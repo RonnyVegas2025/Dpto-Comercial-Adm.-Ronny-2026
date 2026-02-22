@@ -13,8 +13,19 @@ function clean(v) {
   return v === '-' || v === undefined || v === null ? null : String(v).trim();
 }
 function cleanNum(v) {
-  if (!v || v === '-') return 0;
-  const n = parseFloat(String(v).replace(/[R$\s.]/g, '').replace(',', '.'));
+  if (!v || v === '-' || v === '') return 0;
+  // Remove R$, espaços e caracteres especiais, depois trata formato pt-BR
+  // Ex: "R$ 2.166,68" → "2166.68"
+  let s = String(v)
+    .replace(/R\$\s*/g, '')   // remove R$
+    .replace(/\s/g, '')        // remove espaços
+    .trim();
+  // Formato brasileiro: ponto = milhar, vírgula = decimal
+  // Ex: 2.166,68 → 2166.68
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 function cleanPct(v) {
@@ -309,4 +320,3 @@ const s = {
   spin:      { width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #f0b429', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
   info:      { background: 'rgba(240,180,41,0.05)', border: '1px solid rgba(240,180,41,0.15)', borderRadius: 14, padding: 24 },
 };
-
