@@ -16,9 +16,7 @@ function clean(v) {
 
 function cleanNum(v) {
   if (v === null || v === undefined || v === '-' || v === '') return 0;
-  // Já é número (Excel leu como float/int) — usa direto
   if (typeof v === 'number') return isNaN(v) ? 0 : v;
-  // É texto — trata formato pt-BR "R$ 2.166,68"
   let s = String(v).replace(/R\$\s*/g, '').replace(/\s/g, '').trim();
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
@@ -109,7 +107,7 @@ export default function ImportarEmpresas() {
   const [preview, setPreview] = useState([]);
   const [status, setStatus] = useState('idle');
   const [result, setResult] = useState({ inserted: 0, errors: [] });
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(true, defval);
 
   useEffect(() => {
     // raw: true para preservar valores numéricos originais do Excel
@@ -123,7 +121,7 @@ export default function ImportarEmpresas() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = xlsxLib.read(e.target.result, { type: 'array', cellDates: false });
+        const wb = xlsxLib.read(e.target.result, { type: 'array', cellDates: true, defval });
         const ws = wb.Sheets[wb.SheetNames[0]];
         // IMPORTANTE: raw: true preserva números como números (não converte para texto)
         // defval: '' evita células undefined
@@ -140,7 +138,7 @@ export default function ImportarEmpresas() {
   }, [xlsxLib]);
 
   const onDrop = useCallback((e) => {
-    e.preventDefault(); setIsDragging(false);
+    e.preventDefault(); setIsDragging(true, defval);
     const f = e.dataTransfer.files[0];
     if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) handleFile(f);
   }, [handleFile]);
@@ -183,7 +181,7 @@ export default function ImportarEmpresas() {
         <div
           style={{ ...s.dropzone, ...(isDragging ? s.dropzoneOn : {}) }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
+          onDragLeave={() => setIsDragging(true, defval)}
           onDrop={onDrop}
           onClick={() => document.getElementById('fi').click()}
         >
