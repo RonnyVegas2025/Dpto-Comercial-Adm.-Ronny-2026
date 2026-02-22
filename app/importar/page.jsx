@@ -38,29 +38,39 @@ function cleanDate(v) {
   return null;
 }
 
+// Encontra chave no objeto ignorando diferenças de encoding/acento
+function findKey(obj, target) {
+  // Tenta direto primeiro
+  if (obj[target] !== undefined) return obj[target];
+  // Normaliza e compara
+  const targetNorm = target.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  for (const key of Object.keys(obj)) {
+    const keyNorm = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (keyNorm === targetNorm) return obj[key];
+  }
+  return undefined;
+}
+
 function parseRow(row) {
-  const potencial = row['Potencial de Movimentação'];
-  // LOG para debug — aparece no console F12
-  console.log('Potencial raw:', potencial, 'tipo:', typeof potencial);
   return {
-    produto_id:             parseInt(row['Produto Id']) || null,
-    nome:                   clean(row['Empresa']),
-    cnpj:                   clean(row['CNPJ']),
-    data_cadastro:          cleanDate(row['Data de Cadastro']),
-    categoria:              clean(row['Categoria']),
-    produto_contratado:     clean(row['Produto Contratado']),
-    cidade:                 clean(row['Cidade']),
-    estado:                 clean(row['Estado']),
-    cartoes_emitidos:       parseInt(row['Cartões Emitidos']) || 0,
-    potencial_movimentacao: cleanNum(potencial),
-    tipo_boleto:            clean(row['Tipo do Boleto']),
-    confeccao_cartao:       cleanNum(row['Confecção de Cartão']),
-    taxa_negativa:          cleanPct(row['Taxa Negativa']),
-    taxa_positiva:          cleanPct(row['Taxa Positiva']),
-    dias_prazo:             parseInt(row['Dias de Prazo']) || 0,
-    _consultor_principal:   clean(row['Consultor Principal']),
-    _consultor_agregado:    clean(row['Consultor Agregado']),
-    _parceiro:              clean(row['Parceiro Comercial']),
+    produto_id:             parseInt(findKey(row, 'Produto Id')) || null,
+    nome:                   clean(findKey(row, 'Empresa')),
+    cnpj:                   clean(findKey(row, 'CNPJ')),
+    data_cadastro:          cleanDate(findKey(row, 'Data de Cadastro')),
+    categoria:              clean(findKey(row, 'Categoria')),
+    produto_contratado:     clean(findKey(row, 'Produto Contratado')),
+    cidade:                 clean(findKey(row, 'Cidade')),
+    estado:                 clean(findKey(row, 'Estado')),
+    cartoes_emitidos:       parseInt(findKey(row, 'Cartoes Emitidos') ?? findKey(row, 'Cartões Emitidos')) || 0,
+    potencial_movimentacao: cleanNum(findKey(row, 'Potencial de Movimentacao') ?? findKey(row, 'Potencial de Movimentação')),
+    tipo_boleto:            clean(findKey(row, 'Tipo do Boleto')),
+    confeccao_cartao:       cleanNum(findKey(row, 'Confeccao de Cartao') ?? findKey(row, 'Confecção de Cartão')),
+    taxa_negativa:          cleanPct(findKey(row, 'Taxa Negativa')),
+    taxa_positiva:          cleanPct(findKey(row, 'Taxa Positiva')),
+    dias_prazo:             parseInt(findKey(row, 'Dias de Prazo')) || 0,
+    _consultor_principal:   clean(findKey(row, 'Consultor Principal')),
+    _consultor_agregado:    clean(findKey(row, 'Consultor Agregado')),
+    _parceiro:              clean(findKey(row, 'Parceiro Comercial')),
   };
 }
 
@@ -131,10 +141,11 @@ export default function ImportarEmpresas() {
         const wb = xlsxLib.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = xlsxLib.utils.sheet_to_json(ws, { raw: true, defval: '' });
-        // Mostra info de debug na tela
-        const primeira = raw[0];
-        const potencial = primeira?.['Potencial de Movimentação'];
-        setDebugInfo(`Potencial linha 1: valor="${potencial}" tipo="${typeof potencial}"`);
+        // Debug — mostra chaves da primeira linha
+        const keys = Object.keys(raw[0] || {});
+        const potKey = keys.find(k => k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes('potencial'));
+        const potVal = raw[0]?.[potKey];
+        setDebugInfo(`Coluna: "${potKey}" | Valor: "${potVal}" | Tipo: ${typeof potVal}`);
         const parsed = raw.map(parseRow).filter(r => r.nome && r.produto_id);
         setPreview(parsed);
         setStatus('confirming');
@@ -178,11 +189,8 @@ export default function ImportarEmpresas() {
   };
 
   const reset = () => {
-    setStatus('idle');
-    setPreview([]);
-    setFile(null);
-    setResult({ inserted: 0, errors: [] });
-    setDebugInfo('');
+    setStatus('idle'); setPreview([]); setFile(null);
+    setResult({ inserted: 0, errors: [] }); setDebugInfo('');
   };
 
   const fmt = (v) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00';
@@ -216,8 +224,8 @@ export default function ImportarEmpresas() {
       {status === 'confirming' && (
         <div style={s.card}>
           {debugInfo && (
-            <div style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 8, padding: '8px 14px', marginBottom: 16, fontSize: '0.8rem', color: '#f0b429', fontFamily: 'monospace' }}>
-              🔍 DEBUG: {debugInfo}
+            <div style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 8, padding: '8px 14px', marginBottom: 16, fontSize: '0.78rem', color: '#f0b429', fontFamily: 'monospace' }}>
+              🔍 {debugInfo}
             </div>
           )}
           <div style={s.cardHead}>
