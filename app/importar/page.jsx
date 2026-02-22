@@ -13,24 +13,22 @@ function clean(v) {
   return v === '-' || v === undefined || v === null ? null : String(v).trim();
 }
 function cleanNum(v) {
-  if (!v || v === '-' || v === '') return 0;
-  // Remove R$, espaços e caracteres especiais, depois trata formato pt-BR
-  // Ex: "R$ 2.166,68" → "2166.68"
-  let s = String(v)
-    .replace(/R\$\s*/g, '')   // remove R$
-    .replace(/\s/g, '')        // remove espaços
-    .trim();
-  // Formato brasileiro: ponto = milhar, vírgula = decimal
-  // Ex: 2.166,68 → 2166.68
-  if (s.includes(',')) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  }
+  if (v === null || v === undefined || v === '-' || v === '') return 0;
+  // Se já vier como número do Excel, usa direto
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  // Texto: "R$ 2.166,68" → 2166.68
+  let s = String(v).replace(/R\$\s*/g, '').replace(/\s/g, '').trim();
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 function cleanPct(v) {
-  if (!v || v === '-') return 0;
-  const n = parseFloat(String(v).replace('%', '').replace(',', '.'));
+  if (v === null || v === undefined || v === '-' || v === '') return 0;
+  // Se já vier como decimal (0.05 = 5%), usa direto
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  // Texto: "5,00%" → 0.05
+  const s = String(v).replace('%', '').replace(',', '.').trim();
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n / 100;
 }
 function cleanDate(v) {
