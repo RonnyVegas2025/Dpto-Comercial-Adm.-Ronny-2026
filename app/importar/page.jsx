@@ -39,6 +39,9 @@ function cleanDate(v) {
 }
 
 function parseRow(row) {
+  const potencial = row['Potencial de Movimentação'];
+  // LOG para debug — aparece no console F12
+  console.log('Potencial raw:', potencial, 'tipo:', typeof potencial);
   return {
     produto_id:             parseInt(row['Produto Id']) || null,
     nome:                   clean(row['Empresa']),
@@ -49,7 +52,7 @@ function parseRow(row) {
     cidade:                 clean(row['Cidade']),
     estado:                 clean(row['Estado']),
     cartoes_emitidos:       parseInt(row['Cartões Emitidos']) || 0,
-    potencial_movimentacao: cleanNum(row['Potencial de Movimentação']),
+    potencial_movimentacao: cleanNum(potencial),
     tipo_boleto:            clean(row['Tipo do Boleto']),
     confeccao_cartao:       cleanNum(row['Confecção de Cartão']),
     taxa_negativa:          cleanPct(row['Taxa Negativa']),
@@ -112,6 +115,7 @@ export default function ImportarEmpresas() {
   const [status, setStatus] = useState('idle');
   const [result, setResult] = useState({ inserted: 0, errors: [] });
   const [isDragging, setIsDragging] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
     import('xlsx').then(mod => setXlsxLib(mod));
@@ -127,6 +131,10 @@ export default function ImportarEmpresas() {
         const wb = xlsxLib.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = xlsxLib.utils.sheet_to_json(ws, { raw: true, defval: '' });
+        // Mostra info de debug na tela
+        const primeira = raw[0];
+        const potencial = primeira?.['Potencial de Movimentação'];
+        setDebugInfo(`Potencial linha 1: valor="${potencial}" tipo="${typeof potencial}"`);
         const parsed = raw.map(parseRow).filter(r => r.nome && r.produto_id);
         setPreview(parsed);
         setStatus('confirming');
@@ -174,6 +182,7 @@ export default function ImportarEmpresas() {
     setPreview([]);
     setFile(null);
     setResult({ inserted: 0, errors: [] });
+    setDebugInfo('');
   };
 
   const fmt = (v) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00';
@@ -196,21 +205,21 @@ export default function ImportarEmpresas() {
         >
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>📂</div>
           <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>
-            {status === 'parsing'
-              ? 'Lendo arquivo...'
-              : (xlsxLib ? 'Arraste o Excel aqui ou clique para selecionar' : 'Carregando...')}
+            {status === 'parsing' ? 'Lendo arquivo...' : (xlsxLib ? 'Arraste o Excel aqui ou clique para selecionar' : 'Carregando...')}
           </div>
           <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>.xlsx ou .xls — exportado do sistema</div>
-          <input
-            id="fi" type="file" accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            onChange={(e) => handleFile(e.target.files[0])}
-          />
+          <input id="fi" type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
+            onChange={(e) => handleFile(e.target.files[0])} />
         </div>
       )}
 
       {status === 'confirming' && (
         <div style={s.card}>
+          {debugInfo && (
+            <div style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 8, padding: '8px 14px', marginBottom: 16, fontSize: '0.8rem', color: '#f0b429', fontFamily: 'monospace' }}>
+              🔍 DEBUG: {debugInfo}
+            </div>
+          )}
           <div style={s.cardHead}>
             <div>
               <div style={s.cardTitle}>✅ {preview.length} empresas encontradas</div>
@@ -224,11 +233,8 @@ export default function ImportarEmpresas() {
           <div style={{ overflowX: 'auto' }}>
             <table style={s.table}>
               <thead>
-                <tr>
-                  {['ID','Empresa','CNPJ','Produto','Cidade/UF','Cartões','Potencial','Consultor','Parceiro'].map(h => (
-                    <th key={h} style={s.th}>{h}</th>
-                  ))}
-                </tr>
+                <tr>{['ID','Empresa','CNPJ','Produto','Cidade/UF','Cartões','Potencial','Consultor','Parceiro'].map(h =>
+                  <th key={h} style={s.th}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {preview.slice(0, 15).map((r, i) => (
@@ -239,7 +245,7 @@ export default function ImportarEmpresas() {
                     <td style={s.td}>{r.produto_contratado}</td>
                     <td style={s.td}>{r.cidade} / {r.estado}</td>
                     <td style={{ ...s.td, textAlign: 'center' }}>{r.cartoes_emitidos}</td>
-                    <td style={{ ...s.td, color: r.potencial_movimentacao > 0 ? '#34d399' : '#6b7280' }}>
+                    <td style={{ ...s.td, color: r.potencial_movimentacao > 0 ? '#34d399' : '#f87171' }}>
                       {fmt(r.potencial_movimentacao)}
                     </td>
                     <td style={s.td}>{r._consultor_principal || '—'}</td>
@@ -248,11 +254,6 @@ export default function ImportarEmpresas() {
                 ))}
               </tbody>
             </table>
-            {preview.length > 15 && (
-              <div style={{ textAlign: 'center', padding: 12, color: '#6b7280', fontSize: '0.8rem' }}>
-                ... e mais {preview.length - 15} empresas
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -260,9 +261,7 @@ export default function ImportarEmpresas() {
       {status === 'importing' && (
         <div style={s.stCard}>
           <div style={s.spin}></div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>
-            Importando {preview.length} empresas...
-          </div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>Importando {preview.length} empresas...</div>
           <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>Aguarde alguns segundos</div>
         </div>
       )}
@@ -300,8 +299,8 @@ export default function ImportarEmpresas() {
         <ol style={{ paddingLeft: 20, color: '#9ca3af', fontSize: '0.87rem', lineHeight: 2 }}>
           <li>Exporte a planilha do seu sistema normalmente (.xlsx)</li>
           <li>Arraste o arquivo aqui ou clique para selecionar</li>
-          <li>Confira o preview — potencial e valores devem aparecer em verde</li>
-          <li>Clique em "Importar" — empresas já existentes são atualizadas automaticamente</li>
+          <li>Confira o preview e clique em Importar</li>
+          <li>Empresas já existentes são atualizadas automaticamente</li>
         </ol>
       </div>
 
@@ -330,4 +329,3 @@ const s = {
   spin:      { width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #f0b429', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
   info:      { background: 'rgba(240,180,41,0.05)', border: '1px solid rgba(240,180,41,0.15)', borderRadius: 14, padding: 24 },
 };
-
