@@ -33,37 +33,25 @@ function cleanNum(v) {
   return isNaN(n) ? 0 : n;
 }
 function cleanDate(v) {
-  if (!v) return null;
+  if (!v || v === '-' || v === '') return null;
+  // Objeto Date (quando cellDates:true funciona)
   if (v instanceof Date) {
-  const d = new Date(v.getTime() - v.getTimezoneOffset() * 60000);
-  return d.toISOString().split('T')[0];
-}  
+    const d = new Date(v.getTime() - v.getTimezoneOffset() * 60000);
+    return d.toISOString().split('T')[0];
+  }
+  // Número serial do Excel (ex: 45678)
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    const d2 = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return d2.toISOString().split('T')[0];
+  }
+  // Texto DD/MM/AAAA
+  const parts = String(v).trim().split('/');
   if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+  // Texto AAAA-MM-DD
+  if (String(v).match(/^\d{4}-\d{2}-\d{2}/)) return String(v).substring(0,10);
   return null;
 }
-function parseRow(row) {
-  return {
-    produto_id:           parseInt(findKey(row,'Produto Id')) || null,
-    nome:                 clean(findKey(row,'Empresa')),
-    cnpj:                 clean(findKey(row,'CNPJ')),
-    data_cadastro:        cleanDate(findKey(row,'Data de Cadastro')),
-    categoria:            clean(findKey(row,'Categoria')),
-    produto_contratado:   clean(findKey(row,'Produto Contratado')),
-    cidade:               clean(findKey(row,'Cidade')),
-    estado:               clean(findKey(row,'Estado')),
-    cartoes_emitidos:     parseInt(cleanNum(findKey(row,'Cartoes Emitidos') ?? findKey(row,'Cartões Emitidos'))) || 0,
-    potencial_movimentacao: cleanNum(findKey(row,'Potencial de Movimentacao') ?? findKey(row,'Potencial de Movimentação')),
-    tipo_boleto:          clean(findKey(row,'Tipo do Boleto')),
-    confeccao_cartao:     cleanNum(findKey(row,'Confeccao de Cartao') ?? findKey(row,'Confecção de Cartão')),
-    taxa_negativa:        cleanNum(findKey(row,'Taxa Negativa')),
-    taxa_positiva:        cleanNum(findKey(row,'Taxa Positiva')),
-    dias_prazo:           parseInt(cleanNum(findKey(row,'Dias de Prazo'))) || 0,
-    _consultor_principal: clean(findKey(row,'Consultor Principal')),
-    _consultor_agregado:  clean(findKey(row,'Consultor Agregado')),
-    _parceiro:            clean(findKey(row,'Parceiro Comercial')),
-  };
-}
-
 async function resolveIds(rows) {
   // Busca produtos, consultores e parceiros do banco novo
   const { data: produtos }    = await supabase.from('produtos').select('id, nome, peso');
@@ -124,7 +112,7 @@ export default function ImportarEmpresas() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = xlsxLib.read(e.target.result, { type:'array', cellDates:true });
+        const wb = xlsxLib.read(e.target.result, { type:'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'' });
         const parsed = raw.map(parseRow).filter(r => r.nome && r.produto_id);
