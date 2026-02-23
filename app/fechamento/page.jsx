@@ -123,7 +123,6 @@ export default function ImportarFechamento() {
         competencia:           r.competencia,
         valor_movimentacao:    r.vendas,
         receita_taxa_positiva: r.taxa,
-        receita_total:         r.taxa,
       })).filter(r => r.empresa_id);
 
       const errors = []; let inserted = 0;
