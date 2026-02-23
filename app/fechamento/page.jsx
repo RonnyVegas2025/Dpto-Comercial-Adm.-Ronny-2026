@@ -92,7 +92,7 @@ export default function ImportarFechamento() {
         const raw = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'' });
         console.log('Primeira linha:', raw[0]);
         console.log('Keys:', Object.keys(raw[0]||{}));
-        const parsed = raw.map(parseRow).filter(r => r.produto_id && r.competencia);
+        const parsed = raw.map(parseRow).filter(r => r.produto_id);
         console.log('Parsed:', parsed);
         setPreview(parsed);
         setStatus('confirming');
