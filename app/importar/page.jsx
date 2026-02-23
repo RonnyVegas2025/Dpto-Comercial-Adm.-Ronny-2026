@@ -34,8 +34,10 @@ function cleanNum(v) {
 }
 function cleanDate(v) {
   if (!v) return null;
-  if (v instanceof Date) return v.toISOString().split('T')[0];
-  const parts = String(v).split('/');
+  if (v instanceof Date) {
+  const d = new Date(v.getTime() - v.getTimezoneOffset() * 60000);
+  return d.toISOString().split('T')[0];
+}  
   if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
   return null;
 }
