@@ -41,7 +41,7 @@ export default function DashboardPrevisao() {
         .eq('ativo', true);
 
       // Extrai gestores únicos
-      const gs = ['Geral', ...new Set((consultores||[]).map(c => c.gestor).filter(Boolean))];
+      const gs = ['Geral', 'Ronny Peterson Izidorio', 'Marcos Rossi'];
       setGestores(gs);
       setRawEmpresas(empresas || []);
       setRawConsultores(consultores || []);
