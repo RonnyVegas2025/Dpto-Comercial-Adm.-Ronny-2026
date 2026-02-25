@@ -12,108 +12,120 @@ const fmt = (v) => Number(v||0).toLocaleString('pt-BR', { style:'currency', curr
 const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
 
 export default function DashboardPrevisao() {
-  const [dados, setDados] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState('consultores');
+  const [rawEmpresas, setRawEmpresas]   = useState([]);
+  const [rawConsultores, setRawConsultores] = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [aba, setAba]                   = useState('consultores');
+  const [gestorFiltro, setGestorFiltro] = useState('Geral');
+  const [gestores, setGestores]         = useState(['Geral']);
+  const [dados, setDados]               = useState(null);
 
   useEffect(() => { carregarDados(); }, []);
+  useEffect(() => { if (rawEmpresas.length) processarDados(); }, [gestorFiltro, rawEmpresas, rawConsultores]);
 
   async function carregarDados() {
     setLoading(true);
     try {
-      // Busca todas empresas com potencial, produto, consultor, parceiro
       const { data: empresas } = await supabase
         .from('empresas')
         .select(`
           nome, potencial_movimentacao, peso_categoria, categoria, produto_contratado,
-          consultor_principal:consultor_principal_id (id, nome, meta_mensal, setor),
+          consultor_principal:consultor_principal_id (id, nome, meta_mensal, setor, gestor),
           parceiro:parceiro_id (id, nome)
         `)
         .eq('ativo', true);
 
-      // Busca metas dos consultores
       const { data: consultores } = await supabase
         .from('consultores')
-        .select('id, nome, meta_mensal, setor')
+        .select('id, nome, meta_mensal, setor, gestor')
         .eq('ativo', true);
 
-      if (!empresas) return;
-
-      // === CONSULTORES ===
-      const consultorMap = {};
-      (consultores||[]).forEach(c => {
-        consultorMap[c.id] = { nome: c.nome, meta: c.meta_mensal||0, setor: c.setor, potencial: 0, resultado: 0, empresas: 0 };
-      });
-
-      // === CATEGORIAS ===
-      const catMap = {};
-
-      // === PRODUTOS ===
-      const prodMap = {};
-
-      // === PARCEIROS ===
-      const parcMap = {};
-
-      // === TOP EMPRESAS ===
-      const topEmpresas = [];
-
-      empresas.forEach(e => {
-        const pot = e.potencial_movimentacao || 0;
-        const peso = e.peso_categoria || 1;
-        const resultado = pot * peso;
-        const cId = e.consultor_principal?.id;
-
-        // Consultores
-        if (cId && consultorMap[cId]) {
-          consultorMap[cId].potencial += pot;
-          consultorMap[cId].resultado += resultado;
-          consultorMap[cId].empresas  += 1;
-        }
-
-        // Categorias
-        const cat = e.categoria || 'Outros';
-        if (!catMap[cat]) catMap[cat] = { potencial: 0, resultado: 0, empresas: 0 };
-        catMap[cat].potencial += pot;
-        catMap[cat].resultado += resultado;
-        catMap[cat].empresas  += 1;
-
-        // Produtos
-        const prod = e.produto_contratado || 'Outros';
-        if (!prodMap[prod]) prodMap[prod] = { potencial: 0, resultado: 0, empresas: 0, peso };
-        prodMap[prod].potencial += pot;
-        prodMap[prod].resultado += resultado;
-        prodMap[prod].empresas  += 1;
-
-        // Parceiros
-        const parc = e.parceiro?.nome || 'Sem Parceiro';
-        if (!parcMap[parc]) parcMap[parc] = { potencial: 0, resultado: 0, empresas: 0 };
-        parcMap[parc].potencial += pot;
-        parcMap[parc].resultado += resultado;
-        parcMap[parc].empresas  += 1;
-
-        // Top empresas
-        topEmpresas.push({ nome: e.nome, produto: e.produto_contratado, categoria: e.categoria, consultor: e.consultor_principal?.nome||'—', parceiro: e.parceiro?.nome||'—', potencial: pot, resultado });
-      });
-
-      // Totais gerais
-      const totalPotencial = empresas.reduce((s,e) => s+(e.potencial_movimentacao||0), 0);
-      const totalResultado = empresas.reduce((s,e) => s+((e.potencial_movimentacao||0)*(e.peso_categoria||1)), 0);
-      const totalMeta = (consultores||[]).reduce((s,c) => s+(c.meta_mensal||0), 0);
-
-      setDados({
-        totais: { potencial: totalPotencial, resultado: totalResultado, meta: totalMeta, empresas: empresas.length },
-        consultores: Object.values(consultorMap).filter(c => c.resultado > 0 || c.meta > 0).sort((a,b) => b.resultado - a.resultado),
-        categorias: Object.entries(catMap).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
-        produtos: Object.entries(prodMap).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
-        parceiros: Object.entries(parcMap).filter(([n]) => n !== 'Sem Parceiro').map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
-        topEmpresas: topEmpresas.sort((a,b) => b.resultado - a.resultado).slice(0,15),
-      });
+      // Extrai gestores únicos
+      const gs = ['Geral', ...new Set((consultores||[]).map(c => c.gestor).filter(Boolean))];
+      setGestores(gs);
+      setRawEmpresas(empresas || []);
+      setRawConsultores(consultores || []);
     } catch(err) { console.error(err); }
     setLoading(false);
   }
 
+  function processarDados() {
+    const empresas    = rawEmpresas;
+    const consultores = rawConsultores;
+
+    // Filtra consultores pelo gestor selecionado
+    const consultsFiltrados = gestorFiltro === 'Geral'
+      ? consultores
+      : consultores.filter(c => c.gestor === gestorFiltro);
+
+    // IDs dos consultores filtrados
+    const consultIds = new Set(consultsFiltrados.map(c => c.id));
+
+    // Filtra empresas pelos consultores do gestor
+    const empresasFiltradas = gestorFiltro === 'Geral'
+      ? empresas
+      : empresas.filter(e => e.consultor_principal?.id && consultIds.has(e.consultor_principal.id));
+
+    // Monta mapa de consultores
+    const consultorMap = {};
+    consultsFiltrados.forEach(c => {
+      consultorMap[c.id] = { nome: c.nome, meta: c.meta_mensal||0, setor: c.setor, gestor: c.gestor, potencial: 0, resultado: 0, empresas: 0 };
+    });
+
+    const catMap  = {};
+    const prodMap = {};
+    const parcMap = {};
+    const topEmpresas = [];
+
+    empresasFiltradas.forEach(e => {
+      const pot      = e.potencial_movimentacao || 0;
+      const peso     = e.peso_categoria || 1;
+      const resultado = pot * peso;
+      const cId      = e.consultor_principal?.id;
+
+      if (cId && consultorMap[cId]) {
+        consultorMap[cId].potencial += pot;
+        consultorMap[cId].resultado += resultado;
+        consultorMap[cId].empresas  += 1;
+      }
+
+      const cat = e.categoria || 'Outros';
+      if (!catMap[cat]) catMap[cat] = { potencial:0, resultado:0, empresas:0 };
+      catMap[cat].potencial += pot;
+      catMap[cat].resultado += resultado;
+      catMap[cat].empresas  += 1;
+
+      const prod = e.produto_contratado || 'Outros';
+      if (!prodMap[prod]) prodMap[prod] = { potencial:0, resultado:0, empresas:0, peso };
+      prodMap[prod].potencial += pot;
+      prodMap[prod].resultado += resultado;
+      prodMap[prod].empresas  += 1;
+
+      const parc = e.parceiro?.nome || 'Sem Parceiro';
+      if (!parcMap[parc]) parcMap[parc] = { potencial:0, resultado:0, empresas:0 };
+      parcMap[parc].potencial += pot;
+      parcMap[parc].resultado += resultado;
+      parcMap[parc].empresas  += 1;
+
+      topEmpresas.push({ nome: e.nome, produto: e.produto_contratado, categoria: e.categoria, consultor: e.consultor_principal?.nome||'—', parceiro: e.parceiro?.nome||'—', potencial: pot, resultado });
+    });
+
+    const totalPotencial = empresasFiltradas.reduce((s,e) => s+(e.potencial_movimentacao||0), 0);
+    const totalResultado = empresasFiltradas.reduce((s,e) => s+((e.potencial_movimentacao||0)*(e.peso_categoria||1)), 0);
+    const totalMeta      = consultsFiltrados.reduce((s,c) => s+(c.meta_mensal||0), 0);
+
+    setDados({
+      totais: { potencial: totalPotencial, resultado: totalResultado, meta: totalMeta, empresas: empresasFiltradas.length },
+      consultores: Object.values(consultorMap).filter(c => c.resultado > 0 || c.meta > 0).sort((a,b) => b.resultado - a.resultado),
+      categorias: Object.entries(catMap).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
+      produtos: Object.entries(prodMap).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
+      parceiros: Object.entries(parcMap).filter(([n]) => n !== 'Sem Parceiro').map(([nome,v]) => ({nome,...v})).sort((a,b) => b.resultado - a.resultado),
+      topEmpresas: topEmpresas.sort((a,b) => b.resultado - a.resultado).slice(0,15),
+    });
+  }
+
   if (loading) return (
-    <div style={{...s.page, display:'flex', alignItems:'center', justifyContent:'center'}}>
+    <div style={{...s.page, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh'}}>
       <div style={{textAlign:'center'}}>
         <div style={s.spin}></div>
         <div style={{color:'#6b7280'}}>Carregando previsões...</div>
@@ -124,6 +136,7 @@ export default function DashboardPrevisao() {
 
   const { totais, consultores, categorias, produtos, parceiros, topEmpresas } = dados || {};
   const pctMeta = totais?.meta > 0 ? (totais.resultado / totais.meta) * 100 : 0;
+
   const abas = [
     { key:'consultores', label:'👤 Por Consultor' },
     { key:'categorias',  label:'📦 Por Categoria' },
@@ -142,6 +155,17 @@ export default function DashboardPrevisao() {
           <p style={s.sub}>Potencial de movimentação das empresas cadastradas</p>
         </div>
         <a href="/importar" style={s.linkBtn}>📥 Importar Empresas</a>
+      </div>
+
+      {/* Filtro de Gestor */}
+      <div style={s.gestorBar}>
+        <span style={{color:'#6b7280', fontSize:'0.8rem', marginRight:8}}>GESTÃO:</span>
+        {gestores.map(g => (
+          <button key={g} style={{...s.gestorBtn, ...(gestorFiltro===g ? s.gestorBtnAtivo : {})}}
+            onClick={() => setGestorFiltro(g)}>
+            {g === 'Geral' ? '🌐 Geral' : `👔 ${g}`}
+          </button>
+        ))}
       </div>
 
       {/* KPIs */}
@@ -178,7 +202,6 @@ export default function DashboardPrevisao() {
         ))}
       </div>
 
-      {/* Conteúdo das abas */}
       <div style={s.card}>
 
         {/* CONSULTORES */}
@@ -188,7 +211,7 @@ export default function DashboardPrevisao() {
             <div style={{overflowX:'auto', marginTop:16}}>
               <table style={s.table}>
                 <thead><tr>
-                  {['Consultor','Setor','Empresas','Potencial Bruto','Resultado Esperado','Meta','% Previsão','Barra'].map(h =>
+                  {['Consultor','Setor','Gestor','Empresas','Potencial Bruto','Resultado Esperado','Meta','% Previsão','Barra'].map(h =>
                     <th key={h} style={s.th}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -199,11 +222,12 @@ export default function DashboardPrevisao() {
                       <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.02)'}:{}}>
                         <td style={{...s.td, fontWeight:600}}>{c.nome}</td>
                         <td style={{...s.td, color:'#9ca3af'}}>{c.setor||'—'}</td>
+                        <td style={{...s.td, color:'#9ca3af'}}>{c.gestor||'—'}</td>
                         <td style={{...s.td, textAlign:'center'}}>{c.empresas}</td>
                         <td style={s.td}>{fmt(c.potencial)}</td>
                         <td style={{...s.td, color:'#f0b429', fontWeight:600}}>{fmt(c.resultado)}</td>
                         <td style={s.td}>{c.meta > 0 ? fmt(c.meta) : '—'}</td>
-                        <td style={{...s.td, color:cor, fontWeight:700}}>{c.meta > 0 ? fmtPct(pct) : '—'}</td>
+                        <td style={{...s.td, color: c.meta > 0 ? cor : '#6b7280', fontWeight:700}}>{c.meta > 0 ? fmtPct(pct) : '—'}</td>
                         <td style={{...s.td, minWidth:120}}>
                           {c.meta > 0 && (
                             <div style={{background:'rgba(255,255,255,0.07)', borderRadius:4, height:8, overflow:'hidden'}}>
@@ -341,31 +365,32 @@ export default function DashboardPrevisao() {
           </>
         )}
       </div>
-
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
 const s = {
-  page:     {maxWidth:1200, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh'},
-  header:   {display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:32, flexWrap:'wrap', gap:16},
-  tag:      {color:'#f0b429', fontWeight:800, fontSize:'0.9rem', letterSpacing:2, marginBottom:12, textTransform:'uppercase'},
-  title:    {fontSize:'1.8rem', fontWeight:700, margin:'0 0 8px'},
-  sub:      {color:'#6b7280', fontSize:'0.9rem'},
-  linkBtn:  {background:'rgba(240,180,41,0.08)', border:'1px solid rgba(240,180,41,0.2)', borderRadius:10, padding:'10px 20px', color:'#f0b429', textDecoration:'none', fontSize:'0.85rem', fontWeight:600},
-  kpis:     {display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16, marginBottom:24},
-  kpi:      {background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'18px 22px', display:'flex', flexDirection:'column'},
-  kpiLabel: {color:'#6b7280', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:1, marginBottom:8},
-  kpiVal:   {fontSize:'1.4rem', fontWeight:700},
-  tabs:     {display:'flex', gap:8, marginBottom:16, flexWrap:'wrap'},
-  tab:      {background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'8px 16px', color:'#6b7280', cursor:'pointer', fontSize:'0.85rem', fontWeight:500, fontFamily:'inherit'},
-  tabAtiva: {background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.3)', color:'#f0b429'},
-  card:     {background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:28, marginBottom:24},
-  cardTitle:{fontSize:'1rem', fontWeight:700},
-  table:    {width:'100%', borderCollapse:'collapse', fontSize:'0.8rem'},
-  th:       {padding:'8px 12px', textAlign:'left', color:'#6b7280', fontWeight:500, borderBottom:'1px solid rgba(255,255,255,0.07)', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.7rem', letterSpacing:0.5},
-  td:       {padding:'10px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap'},
-  spin:     {width:40, height:40, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 20px', animation:'spin 0.8s linear infinite'},
+  page:          {maxWidth:1200, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh'},
+  header:        {display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:16},
+  tag:           {color:'#f0b429', fontWeight:800, fontSize:'0.9rem', letterSpacing:2, marginBottom:12, textTransform:'uppercase'},
+  title:         {fontSize:'1.8rem', fontWeight:700, margin:'0 0 8px'},
+  sub:           {color:'#6b7280', fontSize:'0.9rem'},
+  linkBtn:       {background:'rgba(240,180,41,0.08)', border:'1px solid rgba(240,180,41,0.2)', borderRadius:10, padding:'10px 20px', color:'#f0b429', textDecoration:'none', fontSize:'0.85rem', fontWeight:600},
+  gestorBar:     {display:'flex', alignItems:'center', gap:8, marginBottom:20, flexWrap:'wrap', background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:12, padding:'12px 16px'},
+  gestorBtn:     {background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'6px 14px', color:'#6b7280', cursor:'pointer', fontSize:'0.85rem', fontWeight:500, fontFamily:'inherit'},
+  gestorBtnAtivo:{background:'rgba(240,180,41,0.15)', border:'1px solid rgba(240,180,41,0.4)', color:'#f0b429', fontWeight:700},
+  kpis:          {display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16, marginBottom:20},
+  kpi:           {background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'18px 22px', display:'flex', flexDirection:'column'},
+  kpiLabel:      {color:'#6b7280', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:1, marginBottom:8},
+  kpiVal:        {fontSize:'1.4rem', fontWeight:700},
+  tabs:          {display:'flex', gap:8, marginBottom:16, flexWrap:'wrap'},
+  tab:           {background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'8px 16px', color:'#6b7280', cursor:'pointer', fontSize:'0.85rem', fontWeight:500, fontFamily:'inherit'},
+  tabAtiva:      {background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.3)', color:'#f0b429'},
+  card:          {background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:28, marginBottom:24},
+  cardTitle:     {fontSize:'1rem', fontWeight:700},
+  table:         {width:'100%', borderCollapse:'collapse', fontSize:'0.8rem'},
+  th:            {padding:'8px 12px', textAlign:'left', color:'#6b7280', fontWeight:500, borderBottom:'1px solid rgba(255,255,255,0.07)', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.7rem', letterSpacing:0.5},
+  td:            {padding:'10px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap'},
+  spin:          {width:40, height:40, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 20px', animation:'spin 0.8s linear infinite'},
 };
-
