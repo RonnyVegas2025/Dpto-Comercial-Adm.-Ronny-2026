@@ -34,26 +34,45 @@ function cleanNum(v) {
 }
 function cleanDate(v) {
   if (!v || v === '-' || v === '') return null;
-  // Objeto Date (quando cellDates:true funciona)
   if (v instanceof Date) {
     const d = new Date(v.getTime() - v.getTimezoneOffset() * 60000);
     return d.toISOString().split('T')[0];
   }
-  // Número serial do Excel (ex: 45678)
   if (typeof v === 'number') {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
     const d2 = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return d2.toISOString().split('T')[0];
   }
-  // Texto DD/MM/AAAA
   const parts = String(v).trim().split('/');
   if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
-  // Texto AAAA-MM-DD
   if (String(v).match(/^\d{4}-\d{2}-\d{2}/)) return String(v).substring(0,10);
   return null;
 }
+
+function parseRow(row) {
+  return {
+    produto_id:             parseInt(findKey(row,'Produto Id')) || null,
+    nome:                   clean(findKey(row,'Empresa')),
+    cnpj:                   clean(findKey(row,'CNPJ')),
+    data_cadastro:          cleanDate(findKey(row,'Data de Cadastro')),
+    categoria:              clean(findKey(row,'Categoria')),
+    produto_contratado:     clean(findKey(row,'Produto Contratado') ?? findKey(row,'Produto')),
+    cidade:                 clean(findKey(row,'Cidade')),
+    estado:                 clean(findKey(row,'Estado')),
+    cartoes_emitidos:       parseInt(cleanNum(findKey(row,'Cartoes Emitidos') ?? findKey(row,'Cartões Emitidos'))) || 0,
+    potencial_movimentacao: cleanNum(findKey(row,'Potencial de Movimentacao') ?? findKey(row,'Potencial de Movimentação')),
+    tipo_boleto:            clean(findKey(row,'Tipo do Boleto')),
+    confeccao_cartao:       cleanNum(findKey(row,'Confeccao de Cartao') ?? findKey(row,'Confecção de Cartão')),
+    taxa_negativa:          cleanNum(findKey(row,'Taxa Negativa')),
+    taxa_positiva:          cleanNum(findKey(row,'Taxa Positiva')),
+    dias_prazo:             parseInt(cleanNum(findKey(row,'Dias de Prazo'))) || 0,
+    _consultor_principal:   clean(findKey(row,'Consultor Principal')),
+    _consultor_agregado:    clean(findKey(row,'Consultor Agregado')),
+    _parceiro:              clean(findKey(row,'Parceiro Comercial')),
+  };
+}
+
 async function resolveIds(rows) {
-  // Busca produtos, consultores e parceiros do banco novo
   const { data: produtos }    = await supabase.from('produtos').select('id, nome, peso');
   const { data: consultores } = await supabase.from('consultores').select('id, nome');
   const { data: parceiros }   = await supabase.from('parceiros').select('id, nome');
@@ -62,8 +81,7 @@ async function resolveIds(rows) {
   const consultMap = Object.fromEntries((consultores||[]).map(c => [norm(c.nome), c.id]));
   const parcMap    = Object.fromEntries((parceiros||[]).map(p => [norm(p.nome), p.id]));
 
-  // Cria consultores/parceiros que não existem
-  const novosConsult = new Set();
+  const novosConsult   = new Set();
   const novosParceiros = new Set();
   rows.forEach(r => {
     if (r._consultor_principal && !consultMap[norm(r._consultor_principal)]) novosConsult.add(r._consultor_principal);
@@ -87,7 +105,7 @@ async function resolveIds(rows) {
     const { _consultor_principal, _consultor_agregado, _parceiro, ...rest } = r;
     return {
       ...rest,
-      produto_id_ref:         prod?.id || null,
+      produto_id_ref:         prod?.id   || null,
       peso_categoria:         prod?.peso ?? 1.0,
       consultor_principal_id: _consultor_principal ? consultMap[norm(_consultor_principal)] || null : null,
       consultor_agregado_id:  _consultor_agregado  ? consultMap[norm(_consultor_agregado)]  || null : null,
@@ -97,11 +115,11 @@ async function resolveIds(rows) {
 }
 
 export default function ImportarEmpresas() {
-  const [xlsxLib, setXlsxLib]   = useState(null);
-  const [file, setFile]         = useState(null);
-  const [preview, setPreview]   = useState([]);
-  const [status, setStatus]     = useState('idle');
-  const [result, setResult]     = useState({ inserted:0, errors:[] });
+  const [xlsxLib, setXlsxLib]       = useState(null);
+  const [file, setFile]             = useState(null);
+  const [preview, setPreview]       = useState([]);
+  const [status, setStatus]         = useState('idle');
+  const [result, setResult]         = useState({ inserted:0, errors:[] });
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => { import('xlsx').then(mod => setXlsxLib(mod)); }, []);
@@ -112,7 +130,7 @@ export default function ImportarEmpresas() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = xlsxLib.read(e.target.result, { type:'array' });
+        const wb = xlsxLib.read(e.target.result, { type:'array', cellDates:true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'' });
         const parsed = raw.map(parseRow).filter(r => r.nome && r.produto_id);
@@ -190,16 +208,16 @@ export default function ImportarEmpresas() {
           </div>
           <div style={{overflowX:'auto'}}>
             <table style={s.table}>
-              <thead><tr>{['ID','Empresa','CNPJ','Produto','Categoria','Cidade/UF','Potencial','Consultor','Parceiro'].map(h=>
+              <thead><tr>{['ID','Empresa','Produto','Categoria','Peso','Cidade/UF','Potencial','Consultor','Parceiro'].map(h=>
                 <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {preview.slice(0,20).map((r,i)=>(
                   <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.02)'}:{}}>
                     <td style={s.td}>{r.produto_id}</td>
                     <td style={{...s.td,fontWeight:600}}>{r.nome}</td>
-                    <td style={{...s.td,fontFamily:'monospace',color:'#9ca3af',fontSize:'0.75rem'}}>{r.cnpj}</td>
-                    <td style={s.td}>{r.produto_contratado}</td>
+                    <td style={s.td}>{r.produto_contratado||'—'}</td>
                     <td style={{...s.td,color:'#9ca3af'}}>{r.categoria}</td>
+                    <td style={{...s.td,color:'#f0b429'}}>{r.produto_contratado}</td>
                     <td style={s.td}>{r.cidade} / {r.estado}</td>
                     <td style={{...s.td,color:r.potencial_movimentacao>0?'#34d399':'#6b7280'}}>{fmt(r.potencial_movimentacao)}</td>
                     <td style={s.td}>{r._consultor_principal||'—'}</td>
