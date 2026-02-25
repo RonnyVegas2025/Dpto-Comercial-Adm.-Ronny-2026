@@ -150,7 +150,7 @@ export default function DashboardPrevisao() {
       {/* Header */}
       <div style={s.header}>
         <div>
-          <div style={s.tag}>♠ Vegas Card</div>
+          <div style={s.tag}>♠ Vegas Card 2</div>
           <h1 style={s.title}>Dashboard de Previsão</h1>
           <p style={s.sub}>Potencial de movimentação das empresas cadastradas — v2</p>
         </div>
