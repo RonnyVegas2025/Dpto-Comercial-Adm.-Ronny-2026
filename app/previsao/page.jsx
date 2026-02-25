@@ -152,7 +152,7 @@ export default function DashboardPrevisao() {
         <div>
           <div style={s.tag}>♠ Vegas Card</div>
           <h1 style={s.title}>Dashboard de Previsão</h1>
-          <p style={s.sub}>Potencial de movimentação das empresas cadastradas</p>
+          <p style={s.sub}>Potencial de movimentação das empresas cadastradas — v2</p>
         </div>
         <a href="/importar" style={s.linkBtn}>📥 Importar Empresas</a>
       </div>
