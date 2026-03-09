@@ -2,25 +2,25 @@ import Link from 'next/link';
 
 const cards = [
   {
-    href:    '/previsao',
-    icon:    '◉',
-    label:   'Dashboard de Previsão',
-    desc:    'Potencial de movimentação por consultor, categoria e produto',
-    color:   '#f0b429',
+    href:  '/previsao',
+    icon:  '◉',
+    label: 'Dashboard de Previsão',
+    desc:  'Potencial de movimentação por consultor, categoria e produto',
+    cls:   'card-gold',
   },
   {
-    href:    '/fechamento',
-    icon:    '◎',
-    label:   'Fechamento Mensal',
-    desc:    'Importe a planilha de fechamento com vendas e taxas',
-    color:   '#34d399',
+    href:  '/fechamento',
+    icon:  '◎',
+    label: 'Fechamento Mensal',
+    desc:  'Importe a planilha de fechamento com vendas e taxas',
+    cls:   'card-green',
   },
   {
-    href:    '/importar',
-    icon:    '⊕',
-    label:   'Importar Empresas',
-    desc:    'Carregue o Excel para atualizar o cadastro de empresas',
-    color:   '#60a5fa',
+    href:  '/importar',
+    icon:  '⊕',
+    label: 'Importar Empresas',
+    desc:  'Carregue o Excel para atualizar o cadastro de empresas',
+    cls:   'card-blue',
   },
 ];
 
@@ -31,6 +31,21 @@ export default function Home() {
       padding: '48px 40px',
       fontFamily: "'DM Sans', sans-serif",
     }}>
+      <style>{`
+        .nav-card {
+          display: block;
+          background: #111420;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          padding: 28px 24px;
+          text-decoration: none;
+          transition: border-color 0.2s, transform 0.15s;
+        }
+        .card-gold:hover { border-color: rgba(240,180,41,0.4); transform: translateY(-2px); }
+        .card-green:hover { border-color: rgba(52,211,153,0.4); transform: translateY(-2px); }
+        .card-blue:hover { border-color: rgba(96,165,250,0.4); transform: translateY(-2px); }
+      `}</style>
+
       {/* Header */}
       <div style={{ marginBottom: 48 }}>
         <div style={{
@@ -65,41 +80,31 @@ export default function Home() {
         gap: 16,
         maxWidth: 900,
       }}>
-        {cards.map(({ href, icon, label, desc, color }) => (
-          <Link key={href} href={href} style={{
-            display: 'block',
-            background: '#111420',
-            border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: 16,
-            padding: '28px 24px',
-            textDecoration: 'none',
-            transition: 'border-color 0.2s, transform 0.15s',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = `${color}44`;
-            e.currentTarget.style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}>
+        {cards.map(({ href, icon, label, desc, cls }) => (
+          <Link key={href} href={href} className={`nav-card ${cls}`}>
             <div style={{
               fontSize: '1.6rem',
-              color: color,
               marginBottom: 16,
-            }}>{icon}</div>
+              color: cls === 'card-gold' ? '#f0b429' : cls === 'card-green' ? '#34d399' : '#60a5fa',
+            }}>
+              {icon}
+            </div>
             <div style={{
               fontFamily: "'Syne', sans-serif",
               fontWeight: 700,
               fontSize: '1rem',
               color: '#e8eaf0',
               marginBottom: 8,
-            }}>{label}</div>
+            }}>
+              {label}
+            </div>
             <div style={{
               color: '#4b5563',
               fontSize: '0.83rem',
               lineHeight: 1.5,
-            }}>{desc}</div>
+            }}>
+              {desc}
+            </div>
           </Link>
         ))}
       </div>
