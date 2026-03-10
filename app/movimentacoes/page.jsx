@@ -188,6 +188,50 @@ export default function ImportarMovimentacoes() {
 
   const reset = () => { setStatus('idle'); setPreview([]); setFile(null); setResult({ inserted: 0, errors: [] }); };
 
+  const [exportando, setExportando] = useState(false);
+
+  const exportarModelo = async () => {
+    setExportando(true);
+    try {
+      const { data: empresas } = await supabase
+        .from('empresas')
+        .select(`
+          produto_id, nome, produto_contratado, categoria,
+          consultor_principal:consultor_principal_id (nome),
+          parceiro:parceiro_id (nome)
+        `)
+        .eq('ativo', true)
+        .order('produto_id');
+
+      const linhas = (empresas || []).map(e => ({
+        'Produto Id':          e.produto_id,
+        'Empresa':             e.nome,
+        'Produto Contratado':  e.produto_contratado || '',
+        'Categoria':           e.categoria || '',
+        'Consultor Principal': e.consultor_principal?.nome || '',
+        'Parceiro':            e.parceiro?.nome || '',
+        'Mês Ref.':            '',
+        'Recarga (Benefício)': '',
+        'Movimentação (Convênio)': '',
+      }));
+
+      const ws = xlsxLib.utils.json_to_sheet(linhas);
+
+      // Largura das colunas
+      ws['!cols'] = [
+        { wch: 12 }, { wch: 40 }, { wch: 22 }, { wch: 18 },
+        { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 22 }, { wch: 24 },
+      ];
+
+      const wb = xlsxLib.utils.book_new();
+      xlsxLib.utils.book_append_sheet(wb, ws, 'Modelo');
+      xlsxLib.writeFile(wb, `modelo_movimentacoes_${new Date().toISOString().substring(0,7)}.xlsx`);
+    } catch (err) {
+      alert('Erro ao exportar: ' + err.message);
+    }
+    setExportando(false);
+  };
+
   // Resumo por tipo
   const resumo = preview.reduce((acc, r) => {
     if (!acc[r.tipo]) acc[r.tipo] = { qtd: 0, total: 0 };
@@ -205,10 +249,15 @@ export default function ImportarMovimentacoes() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Header */}
-      <div style={s.header}>
-        <div style={s.tag}>♠ Vegas Card</div>
-        <h1 style={s.title}>Movimentações Reais</h1>
-        <p style={s.sub}>Importe os valores reais do mês — Benefícios (recarga) e Convênios (utilização)</p>
+      <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <div style={s.tag}>♠ Vegas Card</div>
+          <h1 style={s.title}>Movimentações Reais</h1>
+          <p style={s.sub}>Importe os valores reais do mês — Benefícios (recarga) e Convênios (utilização)</p>
+        </div>
+        <button style={s.btnExport} onClick={exportarModelo} disabled={!xlsxLib || exportando}>
+          {exportando ? '⏳ Gerando...' : '📥 Baixar Modelo para PROCV'}
+        </button>
       </div>
 
       {/* Legenda de lógica */}
@@ -426,5 +475,5 @@ const s = {
   stCard:      { background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 48, textAlign: 'center', marginBottom: 24 },
   spin:        { width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #f0b429', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
   info:        { background: 'rgba(240,180,41,0.04)', border: '1px solid rgba(240,180,41,0.12)', borderRadius: 14, padding: 24 },
+  btnExport:   { background: 'rgba(52,211,153,0.1)', color: '#34d399', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
-
