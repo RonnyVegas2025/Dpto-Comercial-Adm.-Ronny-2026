@@ -21,6 +21,7 @@ const ABAS = [
   { key: 'resumo',       label: '📊 Resumo'      },
   { key: 'movimentacao', label: '💰 Movimentação' },
   { key: 'produtos',     label: '🎯 Produtos'     },
+  { key: 'parceiros',    label: '🤝 Parceiros'    },
   { key: 'carteira',     label: '📋 Carteira'     },
   { key: 'ranking',      label: '🏆 Ranking'      },
 ];
@@ -119,6 +120,15 @@ export default function DashboardVendedor() {
       const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
       const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
       const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
+
+      // Desconto total: para cada empresa, taxa_negativa% × movimentação real dela
+      const descontoTotal = (empresas || []).reduce((s, e) => {
+        const mov  = movPorEmpresa[e.id]?.total || 0;
+        const taxa = (e.taxa_negativa || 0) / 100;
+        return s + (mov * taxa);
+      }, 0);
+      // % do desconto sobre a movimentação real total da carteira
+      const pctDesconto = totalMovReal > 0 ? (descontoTotal / totalMovReal) * 100 : 0;
       // Conta meses distintos com movimentação real importada
       const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
       const metaAcumulada    = meta * (mesesImportados || 1);
@@ -183,16 +193,32 @@ export default function DashboardVendedor() {
         return { ...e, movReal: mov.total, ultimaMov: mov.ultima, aderencia: ader, situacao };
       }).sort((a, b) => b.movReal - a.movReal);
 
+      // Por parceiro
+      const porParceiro = {};
+      (empresas || []).forEach(e => {
+        const parc = e.parceiro?.nome || 'Sem Parceiro';
+        const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null };
+        if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0 };
+        porParceiro[parc].contratos++;
+        porParceiro[parc].potencial  += e.potencial_movimentacao || 0;
+        porParceiro[parc].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+        porParceiro[parc].movReal    += mov.total;
+      });
+      const parceirosArray = Object.entries(porParceiro)
+        .map(([nome, v]) => ({ nome, ...v }))
+        .sort((a, b) => b.movReal - a.movReal);
+
       setDados({
         consultor,
         consultoresDaVisao,
-        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio },
+        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio, descontoTotal, pctDesconto },
         empresas: empresas || [],
         movRealPorEmpresa,
         evolucaoArray,
         produtosArray,
         timeline: timeline.slice(0, 30),
         resultadoPorConsultor,
+        parceirosArray,
       });
     } catch (err) { console.error(err); }
     setLoading(false);
@@ -261,7 +287,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => e.movReal), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -295,10 +321,12 @@ export default function DashboardVendedor() {
                 { label: '% da Meta', val: fmtPct(kpis.pctMeta), cor: corMeta(kpis.pctMeta) },
                 { label: 'Cartões Emitidos', val: kpis.totalCartoes, cor: '#e8eaf0' },
                 { label: 'Ticket Médio', val: fmt(kpis.ticketMedio), cor: '#60a5fa' },
-              ].map(({ label, val, cor }) => (
+                { label: 'Desconto s/ Carteira', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', extra: `${fmt(kpis.descontoTotal)} em descontos` },
+              ].map(({ label, val, cor, extra }) => (
                 <div key={label} style={s.kpi}>
                   <span style={s.kpiLabel}>{label}</span>
                   <span style={{ ...s.kpiVal, color: cor }}>{val}</span>
+                  {extra && <span style={{ color: '#6b7280', fontSize: '0.7rem', marginTop: 4 }}>{extra}</span>}
                 </div>
               ))}
             </div>
@@ -523,6 +551,97 @@ export default function DashboardVendedor() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* ── PARCEIROS ───────────────────────────────────────────── */}
+            {aba === 'parceiros' && (
+              <div style={s.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <div style={s.cardTitle}>🤝 Fechamentos por Parceiro Comercial</div>
+                  <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{parceirosArray.length} parceiros</span>
+                </div>
+
+                {/* Cards resumo por parceiro */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
+                  {parceirosArray.filter(p => p.nome !== 'Sem Parceiro').map((p, i) => {
+                    const cores = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6'];
+                    const cor = cores[i % cores.length];
+                    const pctMov = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
+                    return (
+                      <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#e8eaf0', flex: 1, paddingRight: 8 }}>{p.nome}</div>
+                          <span style={{ background: `${cor}18`, color: cor, borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {p.contratos} contrato{p.contratos > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                            <span style={{ color: '#6b7280' }}>Resultado esperado</span>
+                            <span style={{ color: cor, fontWeight: 600 }}>{fmt(p.resultado)}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                            <span style={{ color: '#6b7280' }}>Movimentação real</span>
+                            <span style={{ color: '#34d399', fontWeight: 600 }}>{fmt(p.movReal)}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                            <span style={{ color: '#6b7280' }}>Potencial bruto</span>
+                            <span style={{ color: '#9ca3af' }}>{fmt(p.potencial)}</span>
+                          </div>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                          <div style={{ background: cor, height: '100%', width: `${Math.min(pctMov, 100)}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
+                        </div>
+                        <div style={{ color: '#4b5563', fontSize: '0.68rem', marginTop: 4, textAlign: 'right' }}>
+                          {fmtPct(pctMov)} aderência
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tabela detalhada */}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 14, color: '#9ca3af' }}>DETALHAMENTO COMPLETO</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={s.table}>
+                      <thead>
+                        <tr>
+                          {['Parceiro', 'Contratos', 'Potencial Bruto', 'Resultado Esperado', 'Mov. Real', '% Aderência', 'Ticket Médio'].map(h =>
+                            <th key={h} style={s.th}>{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parceirosArray.map((p, i) => {
+                          const ader = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
+                          const ticket = p.contratos > 0 ? p.resultado / p.contratos : 0;
+                          const corAder = ader >= 90 ? '#34d399' : ader >= 50 ? '#f0b429' : ader > 0 ? '#f87171' : '#4b5563';
+                          return (
+                            <tr key={i} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
+                              <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#4b5563' : '#e8eaf0' }}>{p.nome}</td>
+                              <td style={{ ...s.td, textAlign: 'center' }}>{p.contratos}</td>
+                              <td style={s.td}>{fmt(p.potencial)}</td>
+                              <td style={{ ...s.td, color: '#f0b429', fontWeight: 600 }}>{fmt(p.resultado)}</td>
+                              <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(p.movReal)}</td>
+                              <td style={s.td}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
+                                    <div style={{ background: corAder, height: '100%', width: `${Math.min(ader, 100)}%`, borderRadius: 4 }}></div>
+                                  </div>
+                                  <span style={{ color: corAder, fontWeight: 600, fontSize: '0.8rem' }}>{fmtPct(ader)}</span>
+                                </div>
+                              </td>
+                              <td style={{ ...s.td, color: '#60a5fa' }}>{fmt(ticket)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {parceirosArray.length === 0 && <div style={s.semDados}>Nenhum parceiro registrado</div>}
               </div>
             )}
 
