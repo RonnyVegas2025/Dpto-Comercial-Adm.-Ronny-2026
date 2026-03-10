@@ -163,8 +163,6 @@ export default function ImportarMovimentacoes() {
             empresa_id:              emp.id,
             competencia:             r.competencia,
             valor_movimentacao,
-            receita_taxa_positiva:   0, // movimentação real não tem taxa
-            tipo_movimentacao:       tipoBanco,
           };
         })
         .filter(Boolean)
@@ -196,22 +194,23 @@ export default function ImportarMovimentacoes() {
       const { data: empresas } = await supabase
         .from('empresas')
         .select(`
-          produto_id, nome, produto_contratado, categoria,
+          produto_id, nome, produto_contratado, categoria, data_cadastro,
           consultor_principal:consultor_principal_id (nome),
           parceiro:parceiro_id (nome)
         `)
         .eq('ativo', true)
-        .order('produto_id');
+        .order('data_cadastro', { ascending: true });
 
       const linhas = (empresas || []).map(e => ({
-        'Produto Id':          e.produto_id,
-        'Empresa':             e.nome,
-        'Produto Contratado':  e.produto_contratado || '',
-        'Categoria':           e.categoria || '',
-        'Consultor Principal': e.consultor_principal?.nome || '',
-        'Parceiro':            e.parceiro?.nome || '',
-        'Mês Ref.':            '',
-        'Recarga (Benefício)': '',
+        'Produto Id':              e.produto_id,
+        'Empresa':                 e.nome,
+        'Produto Contratado':      e.produto_contratado || '',
+        'Categoria':               e.categoria || '',
+        'Consultor Principal':     e.consultor_principal?.nome || '',
+        'Parceiro':                e.parceiro?.nome || '',
+        'Data Cadastro':           e.data_cadastro || '',
+        'Mês Ref.':                '',
+        'Recarga (Benefício)':     '',
         'Movimentação (Convênio)': '',
       }));
 
@@ -220,7 +219,7 @@ export default function ImportarMovimentacoes() {
       // Largura das colunas
       ws['!cols'] = [
         { wch: 12 }, { wch: 40 }, { wch: 22 }, { wch: 18 },
-        { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 22 }, { wch: 24 },
+        { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 24 },
       ];
 
       const wb = xlsxLib.utils.book_new();
