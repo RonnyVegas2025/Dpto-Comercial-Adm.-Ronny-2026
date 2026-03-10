@@ -18,12 +18,11 @@ const fmtMes = (d) => {
 };
 
 const ABAS = [
-  { key: 'resumo',       label: '📊 Resumo'         },
-  { key: 'fechamentos',  label: '✅ Fechamentos'     },
-  { key: 'movimentacao', label: '💰 Movimentação'    },
-  { key: 'produtos',     label: '🎯 Produtos'        },
-  { key: 'carteira',     label: '📋 Carteira'        },
-  { key: 'ranking',      label: '🏆 Ranking'         },
+  { key: 'resumo',       label: '📊 Resumo'      },
+  { key: 'movimentacao', label: '💰 Movimentação' },
+  { key: 'produtos',     label: '🎯 Produtos'     },
+  { key: 'carteira',     label: '📋 Carteira'     },
+  { key: 'ranking',      label: '🏆 Ranking'      },
 ];
 
 export default function DashboardVendedor() {
@@ -36,7 +35,7 @@ export default function DashboardVendedor() {
   const [aba, setAba]                 = useState('resumo');
 
   useEffect(() => { carregarConsultores(); }, []);
-  useEffect(() => { if (consultorId) carregarDados(); }, [consultorId]);
+  useEffect(() => { carregarDados(); }, [consultorId, gestorFiltro]);
 
   async function carregarConsultores() {
     const { data } = await supabase
@@ -50,22 +49,34 @@ export default function DashboardVendedor() {
   }
 
   async function carregarDados() {
-    if (!consultorId) return;
     setLoading(true);
+    setDados(null);
     try {
-      // Empresas do consultor
-      const { data: empresas } = await supabase
+      // Monta filtro de empresas conforme seleção
+      let query = supabase
         .from('empresas')
         .select(`
           id, nome, cnpj, produto_contratado, categoria, cidade, estado,
           potencial_movimentacao, peso_categoria, cartoes_emitidos,
           data_cadastro, taxa_positiva, taxa_negativa,
-          consultor_principal:consultor_principal_id (id, nome),
+          consultor_principal:consultor_principal_id (id, nome, gestor),
           consultor_agregado:consultor_agregado_id (id, nome),
           parceiro:parceiro_id (nome)
         `)
-        .or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId}`)
         .eq('ativo', true);
+
+      if (consultorId) {
+        // Vendedor individual
+        query = query.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId}`);
+      } else if (gestorFiltro !== 'Geral') {
+        // Consolidado por gestor — busca IDs dos consultores do gestor
+        const idsGestor = consultores.filter(c => c.gestor === gestorFiltro).map(c => c.id);
+        if (idsGestor.length === 0) { setLoading(false); return; }
+        query = query.in('consultor_principal_id', idsGestor);
+      }
+      // Geral = sem filtro adicional → traz todas
+
+      const { data: empresas } = await query;
 
       // Movimentações das empresas do consultor
       const empresaIds = (empresas || []).map(e => e.id);
@@ -79,8 +90,13 @@ export default function DashboardVendedor() {
         movimentacoes = movs || [];
       }
 
-      // Consultor atual
-      const consultor = consultores.find(c => c.id === consultorId);
+      // Consultor atual ou equipe
+      const consultor = consultorId ? consultores.find(c => c.id === consultorId) : null;
+      const consultoresDaVisao = consultorId
+        ? [consultor].filter(Boolean)
+        : gestorFiltro === 'Geral'
+          ? consultores
+          : consultores.filter(c => c.gestor === gestorFiltro);
 
       // Ranking: busca resultado de TODOS os consultores da equipe
       const { data: todasEmpresas } = await supabase
@@ -101,9 +117,12 @@ export default function DashboardVendedor() {
       const totalPotencial   = (empresas || []).reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
       const totalResultado   = (empresas || []).reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1)), 0);
       const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
-      const meta             = consultor?.meta_mensal || 0;
-      const pctMeta          = meta > 0 ? (totalResultado / meta) * 100 : 0;
+      const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
       const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
+      // Conta meses distintos com movimentação real importada
+      const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
+      const metaAcumulada    = meta * (mesesImportados || 1);
+      const pctMeta          = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
 
       // Movimentação real acumulada por empresa
       const movPorEmpresa = {};
@@ -166,7 +185,8 @@ export default function DashboardVendedor() {
 
       setDados({
         consultor,
-        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, pctMeta, ticketMedio, totalMovReal },
+        consultoresDaVisao,
+        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio },
         empresas: empresas || [],
         movRealPorEmpresa,
         evolucaoArray,
@@ -210,7 +230,7 @@ export default function DashboardVendedor() {
             {gestores.map(g => (
               <button key={g}
                 style={{ ...s.gestorBtn, ...(gestorFiltro === g ? s.gestorBtnAtivo : {}) }}
-                onClick={() => { setGestorFiltro(g); setConsultorId(''); setDados(null); }}>
+                onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
                 {g === 'Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
               </button>
             ))}
@@ -220,7 +240,7 @@ export default function DashboardVendedor() {
           <label style={s.filtroLabel}>VENDEDOR</label>
           <select style={s.select} value={consultorId}
             onChange={e => setConsultorId(e.target.value)}>
-            <option value="">— Selecione um vendedor —</option>
+            <option value="">— Ver equipe consolidada —</option>
             {consultoresFiltrados.map(c => (
               <option key={c.id} value={c.id}>{c.nome}</option>
             ))}
@@ -229,13 +249,7 @@ export default function DashboardVendedor() {
       </div>
 
       {/* Estado vazio */}
-      {!consultorId && !loading && (
-        <div style={s.vazio}>
-          <div style={{ fontSize: '3rem', marginBottom: 16 }}>👤</div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>Selecione um vendedor</div>
-          <div style={{ color: '#4b5563', fontSize: '0.85rem' }}>Escolha o gestor e o vendedor acima para ver o dashboard completo</div>
-        </div>
-      )}
+
 
       {/* Loading */}
       {loading && (
@@ -247,20 +261,26 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => e.movReal), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
         return (
           <>
-            {/* Nome do consultor */}
+            {/* Nome do consultor / equipe */}
             <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(240,180,41,0.15)', border: '2px solid rgba(240,180,41,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 700, color: '#f0b429' }}>
-                {consultor?.nome?.[0]}
+                {consultorId ? consultor?.nome?.[0] : gestorFiltro === 'Geral' ? '🌐' : '👔'}
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{consultor?.nome}</div>
-                <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{consultor?.setor || '—'} · {consultor?.gestor || '—'}</div>
+                <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>
+                  {consultorId ? consultor?.nome : gestorFiltro === 'Geral' ? 'Visão Geral — Todas as Equipes' : `Equipe ${gestorFiltro}`}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                  {consultorId
+                    ? `${consultor?.setor || '—'} · ${consultor?.gestor || '—'}`
+                    : `${consultoresDaVisao.length} consultores · ${dados?.empresas?.length || 0} empresas`}
+                </div>
               </div>
             </div>
 
@@ -271,7 +291,7 @@ export default function DashboardVendedor() {
                 { label: 'Potencial Bruto', val: fmt(kpis.totalPotencial), cor: '#e8eaf0' },
                 { label: 'Resultado Esperado', val: fmt(kpis.totalResultado), cor: '#f0b429' },
                 { label: 'Movimentação Real', val: fmt(kpis.totalMovReal), cor: '#34d399' },
-                { label: 'Meta Mensal', val: fmt(kpis.meta), cor: '#e8eaf0' },
+                { label: `Meta Acumulada (${kpis.mesesImportados} ${kpis.mesesImportados === 1 ? 'mês' : 'meses'})`, val: fmt(kpis.metaAcumulada), cor: '#e8eaf0' },
                 { label: '% da Meta', val: fmtPct(kpis.pctMeta), cor: corMeta(kpis.pctMeta) },
                 { label: 'Cartões Emitidos', val: kpis.totalCartoes, cor: '#e8eaf0' },
                 { label: 'Ticket Médio', val: fmt(kpis.ticketMedio), cor: '#60a5fa' },
@@ -287,14 +307,14 @@ export default function DashboardVendedor() {
             <div style={{ ...s.card, marginBottom: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Progresso da Meta</span>
-                <span style={{ color: corMeta(kpis.pctMeta), fontWeight: 700 }}>{fmtPct(kpis.pctMeta)}</span>
+                <span style={{ color: corMeta(kpis.pctMeta), fontWeight: 700 }}>{fmtPct(kpis.pctMeta)} · {kpis.mesesImportados} {kpis.mesesImportados === 1 ? 'mês' : 'meses'} importados</span>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 8, height: 12, overflow: 'hidden' }}>
                 <div style={{ background: corMeta(kpis.pctMeta), height: '100%', width: `${Math.min(kpis.pctMeta, 100)}%`, borderRadius: 8, transition: 'width 0.8s ease' }}></div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: '0.75rem', color: '#6b7280' }}>
                 <span>R$ 0</span>
-                <span>{fmt(kpis.meta)}</span>
+                <span>{fmt(kpis.metaAcumulada)}</span>
               </div>
             </div>
 
@@ -374,41 +394,6 @@ export default function DashboardVendedor() {
               </div>
             )}
 
-            {/* ── FECHAMENTOS ─────────────────────────────────────────── */}
-            {aba === 'fechamentos' && (
-              <div style={s.card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div style={s.cardTitle}>✅ Empresas Fechadas — Carteira Completa</div>
-                  <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{empresas.length} registros</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr>
-                        {['Empresa', 'CNPJ', 'Produto', 'Categoria', 'Cidade/UF', 'Cartões', 'Potencial', 'Resultado', 'Parceiro', 'Consultor Agregado'].map(h =>
-                          <th key={h} style={s.th}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empresas.map((e, i) => (
-                        <tr key={i} className="row-hover" style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{e.nome}</td>
-                          <td style={{ ...s.td, color: '#6b7280', fontFamily: 'monospace', fontSize: '0.75rem' }}>{e.cnpj || '—'}</td>
-                          <td style={s.td}>{e.produto_contratado || '—'}</td>
-                          <td style={{ ...s.td, color: '#9ca3af' }}>{e.categoria || '—'}</td>
-                          <td style={s.td}>{e.cidade || '—'} / {e.estado || '—'}</td>
-                          <td style={{ ...s.td, textAlign: 'center' }}>{e.cartoes_emitidos || 0}</td>
-                          <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                          <td style={{ ...s.td, color: '#f0b429', fontWeight: 600 }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1))}</td>
-                          <td style={{ ...s.td, color: '#9ca3af' }}>{e.parceiro?.nome || '—'}</td>
-                          <td style={{ ...s.td, color: '#9ca3af' }}>{e.consultor_agregado?.nome || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
 
             {/* ── MOVIMENTAÇÃO REAL ───────────────────────────────────── */}
             {aba === 'movimentacao' && (
