@@ -67,21 +67,30 @@ function parseRow(row) {
   const recarga    = cleanNum(findKeyContains(row, 'recarga') || findKeyContains(row, 'credito') || findKeyContains(row, 'creditado'));
   const movimentou = cleanNum(findKeyContains(row, 'moviment') || findKeyContains(row, 'utiliz') || findKeyContains(row, 'consumo'));
 
+  // Spread — lê da planilha se vier preenchido
+  const taxa_negativa_plan  = cleanNum(findKey(row, 'Taxa Negativa') || findKey(row, 'Taxa Negativa (%)'));
+  const taxa_positiva_plan  = cleanNum(findKey(row, 'Taxa Positiva') || findKey(row, 'Taxa Positiva (%)'));
+  const custo_plan          = cleanNum(findKey(row, 'Custo da Taxa Negativa') || findKey(row, 'Custo Taxa Negativa'));
+  const receita_bruta_plan  = cleanNum(findKey(row, 'Receita Bruta R$') || findKey(row, 'Receita Bruta'));
+
   const tipo = tipoProduto(produto);
-  // Lógica central: Benefício = recarga / Convênio = movimentação utilizada
   const valor_meta = tipo === 'beneficio' ? recarga
                    : tipo === 'convenio'  ? movimentou
-                   : (recarga || movimentou); // fallback: o que tiver
+                   : (recarga || movimentou);
 
   return {
     produto_id,
     empresa,
     produto,
     tipo,
-    competencia: cleanDate(mesRef),
+    competencia:       cleanDate(mesRef),
     recarga,
     movimentou,
     valor_meta,
+    taxa_negativa_plan,
+    taxa_positiva_plan,
+    custo_plan,
+    receita_bruta_plan,
   };
 }
 
@@ -148,21 +157,39 @@ export default function ImportarMovimentacoes() {
 
       const empresaMap = Object.fromEntries((empresas || []).map(e => [e.produto_id, e]));
 
+      // Busca taxa_positiva e taxa_negativa do banco para calcular spread quando não vier na planilha
+      const { data: empresasComTaxa } = await supabase
+        .from('empresas')
+        .select('id, produto_id, produto_contratado, taxa_positiva, taxa_negativa')
+        .in('produto_id', ids);
+      const empresaMapTaxa = Object.fromEntries((empresasComTaxa || []).map(e => [e.produto_id, e]));
+
       const rows = preview
         .map(r => {
-          const emp = empresaMap[r.produto_id];
+          const emp = empresaMapTaxa[r.produto_id] || empresaMap[r.produto_id];
           if (!emp) return null;
 
-          // Re-detecta tipo pelo produto real do banco (mais confiável)
           const tipoBanco = tipoProduto(emp.produto_contratado || r.produto);
           const valor_movimentacao = tipoBanco === 'beneficio' ? r.recarga
                                    : tipoBanco === 'convenio'  ? r.movimentou
                                    : r.valor_meta;
 
+          // Spread: usa valor da planilha se veio preenchido, senão calcula com taxa do banco
+          const taxa_neg = r.taxa_negativa_plan > 0 ? r.taxa_negativa_plan : (emp.taxa_negativa || 0);
+          const taxa_pos = r.taxa_positiva_plan > 0 ? r.taxa_positiva_plan : (emp.taxa_positiva || 0);
+          const custo_taxa_negativa = r.custo_plan > 0
+            ? r.custo_plan
+            : valor_movimentacao * (taxa_neg / 100);
+          const receita_bruta = r.receita_bruta_plan > 0
+            ? r.receita_bruta_plan
+            : valor_movimentacao * (taxa_pos / 100);
+
           return {
-            empresa_id:              emp.id,
-            competencia:             r.competencia,
+            empresa_id:         emp.id,
+            competencia:        r.competencia,
             valor_movimentacao,
+            receita_bruta,
+            custo_taxa_negativa,
           };
         })
         .filter(Boolean)
@@ -243,6 +270,11 @@ export default function ImportarMovimentacoes() {
     return acc;
   }, {});
 
+  const totalMovPreview   = preview.reduce((s, r) => s + r.valor_meta, 0);
+  const totalRecPreview   = preview.reduce((s, r) => s + (r.receita_bruta_plan || 0), 0);
+  const totalCustoPreview = preview.reduce((s, r) => s + (r.custo_plan || 0), 0);
+  const temSpread         = totalRecPreview > 0 || totalCustoPreview > 0;
+
   const semMatch = preview.filter(r => !r.produto_id).length;
   const previewFiltrado = filtroTipo === 'todos' ? preview : preview.filter(r => r.tipo === filtroTipo);
   const mesRef = preview[0]?.competencia;
@@ -316,6 +348,29 @@ export default function ImportarMovimentacoes() {
                 <span style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>{v.qtd} empresas</span>
               </div>
             ))}
+            {temSpread && (
+              <div style={{ ...s.resumoItem, borderColor: 'rgba(52,211,153,0.3)' }}>
+                <span style={s.resumoLabel}>Receita Bruta</span>
+                <span style={{ ...s.resumoVal, color: '#34d399' }}>{fmt(totalRecPreview)}</span>
+                <span style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>taxa positiva</span>
+              </div>
+            )}
+            {temSpread && (
+              <div style={{ ...s.resumoItem, borderColor: 'rgba(248,113,113,0.3)' }}>
+                <span style={s.resumoLabel}>Custo (tx-)</span>
+                <span style={{ ...s.resumoVal, color: '#f87171' }}>{fmt(totalCustoPreview)}</span>
+                <span style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>taxa negativa</span>
+              </div>
+            )}
+            {temSpread && (
+              <div style={{ ...s.resumoItem, borderColor: 'rgba(96,165,250,0.3)' }}>
+                <span style={s.resumoLabel}>Spread Líquido</span>
+                <span style={{ ...s.resumoVal, color: '#60a5fa' }}>{fmt(totalRecPreview - totalCustoPreview)}</span>
+                <span style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>
+                  {totalMovPreview > 0 ? ((totalRecPreview - totalCustoPreview) / totalMovPreview * 100).toFixed(2) : '0.00'}%
+                </span>
+              </div>
+            )}
             {semMatch > 0 && (
               <div style={{ ...s.resumoItem, borderColor: 'rgba(248,113,113,0.3)' }}>
                 <span style={s.resumoLabel}>Sem match</span>
@@ -353,7 +408,7 @@ export default function ImportarMovimentacoes() {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {['ID', 'Empresa', 'Produto', 'Tipo', 'Mês Ref.', 'Recarga', 'Utilizado', 'Valor p/ Meta'].map(h =>
+                  {['ID', 'Empresa', 'Produto', 'Tipo', 'Mês Ref.', 'Valor p/ Meta', 'Receita Bruta', 'Custo (tx-)'].map(h =>
                     <th key={h} style={s.th}>{h}</th>)}
                 </tr>
               </thead>
@@ -371,14 +426,14 @@ export default function ImportarMovimentacoes() {
                         </span>
                       </td>
                       <td style={s.td}>{fmtMes(r.competencia)}</td>
-                      <td style={{ ...s.td, color: r.recarga > 0 ? '#60a5fa' : '#4b5563' }}>{fmt(r.recarga)}</td>
-                      <td style={{ ...s.td, color: r.movimentou > 0 ? '#34d399' : '#4b5563' }}>{fmt(r.movimentou)}</td>
                       <td style={{ ...s.td, color: '#f0b429', fontWeight: 700 }}>{fmt(r.valor_meta)}</td>
+                      <td style={{ ...s.td, color: r.receita_bruta_plan > 0 ? '#34d399' : '#4b5563' }}>{r.receita_bruta_plan > 0 ? fmt(r.receita_bruta_plan) : '—'}</td>
+                      <td style={{ ...s.td, color: r.custo_plan > 0 ? '#f87171' : '#4b5563' }}>{r.custo_plan > 0 ? fmt(r.custo_plan) : '—'}</td>
                     </tr>
                   );
                 })}
                 {previewFiltrado.length > 20 && (
-                  <tr><td colSpan={8} style={{ ...s.td, textAlign: 'center', color: '#6b7280' }}>
+                  <tr><td colSpan={7} style={{ ...s.td, textAlign: 'center', color: '#6b7280' }}>
                     ... e mais {previewFiltrado.length - 20} registros
                   </td></tr>
                 )}
