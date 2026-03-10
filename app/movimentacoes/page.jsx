@@ -195,6 +195,7 @@ export default function ImportarMovimentacoes() {
         .from('empresas')
         .select(`
           produto_id, nome, produto_contratado, categoria, data_cadastro,
+          taxa_positiva, taxa_negativa,
           consultor_principal:consultor_principal_id (nome),
           parceiro:parceiro_id (nome)
         `)
@@ -209,6 +210,8 @@ export default function ImportarMovimentacoes() {
         'Consultor Principal':     e.consultor_principal?.nome || '',
         'Parceiro':                e.parceiro?.nome || '',
         'Data Cadastro':           e.data_cadastro || '',
+        'Taxa Positiva (%)':       e.taxa_positiva || 0,
+        'Taxa Negativa (%)':       e.taxa_negativa || 0,
         'Mês Ref.':                '',
         'Recarga (Benefício)':     '',
         'Movimentação (Convênio)': '',
@@ -219,7 +222,8 @@ export default function ImportarMovimentacoes() {
       // Largura das colunas
       ws['!cols'] = [
         { wch: 12 }, { wch: 40 }, { wch: 22 }, { wch: 18 },
-        { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 12 }, { wch: 22 }, { wch: 24 },
+        { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 18 }, { wch: 18 },
+        { wch: 12 }, { wch: 22 }, { wch: 24 },
       ];
 
       const wb = xlsxLib.utils.book_new();
