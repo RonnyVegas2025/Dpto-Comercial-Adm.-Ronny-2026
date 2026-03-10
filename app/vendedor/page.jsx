@@ -73,7 +73,7 @@ export default function DashboardVendedor() {
       if (empresaIds.length > 0) {
         const { data: movs } = await supabase
           .from('movimentacoes')
-          .select('empresa_id, competencia, valor_movimentacao, receita_taxa_positiva')
+          .select('empresa_id, competencia, valor_movimentacao')
           .in('empresa_id', empresaIds)
           .order('competencia', { ascending: false });
         movimentacoes = movs || [];
@@ -121,9 +121,8 @@ export default function DashboardVendedor() {
       movimentacoes.forEach(m => {
         const mes = m.competencia?.substring(0, 7);
         if (!mes) return;
-        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, taxa: 0 };
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0 };
         evolucao[mes].movReal += m.valor_movimentacao || 0;
-        evolucao[mes].taxa    += m.receita_taxa_positiva || 0;
       });
       const evolucaoArray = Object.entries(evolucao)
         .sort(([a], [b]) => a.localeCompare(b))
