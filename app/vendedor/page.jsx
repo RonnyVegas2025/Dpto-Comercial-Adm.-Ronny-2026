@@ -82,6 +82,20 @@ export default function DashboardVendedor() {
       // Consultor atual
       const consultor = consultores.find(c => c.id === consultorId);
 
+      // Ranking: busca resultado de TODOS os consultores da equipe
+      const { data: todasEmpresas } = await supabase
+        .from('empresas')
+        .select('consultor_principal_id, potencial_movimentacao, peso_categoria')
+        .eq('ativo', true);
+
+      const resultadoPorConsultor = {};
+      (todasEmpresas || []).forEach(e => {
+        const cid = e.consultor_principal_id;
+        if (!cid) return;
+        if (!resultadoPorConsultor[cid]) resultadoPorConsultor[cid] = 0;
+        resultadoPorConsultor[cid] += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+      });
+
       // ── Processamento ───────────────────────────────────────────────────────
       const totalEmpresas    = (empresas || []).length;
       const totalPotencial   = (empresas || []).reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
@@ -159,6 +173,7 @@ export default function DashboardVendedor() {
         evolucaoArray,
         produtosArray,
         timeline: timeline.slice(0, 30),
+        resultadoPorConsultor,
       });
     } catch (err) { console.error(err); }
     setLoading(false);
@@ -233,7 +248,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => e.movReal), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -536,7 +551,7 @@ export default function DashboardVendedor() {
                     {consultores
                       .filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro)
                       .map(c => ({ ...c }))
-                      .sort((a, b) => (b.meta_mensal || 0) - (a.meta_mensal || 0))
+                      .sort((a, b) => (resultadoPorConsultor[b.id] || 0) - (resultadoPorConsultor[a.id] || 0))
                       .map((c, i) => {
                         const isAtual = c.id === consultorId;
                         return (
@@ -546,7 +561,8 @@ export default function DashboardVendedor() {
                             </span>
                             <span style={{ flex: 1, fontWeight: isAtual ? 700 : 500, color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</span>
                             <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{c.gestor || '—'}</span>
-                            <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{fmt(c.meta_mensal)} meta</span>
+                            <span style={{ color: '#f0b429', fontSize: '0.85rem', fontWeight: 600 }}>{fmt(resultadoPorConsultor[c.id] || 0)}</span>
+                            <span style={{ color: '#4b5563', fontSize: '0.75rem' }}>resultado</span>
                             {isAtual && <span style={{ background: 'rgba(240,180,41,0.2)', color: '#f0b429', borderRadius: 6, padding: '2px 8px', fontSize: '0.72rem', fontWeight: 700 }}>você</span>}
                           </div>
                         );
@@ -590,4 +606,3 @@ const s = {
   td:          { padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' },
   semDados:    { color: '#4b5563', fontSize: '0.85rem', textAlign: 'center', padding: '32px 0' },
 };
-
