@@ -36,7 +36,7 @@ export default function DashboardVendedor() {
   const [aba, setAba]                 = useState('resumo');
 
   useEffect(() => { carregarConsultores(); }, []);
-  useEffect(() => { carregarDados(); }, [consultorId, gestorFiltro]);
+  useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores]);
 
   async function carregarConsultores() {
     const { data } = await supabase
@@ -70,9 +70,15 @@ export default function DashboardVendedor() {
         // Vendedor individual
         query = query.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId}`);
       } else if (gestorFiltro !== 'Geral') {
-        // Consolidado por gestor — busca IDs dos consultores do gestor
-        const idsGestor = consultores.filter(c => c.gestor === gestorFiltro).map(c => c.id);
-        if (idsGestor.length === 0) { setLoading(false); return; }
+        // Consolidado por gestor — usa consultores já carregados no state
+        const idsGestor = consultores
+          .filter(c => c.gestor === gestorFiltro)
+          .map(c => c.id);
+        if (idsGestor.length === 0) {
+          setLoading(false);
+          setDados({ kpis: { totalEmpresas:0, totalPotencial:0, totalResultado:0, totalCartoes:0, meta:0, metaAcumulada:0, mesesImportados:0, pctMeta:0, totalMovReal:0, ticketMedio:0, receitaBruta:0, pctReceita:0, descontoTotal:0, pctDesconto:0, spreadLiquido:0, pctSpread:0 }, empresas:[], movRealPorEmpresa:[], evolucaoArray:[], produtosArray:[], parceirosArray:[], timeline:[], resultadoPorConsultor:{}, consultoresDaVisao:[], consultor: null });
+          return;
+        }
         query = query.in('consultor_principal_id', idsGestor);
       }
       // Geral = sem filtro adicional → traz todas
@@ -114,27 +120,8 @@ export default function DashboardVendedor() {
       });
 
       // ── Processamento ───────────────────────────────────────────────────────
-      const totalEmpresas    = (empresas || []).length;
-      const totalPotencial   = (empresas || []).reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
-      const totalResultado   = (empresas || []).reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1)), 0);
-      const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
-      const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
-      const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
 
-      // Desconto total: para cada empresa, taxa_negativa% × movimentação real dela
-      const descontoTotal = (empresas || []).reduce((s, e) => {
-        const mov  = movPorEmpresa[e.id]?.total || 0;
-        const taxa = (e.taxa_negativa || 0) / 100;
-        return s + (mov * taxa);
-      }, 0);
-      // % do desconto sobre a movimentação real total da carteira
-      const pctDesconto = totalMovReal > 0 ? (descontoTotal / totalMovReal) * 100 : 0;
-      // Conta meses distintos com movimentação real importada
-      const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
-      const metaAcumulada    = meta * (mesesImportados || 1);
-      const pctMeta          = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
-
-      // Movimentação real acumulada por empresa
+      // 1. Movimentação real acumulada por empresa (precisa vir primeiro)
       const movPorEmpresa = {};
       movimentacoes.forEach(m => {
         if (!movPorEmpresa[m.empresa_id]) movPorEmpresa[m.empresa_id] = { total: 0, ultima: null };
@@ -142,8 +129,37 @@ export default function DashboardVendedor() {
         if (!movPorEmpresa[m.empresa_id].ultima || m.competencia > movPorEmpresa[m.empresa_id].ultima)
           movPorEmpresa[m.empresa_id].ultima = m.competencia;
       });
-
       const totalMovReal = Object.values(movPorEmpresa).reduce((s, m) => s + m.total, 0);
+
+      // 2. KPIs básicos
+      const totalEmpresas    = (empresas || []).length;
+      const totalPotencial   = (empresas || []).reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
+      const totalResultado   = (empresas || []).reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1)), 0);
+      const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
+      const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
+      const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
+
+      // 3. Meta acumulada
+      const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
+      const metaAcumulada    = meta * (mesesImportados || 1);
+      const pctMeta          = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
+
+      // 4. Spread e desconto — depende de movPorEmpresa e totalMovReal
+      // Receita bruta: taxa_positiva% × mov real
+      const receitaBruta = (empresas || []).reduce((s, e) => {
+        const mov = movPorEmpresa[e.id]?.total || 0;
+        return s + (mov * ((e.taxa_positiva || 0) / 100));
+      }, 0);
+      // Desconto: taxa_negativa% × mov real
+      const descontoTotal = (empresas || []).reduce((s, e) => {
+        const mov = movPorEmpresa[e.id]?.total || 0;
+        return s + (mov * ((e.taxa_negativa || 0) / 100));
+      }, 0);
+      // Spread líquido = receita bruta - desconto
+      const spreadLiquido = receitaBruta - descontoTotal;
+      const pctDesconto   = totalMovReal > 0 ? (descontoTotal  / totalMovReal) * 100 : 0;
+      const pctReceita    = totalMovReal > 0 ? (receitaBruta   / totalMovReal) * 100 : 0;
+      const pctSpread     = totalMovReal > 0 ? (spreadLiquido  / totalMovReal) * 100 : 0;
 
       // Evolução mensal (agrupa movimentações por competência)
       const evolucao = {};
@@ -211,7 +227,7 @@ export default function DashboardVendedor() {
       setDados({
         consultor,
         consultoresDaVisao,
-        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio, descontoTotal, pctDesconto },
+        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
         movRealPorEmpresa,
         evolucaoArray,
@@ -321,7 +337,9 @@ export default function DashboardVendedor() {
                 { label: '% da Meta', val: fmtPct(kpis.pctMeta), cor: corMeta(kpis.pctMeta) },
                 { label: 'Cartões Emitidos', val: kpis.totalCartoes, cor: '#e8eaf0' },
                 { label: 'Ticket Médio', val: fmt(kpis.ticketMedio), cor: '#60a5fa' },
-                { label: 'Desconto s/ Carteira', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', extra: `${fmt(kpis.descontoTotal)} em descontos` },
+                { label: 'Receita Bruta (tx+)', val: `${Number(kpis.pctReceita||0).toFixed(2)}%`, cor: '#34d399', extra: fmt(kpis.receitaBruta) },
+                { label: 'Custo / Desconto (tx-)', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', extra: fmt(kpis.descontoTotal) },
+                { label: 'Spread Líquido', val: `${Number(kpis.pctSpread||0).toFixed(2)}%`, cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171', extra: fmt(kpis.spreadLiquido) },
               ].map(({ label, val, cor, extra }) => (
                 <div key={label} style={s.kpi}>
                   <span style={s.kpiLabel}>{label}</span>
