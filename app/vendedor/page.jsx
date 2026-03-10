@@ -91,7 +91,7 @@ export default function DashboardVendedor() {
       if (empresaIds.length > 0) {
         const { data: movs } = await supabase
           .from('movimentacoes')
-          .select('empresa_id, competencia, valor_movimentacao')
+          .select('empresa_id, competencia, valor_movimentacao, receita_bruta, custo_taxa_negativa, spread_liquido')
           .in('empresa_id', empresaIds)
           .order('competencia', { ascending: false });
         movimentacoes = movs || [];
@@ -124,12 +124,16 @@ export default function DashboardVendedor() {
       // 1. Movimentação real acumulada por empresa (precisa vir primeiro)
       const movPorEmpresa = {};
       movimentacoes.forEach(m => {
-        if (!movPorEmpresa[m.empresa_id]) movPorEmpresa[m.empresa_id] = { total: 0, ultima: null };
-        movPorEmpresa[m.empresa_id].total += m.valor_movimentacao || 0;
+        if (!movPorEmpresa[m.empresa_id]) movPorEmpresa[m.empresa_id] = { total: 0, receita: 0, custo: 0, ultima: null };
+        movPorEmpresa[m.empresa_id].total   += m.valor_movimentacao  || 0;
+        movPorEmpresa[m.empresa_id].receita += m.receita_bruta       || 0;
+        movPorEmpresa[m.empresa_id].custo   += m.custo_taxa_negativa || 0;
         if (!movPorEmpresa[m.empresa_id].ultima || m.competencia > movPorEmpresa[m.empresa_id].ultima)
           movPorEmpresa[m.empresa_id].ultima = m.competencia;
       });
-      const totalMovReal = Object.values(movPorEmpresa).reduce((s, m) => s + m.total, 0);
+      const totalMovReal    = Object.values(movPorEmpresa).reduce((s, m) => s + m.total,   0);
+      const totalReceitaMov = Object.values(movPorEmpresa).reduce((s, m) => s + m.receita, 0);
+      const totalCustoMov   = Object.values(movPorEmpresa).reduce((s, m) => s + m.custo,   0);
 
       // 2. KPIs básicos
       const totalEmpresas    = (empresas || []).length;
@@ -144,22 +148,24 @@ export default function DashboardVendedor() {
       const metaAcumulada    = meta * (mesesImportados || 1);
       const pctMeta          = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
 
-      // 4. Spread e desconto — depende de movPorEmpresa e totalMovReal
-      // Receita bruta: taxa_positiva% × mov real
-      const receitaBruta = (empresas || []).reduce((s, e) => {
-        const mov = movPorEmpresa[e.id]?.total || 0;
-        return s + (mov * ((e.taxa_positiva || 0) / 100));
-      }, 0);
-      // Desconto: taxa_negativa% × mov real
-      const descontoTotal = (empresas || []).reduce((s, e) => {
-        const mov = movPorEmpresa[e.id]?.total || 0;
-        return s + (mov * ((e.taxa_negativa || 0) / 100));
-      }, 0);
-      // Spread líquido = receita bruta - desconto
+      // 4. Spread — usa valores salvos nas movimentações (receita_bruta e custo_taxa_negativa)
+      //    Se movimentações não têm spread (importação antiga), fallback para taxa do cadastro
+      const receitaBruta = totalReceitaMov > 0
+        ? totalReceitaMov
+        : (empresas || []).reduce((s, e) => {
+            const mov = movPorEmpresa[e.id]?.total || 0;
+            return s + (mov * ((e.taxa_positiva || 0) / 100));
+          }, 0);
+      const descontoTotal = totalCustoMov > 0
+        ? totalCustoMov
+        : (empresas || []).reduce((s, e) => {
+            const mov = movPorEmpresa[e.id]?.total || 0;
+            return s + (mov * ((e.taxa_negativa || 0) / 100));
+          }, 0);
       const spreadLiquido = receitaBruta - descontoTotal;
-      const pctDesconto   = totalMovReal > 0 ? (descontoTotal  / totalMovReal) * 100 : 0;
-      const pctReceita    = totalMovReal > 0 ? (receitaBruta   / totalMovReal) * 100 : 0;
-      const pctSpread     = totalMovReal > 0 ? (spreadLiquido  / totalMovReal) * 100 : 0;
+      const pctReceita    = totalMovReal > 0 ? (receitaBruta  / totalMovReal) * 100 : 0;
+      const pctDesconto   = totalMovReal > 0 ? (descontoTotal / totalMovReal) * 100 : 0;
+      const pctSpread     = totalMovReal > 0 ? (spreadLiquido / totalMovReal) * 100 : 0;
 
       // Evolução mensal (agrupa movimentações por competência)
       const evolucao = {};
