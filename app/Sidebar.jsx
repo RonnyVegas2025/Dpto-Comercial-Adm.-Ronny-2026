@@ -7,8 +7,9 @@ const nav = [
   { href: '/',           icon: '◈', label: 'Início'     },
   { href: '/previsao',   icon: '◉', label: 'Previsão'   },
   { href: '/vendedor',   icon: '👤', label: 'Vendedor'   },
-  { href: '/fechamento', icon: '◎', label: 'Fechamento' },
-  { href: '/importar',   icon: '⊕', label: 'Importar'   },
+  { href: '/movimentacoes', icon: '💳', label: 'Movimentações' },
+  { href: '/fechamento',    icon: '◎', label: 'Fechamento'    },
+  { href: '/importar',      icon: '⊕', label: 'Importar'      },
 ];
 
 export default function Sidebar() {
