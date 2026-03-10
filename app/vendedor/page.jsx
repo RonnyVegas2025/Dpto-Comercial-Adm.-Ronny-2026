@@ -137,8 +137,17 @@ export default function DashboardVendedor() {
 
       // 2. KPIs básicos
       const totalEmpresas    = (empresas || []).length;
-      const totalPotencial   = (empresas || []).reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
-      const totalResultado   = (empresas || []).reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1)), 0);
+      // Potencial e resultado × meses de cada empresa (base acumulada = mesma base da mov. real)
+      const totalPotencial   = (empresas || []).reduce((s, e) => {
+        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
+          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
+        return s + (e.potencial_movimentacao || 0) * mesesE;
+      }, 0);
+      const totalResultado   = (empresas || []).reduce((s, e) => {
+        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
+          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
+        return s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesE;
+      }, 0);
       const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
       const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
       const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
@@ -179,14 +188,16 @@ export default function DashboardVendedor() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([mes, v]) => ({ mes, ...v }));
 
-      // Por produto
+      // Por produto — também acumulado
       const porProduto = {};
       (empresas || []).forEach(e => {
         const p = e.produto_contratado || 'Outros';
+        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
+          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
         if (!porProduto[p]) porProduto[p] = { contratos: 0, potencial: 0, resultado: 0 };
         porProduto[p].contratos++;
-        porProduto[p].potencial  += e.potencial_movimentacao || 0;
-        porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+        porProduto[p].potencial  += (e.potencial_movimentacao || 0) * mesesE;
+        porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesE;
       });
       const produtosArray = Object.entries(porProduto)
         .map(([nome, v]) => ({ nome, ...v }))
@@ -215,19 +226,34 @@ export default function DashboardVendedor() {
         return { ...e, movReal: mov.total, ultimaMov: mov.ultima, aderencia: ader, situacao };
       }).sort((a, b) => b.movReal - a.movReal);
 
-      // Por parceiro
+      // Por parceiro — potencial e resultado acumulados (× meses importados)
+      // para ficarem na mesma base da movimentação real acumulada
       const porParceiro = {};
       (empresas || []).forEach(e => {
         const parc = e.parceiro?.nome || 'Sem Parceiro';
-        const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null };
-        if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0 };
+        const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null, receita: 0, custo: 0 };
+        // Meses com movimentação real para essa empresa especificamente
+        const mesesEmpresa = movimentacoes.filter(m => m.empresa_id === e.id)
+          .map(m => m.competencia?.substring(0,7))
+          .filter((v, i, a) => v && a.indexOf(v) === i).length || 1;
+        if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0, receita: 0, custo: 0, totalMeses: 0 };
         porParceiro[parc].contratos++;
-        porParceiro[parc].potencial  += e.potencial_movimentacao || 0;
-        porParceiro[parc].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
-        porParceiro[parc].movReal    += mov.total;
+        porParceiro[parc].potencial   += (e.potencial_movimentacao || 0) * mesesEmpresa;
+        porParceiro[parc].resultado   += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesEmpresa;
+        porParceiro[parc].movReal     += mov.total;
+        porParceiro[parc].receita     += mov.receita || 0;
+        porParceiro[parc].custo       += mov.custo   || 0;
+        porParceiro[parc].totalMeses  += mesesEmpresa; // soma meses de todas as empresas do parceiro
       });
       const parceirosArray = Object.entries(porParceiro)
-        .map(([nome, v]) => ({ nome, ...v }))
+        .map(([nome, v]) => ({
+          nome, ...v,
+          spread:          v.receita - v.custo,
+          // Média mensal = mov real total ÷ meses médios das empresas do parceiro
+          mesesMedios:     v.contratos > 0 ? v.totalMeses / v.contratos : 1,
+          mediaMovMensal:  v.totalMeses > 0 ? v.movReal / (v.totalMeses / v.contratos) : 0,
+          potencialMensal: v.contratos > 0 ? v.potencial / (v.totalMeses / v.contratos) : 0,
+        }))
         .sort((a, b) => b.movReal - a.movReal);
 
       setDados({
@@ -592,34 +618,50 @@ export default function DashboardVendedor() {
                     const cores = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6'];
                     const cor = cores[i % cores.length];
                     const pctMov = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
+                    const meses  = Math.round(p.mesesMedios);
+                    const resultadoMensal = meses > 0 ? p.resultado / meses : p.resultado;
+                    const corAder = pctMov >= 100 ? '#34d399' : pctMov >= 70 ? '#f0b429' : '#f87171';
                     return (
-                      <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#e8eaf0', flex: 1, paddingRight: 8 }}>{p.nome}</div>
-                          <span style={{ background: `${cor}18`, color: cor, borderRadius: 6, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {p.contratos} contrato{p.contratos > 1 ? 's' : ''}
+                      <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+                        {/* Cabeçalho: nome + badge contratos */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#e8eaf0', flex: 1, paddingRight: 8, lineHeight: 1.3 }}>{p.nome}</div>
+                          <span style={{ background: `${cor}18`, color: cor, borderRadius: 6, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {p.contratos} empresa{p.contratos > 1 ? 's' : ''}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#6b7280' }}>Resultado esperado</span>
-                            <span style={{ color: cor, fontWeight: 600 }}>{fmt(p.resultado)}</span>
+
+                        {/* Destaque principal: Média Mensal Real */}
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ color: '#4b5563', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>Média Mensal Real</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#60a5fa' }}>{fmt(p.mediaMovMensal)}</div>
+                          <div style={{ color: '#4b5563', fontSize: '0.68rem', marginTop: 2 }}>base {meses} {meses === 1 ? 'mês' : 'meses'} · acum. {fmt(p.movReal)}</div>
+                        </div>
+
+                        {/* Divisor */}
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', marginBottom: 10 }}></div>
+
+                        {/* Comparativo mensal: esperado vs real */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                          <div>
+                            <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Esperado/mês</div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: cor }}>{fmt(resultadoMensal)}</div>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#6b7280' }}>Movimentação real</span>
-                            <span style={{ color: '#34d399', fontWeight: 600 }}>{fmt(p.movReal)}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#6b7280' }}>Potencial bruto</span>
-                            <span style={{ color: '#9ca3af' }}>{fmt(p.potencial)}</span>
+                          <div>
+                            <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Potencial/mês</div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#9ca3af' }}>{fmt(p.potencialMensal)}</div>
                           </div>
                         </div>
-                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                          <div style={{ background: cor, height: '100%', width: `${Math.min(pctMov, 100)}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
+
+                        {/* Barra de aderência */}
+                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 4 }}>
+                          <div style={{ background: corAder, height: '100%', width: `${Math.min(pctMov, 100)}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
                         </div>
-                        <div style={{ color: '#4b5563', fontSize: '0.68rem', marginTop: 4, textAlign: 'right' }}>
-                          {fmtPct(pctMov)} aderência
+                        <div style={{ color: corAder, fontSize: '0.68rem', fontWeight: 600, textAlign: 'right' }}>
+                          {fmtPct(pctMov)} da meta acumulada
                         </div>
+
                       </div>
                     );
                   })}
@@ -627,27 +669,39 @@ export default function DashboardVendedor() {
 
                 {/* Tabela detalhada */}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 14, color: '#9ca3af' }}>DETALHAMENTO COMPLETO</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#9ca3af' }}>DETALHAMENTO COMPLETO</div>
+                    <div style={{ fontSize: '0.72rem', color: '#4b5563', background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '4px 10px' }}>
+                      📌 Potencial e Resultado acumulados (× meses importados) — mesma base da Mov. Real
+                    </div>
+                  </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={s.table}>
                       <thead>
                         <tr>
-                          {['Parceiro', 'Contratos', 'Potencial Bruto', 'Resultado Esperado', 'Mov. Real', '% Aderência', 'Ticket Médio'].map(h =>
+                          {['Parceiro', 'Contratos', 'Potencial Mensal', 'Resultado Acum.', 'Mov. Real Acum.', 'Média Mensal', '% Aderência', 'Spread Líquido'].map(h =>
                             <th key={h} style={s.th}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
                         {parceirosArray.map((p, i) => {
-                          const ader = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
+                          const ader   = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
                           const ticket = p.contratos > 0 ? p.resultado / p.contratos : 0;
-                          const corAder = ader >= 90 ? '#34d399' : ader >= 50 ? '#f0b429' : ader > 0 ? '#f87171' : '#4b5563';
+                          const corAder   = ader >= 90 ? '#34d399' : ader >= 50 ? '#f0b429' : ader > 0 ? '#f87171' : '#4b5563';
+                          const corSpread = p.spread > 0 ? '#60a5fa' : p.spread < 0 ? '#f87171' : '#4b5563';
                           return (
                             <tr key={i} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                              <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#4b5563' : '#e8eaf0' }}>{p.nome}</td>
+                              <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#4b5563' : '#e8eaf0' }}>
+                                {p.nome}
+                                <div style={{ color: '#4b5563', fontSize: '0.68rem', fontWeight: 400, marginTop: 2 }}>
+                                  {Math.round(p.mesesMedios)} {Math.round(p.mesesMedios) === 1 ? 'mês' : 'meses'} importados
+                                </div>
+                              </td>
                               <td style={{ ...s.td, textAlign: 'center' }}>{p.contratos}</td>
-                              <td style={s.td}>{fmt(p.potencial)}</td>
-                              <td style={{ ...s.td, color: '#f0b429', fontWeight: 600 }}>{fmt(p.resultado)}</td>
+                              <td style={{ ...s.td, color: '#f0b429' }}>{fmt(p.potencialMensal)}</td>
+                              <td style={{ ...s.td, color: '#9ca3af' }}>{fmt(p.resultado)}</td>
                               <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(p.movReal)}</td>
+                              <td style={{ ...s.td, color: '#60a5fa', fontWeight: 700 }}>{fmt(p.mediaMovMensal)}</td>
                               <td style={s.td}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
@@ -656,7 +710,9 @@ export default function DashboardVendedor() {
                                   <span style={{ color: corAder, fontWeight: 600, fontSize: '0.8rem' }}>{fmtPct(ader)}</span>
                                 </div>
                               </td>
-                              <td style={{ ...s.td, color: '#60a5fa' }}>{fmt(ticket)}</td>
+                              <td style={{ ...s.td, color: corSpread, fontWeight: 600 }}>
+                                {p.spread !== 0 ? fmt(p.spread) : <span style={{ color: '#4b5563' }}>—</span>}
+                              </td>
                             </tr>
                           );
                         })}
