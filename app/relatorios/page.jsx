@@ -282,7 +282,7 @@ export default function RelatorioEmpresas() {
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.produto_contratado}</td>
                         <td style={{ ...s.td, textAlign: 'center', color: '#f0b429' }}>{(e.peso * 100).toFixed(0)}%</td>
                         <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.potencial)}</td>
-                        <td style={{ ...s.td, color: e.taxa_negativa > 0 ? '#f87171' : '#374151', textAlign: 'center' }}>{e.taxa_negativa > 0 ? fmtPct(e.taxa_negativa) : '—'}</td>
+                        <td style={{ ...s.td, color: e.taxa_negativa > 0 ? '#f87171' : '#374151', textAlign: 'center' }}>{e.taxa_negativa > 0 ? `${Number(e.taxa_negativa).toFixed(2)}%` : '—'}</td>
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{fmtDate(e.data_cadastro)}</td>
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{e.cidade} / {e.estado}</td>
                         <td style={{ ...s.td, fontWeight: 500 }}>{e.consultor}</td>
