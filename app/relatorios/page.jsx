@@ -44,7 +44,7 @@ export default function RelatorioEmpresas() {
       .from('empresas')
       .select(`
         produto_id, nome, cnpj, categoria, produto_contratado,
-        peso_categoria, potencial_movimentacao, data_cadastro,
+        peso_categoria, potencial_movimentacao, taxa_negativa, data_cadastro,
         cidade, estado,
         consultor_principal:consultor_principal_id (nome, gestor),
         consultor_agregado:consultor_agregado_id (nome),
@@ -67,6 +67,7 @@ export default function RelatorioEmpresas() {
       consultor:           e.consultor_principal?.nome || '—',
       gestor:              e.consultor_principal?.gestor || '—',
       consultor_agregado:  e.consultor_agregado?.nome || '—',
+      taxa_negativa:       e.taxa_negativa || 0,
       parceiro:            e.parceiro?.nome || '—',
     }));
 
@@ -110,6 +111,7 @@ export default function RelatorioEmpresas() {
         'Produto Contratado':    e.produto_contratado,
         'Peso (%)':              `${(e.peso * 100).toFixed(0)}%`,
         'Potencial Movimentação':e.potencial,
+        'Taxa Negativa (%)':      e.taxa_negativa,
         'Data de Cadastro':      e.data_cadastro || '',
         'Cidade':                e.cidade,
         'UF':                    e.estado,
@@ -181,7 +183,7 @@ export default function RelatorioEmpresas() {
       {/* Filtros */}
       <div style={s.filtrosBox}>
         {/* Busca livre */}
-        <div style={{ flex: 2, minWidth: 200 }}>
+        <div style={{ flex: 3, minWidth: 260 }}>
           <div style={s.filtroLabel}>🔍 Buscar</div>
           <input
             style={s.input}
@@ -254,7 +256,7 @@ export default function RelatorioEmpresas() {
               <table style={s.table}>
                 <thead>
                   <tr>
-                    {['ID', 'Empresa', 'CNPJ', 'Categoria', 'Produto', 'Peso', 'Potencial', 'Cadastro', 'Cidade/UF', 'Consultor Principal', 'Cons. Agregado', 'Parceiro', 'Gestor'].map(h => (
+                    {['ID', 'Empresa', 'CNPJ', 'Categoria', 'Produto', 'Peso', 'Potencial', 'Taxa Neg.', 'Cadastro', 'Cidade/UF', 'Consultor Principal', 'Cons. Agregado', 'Parceiro', 'Gestor'].map(h => (
                       <th key={h} style={s.th}>{h}</th>
                     ))}
                   </tr>
@@ -280,6 +282,7 @@ export default function RelatorioEmpresas() {
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.produto_contratado}</td>
                         <td style={{ ...s.td, textAlign: 'center', color: '#f0b429' }}>{(e.peso * 100).toFixed(0)}%</td>
                         <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.potencial)}</td>
+                        <td style={{ ...s.td, color: e.taxa_negativa > 0 ? '#f87171' : '#374151', textAlign: 'center' }}>{e.taxa_negativa > 0 ? fmtPct(e.taxa_negativa) : '—'}</td>
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{fmtDate(e.data_cadastro)}</td>
                         <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{e.cidade} / {e.estado}</td>
                         <td style={{ ...s.td, fontWeight: 500 }}>{e.consultor}</td>
@@ -318,10 +321,10 @@ const s = {
   kpi:        { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '14px 18px', display: 'flex', flexDirection: 'column' },
   kpiLabel:   { color: '#6b7280', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   kpiVal:     { fontSize: '1.4rem', fontWeight: 700 },
-  filtrosBox: { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' },
+  filtrosBox: { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', marginBottom: 20, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' },
   filtroLabel:{ color: '#6b7280', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
-  input:      { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', width: '100%', outline: 'none' },
-  select:     { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', width: '100%', outline: 'none' },
+  input:      { background: '#1e2235', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', width: '100%', outline: 'none' },
+  select:     { background: '#1e2235', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', width: '100%', outline: 'none', cursor: 'pointer' },
   btnLimpar:  { background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 14px', color: '#f87171', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' },
   card:       { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24 },
   table:      { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
