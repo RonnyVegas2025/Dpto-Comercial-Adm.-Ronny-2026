@@ -14,7 +14,7 @@ const fmtDate = (d) => { if(!d) return '—'; const [y,m,day]=d.split('-'); retu
 
 export default function GestaoEmpresaDetalhe({ params }) {
   const router  = useRouter();
-  const { id }  = params;
+  const id      = params?.id;
 
   const [empresa, setEmpresa]       = useState(null);
   const [form, setForm]             = useState(null);
@@ -23,6 +23,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [sucesso, setSucesso]       = useState(false);
   const [erro, setErro]             = useState('');
   const [editando, setEditando]     = useState(false);
+
+  // Histórico CRM
+  const [historico, setHistorico]   = useState([]);
+  const [novaOco, setNovaOco]       = useState({ tipo:'contato', titulo:'', descricao:'' });
+  const [adicionando, setAdicionando] = useState(false);
+  const [salvandoOco, setSalvandoOco] = useState(false);
 
   // Listas para selects
   const [consultores, setConsultores] = useState([]);
@@ -33,7 +39,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   async function carregarTudo() {
     setLoading(true);
-    const [{ data: emp }, { data: cons }, { data: parc }, { data: prods }] = await Promise.all([
+    const [{ data: emp }, { data: cons }, { data: parc }, { data: prods }, { data: hist }] = await Promise.all([
       supabase.from('empresas').select(`
         *, 
         consultor_principal:consultor_principal_id (id, nome),
@@ -43,7 +49,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('consultores').select('id, nome, gestor').eq('ativo', true).order('nome'),
       supabase.from('parceiros').select('id, nome').order('nome'),
       supabase.from('produtos').select('id, nome, peso').order('nome'),
+      supabase.from('historico_empresa').select('*').eq('empresa_id', id).order('criado_em', { ascending: false }),
     ]);
+    setHistorico(hist || []);
 
     setEmpresa(emp);
     setConsultores(cons || []);
@@ -93,6 +101,30 @@ export default function GestaoEmpresaDetalhe({ params }) {
   }
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  async function salvarOcorrencia() {
+    if (!novaOco.titulo.trim()) return;
+    setSalvandoOco(true);
+    const { error } = await supabase.from('historico_empresa').insert({
+      empresa_id:  id,
+      tipo:        novaOco.tipo,
+      titulo:      novaOco.titulo.trim(),
+      descricao:   novaOco.descricao.trim() || null,
+    });
+    if (!error) {
+      setNovaOco({ tipo:'contato', titulo:'', descricao:'' });
+      setAdicionando(false);
+      const { data } = await supabase.from('historico_empresa').select('*').eq('empresa_id', id).order('criado_em', { ascending: false });
+      setHistorico(data || []);
+    }
+    setSalvandoOco(false);
+  }
+
+  async function deletarOcorrencia(ocId) {
+    if (!confirm('Remover este registro do histórico?')) return;
+    await supabase.from('historico_empresa').delete().eq('id', ocId);
+    setHistorico(h => h.filter(x => x.id !== ocId));
+  }
 
   // Atualiza peso automaticamente ao trocar produto
   function onProdutoChange(nomeProd) {
@@ -337,7 +369,7 @@ const s = {
   btnPri:        { background:'#f0b429', color:'#000', border:'none', borderRadius:10, padding:'10px 22px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem', fontFamily:'inherit' },
   btnSec:        { background:'rgba(255,255,255,0.07)', color:'#e8eaf0', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'10px 18px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem', fontFamily:'inherit' },
   erroBox:       { background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10, padding:'12px 16px', marginBottom:20, color:'#f87171', fontSize:'0.85rem' },
-  grid:          { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(340px,1fr))', gap:20 },
+  grid:          { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:20 },
   card:          { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 },
   cardTitle:     { fontSize:'0.9rem', fontWeight:700, marginBottom:20, color:'#9ca3af', textTransform:'uppercase', letterSpacing:1, fontSize:'0.75rem' },
   infoGrid:      { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 },
@@ -349,4 +381,3 @@ const s = {
   statusBtnInativo:{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.3)', color:'#f87171' },
   spin:          { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
 };
-
