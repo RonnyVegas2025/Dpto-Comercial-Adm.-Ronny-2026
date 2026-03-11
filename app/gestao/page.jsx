@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -12,6 +13,7 @@ const supabase = createClient(
 const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function GestaoEmpresas() {
+  const router = useRouter();
   const [empresas, setEmpresas]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [busca, setBusca]         = useState('');
@@ -130,7 +132,8 @@ export default function GestaoEmpresas() {
                   return (
                     <tr key={e.id} style={{ ...( i%2===0 ? { background:'rgba(255,255,255,0.02)' } : {}), cursor:'pointer', transition:'background 0.15s' }}
                       onMouseEnter={ev => ev.currentTarget.style.background='rgba(240,180,41,0.05)'}
-                      onMouseLeave={ev => ev.currentTarget.style.background= i%2===0?'rgba(255,255,255,0.02)':'transparent'}>
+                      onMouseLeave={ev => ev.currentTarget.style.background= i%2===0?'rgba(255,255,255,0.02)':'transparent'}
+                    onClick={() => router.push(`/gestao/${e.id}`)}>
                       <td style={{ ...s.td, color:'#f0b429', fontWeight:700 }}>{e.produto_id}</td>
                       <td style={{ ...s.td, fontWeight:600, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={e.nome}>{e.nome}</td>
                       <td style={s.td}>
@@ -152,9 +155,9 @@ export default function GestaoEmpresas() {
                         </span>
                       </td>
                       <td style={s.td}>
-                        <Link href={`/gestao/${e.id}`} style={{ background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.25)', borderRadius:8, padding:'5px 12px', color:'#f0b429', textDecoration:'none', fontSize:'0.78rem', fontWeight:600, whiteSpace:'nowrap' }}>
+                        <button onClick={() => { console.log('ID:', e.id); router.push(`/gestao/${e.id}`); }} style={{ background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.25)', borderRadius:8, padding:'5px 12px', color:'#f0b429', cursor:'pointer', fontSize:'0.78rem', fontWeight:600, whiteSpace:'nowrap', fontFamily:'inherit' }}>
                           ✏️ Editar
-                        </Link>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -193,4 +196,3 @@ const s = {
   td:        { padding:'10px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
   spin:      { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
 };
-
