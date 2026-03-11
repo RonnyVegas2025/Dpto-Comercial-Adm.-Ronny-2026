@@ -8,6 +8,7 @@ const nav = [
   { href: '/previsao',   icon: '◉', label: 'Previsão'   },
   { href: '/vendedor',   icon: '👤', label: 'Vendedor'   },
   { href: '/movimentacoes', icon: '💳', label: 'Movimentações' },
+  { href: '/relatorios',    icon: '📋', label: 'Relatórios'    },
   { href: '/fechamento',    icon: '◎', label: 'Fechamento'    },
   { href: '/importar',      icon: '⊕', label: 'Importar'      },
 ];
