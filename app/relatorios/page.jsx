@@ -112,7 +112,7 @@ export default function RelatorioEmpresas() {
         'Peso (%)':              `${(e.peso * 100).toFixed(0)}%`,
         'Potencial Movimentação':e.potencial,
         'Taxa Negativa (%)':      e.taxa_negativa,
-        'Data de Cadastro':      e.data_cadastro || '',
+        'Data de Cadastro':      e.data_cadastro ? (() => { const [y,m,d] = e.data_cadastro.split('-'); return `${d}/${m}/${y}`; })() : '',
         'Cidade':                e.cidade,
         'UF':                    e.estado,
         'Consultor Principal':   e.consultor,
