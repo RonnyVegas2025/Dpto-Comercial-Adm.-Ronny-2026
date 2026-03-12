@@ -229,10 +229,11 @@ export default function DashboardVendedor() {
       const porProduto = {};
       empresasComMov.forEach(e => {
         const p = e.produto_contratado || 'Outros';
-        if (!porProduto[p]) porProduto[p] = { contratos: 0, potencial: 0, resultado: 0 };
+        if (!porProduto[p]) porProduto[p] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0 };
         porProduto[p].contratos++;
         porProduto[p].potencial  += (e.potencial_movimentacao || 0);
         porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+        porProduto[p].movReal    += movPorEmpresa[e.id]?.total || 0;
       });
       const produtosArray = Object.entries(porProduto)
         .map(([nome, v]) => ({ nome, ...v }))
@@ -699,33 +700,91 @@ export default function DashboardVendedor() {
             {/* ── PRODUTOS ────────────────────────────────────────────── */}
             {aba === 'produtos' && (
               <div style={s.card}>
-                <div style={s.cardTitle}>🎯 Distribuição Completa por Produto</div>
-                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {produtosArray.map((p, i) => (
-                    <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{p.nome}</span>
-                        <span style={{ color: '#f0b429', fontWeight: 700 }}>{p.contratos} contrato{p.contratos > 1 ? 's' : ''}</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 10 }}>
-                        <div>
-                          <div style={{ color: '#6b7280', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: 4 }}>Potencial Bruto</div>
-                          <div style={{ fontWeight: 600 }}>{fmt(p.potencial)}</div>
+                {/* Header + legenda */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                  <div style={s.cardTitle}>🎯 Distribuição Completa por Produto</div>
+                  <div style={{ display:'flex', gap:14, fontSize:'0.72rem' }}>
+                    {[
+                      { cor:'#a78bfa', label:'Resultado Esperado' },
+                      { cor:'#f0b429', label:'Movimentado Real' },
+                    ].map(({ cor, label }) => (
+                      <span key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <span style={{ width:10, height:10, borderRadius:2, background:cor, display:'inline-block' }}></span>
+                        <span style={{ color:'#9ca3af' }}>{label}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {produtosArray.map((p, i) => {
+                    const maxBar   = Math.max(...produtosArray.map(x => x.resultado), 1);
+                    const pctEsp   = (p.resultado / maxBar) * 100;
+                    // movReal pode ser > resultado → calcular proporção dentro da barra de resultado
+                    const movCap   = Math.min(p.movReal || 0, p.resultado);   // movReal limitado ao esperado
+                    const pctMov   = p.resultado > 0 ? (movCap / p.resultado) * 100 : 0; // % dentro da barra amarela
+                    const pctTotal = (p.resultado / (kpis.totalResultado || 1)) * 100;
+                    return (
+                      <div key={i} style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:'16px 20px' }}>
+                        {/* Linha topo */}
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                          <span style={{ fontWeight:700, fontSize:'0.95rem' }}>{p.nome}</span>
+                          <span style={{ color:'#f0b429', fontWeight:700, fontSize:'0.82rem' }}>{p.contratos} empresa{p.contratos > 1 ? 's' : ''}</span>
                         </div>
-                        <div>
-                          <div style={{ color: '#6b7280', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: 4 }}>Resultado Esperado</div>
-                          <div style={{ fontWeight: 600, color: '#f0b429' }}>{fmt(p.resultado)}</div>
+                        {/* 4 KPIs */}
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:12 }}>
+                          <div>
+                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Potencial Bruto</div>
+                            <div style={{ fontWeight:600, fontSize:'0.85rem' }}>{fmt(p.potencial)}</div>
+                          </div>
+                          <div>
+                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Resultado Esperado</div>
+                            <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#a78bfa' }}>{fmt(p.resultado)}</div>
+                          </div>
+                          <div>
+                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Movimentado Real</div>
+                            <div style={{ fontWeight:700, fontSize:'0.85rem', color: p.movReal > 0 ? '#f0b429' : '#4b5563' }}>
+                              {p.movReal > 0 ? fmt(p.movReal) : '—'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>% do Total</div>
+                            <div style={{ fontWeight:600, fontSize:'0.85rem', color:'#60a5fa' }}>{fmtPct(pctTotal)}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ color: '#6b7280', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: 4 }}>% do Total</div>
-                          <div style={{ fontWeight: 600, color: '#60a5fa' }}>{fmtPct((p.resultado / (kpis.totalResultado || 1)) * 100)}</div>
+                        {/* Barra segmentada: fundo = resultado esperado (roxo), sobreposição = movimentado (amarelo) */}
+                        <div style={{ position:'relative', height:10, borderRadius:6, overflow:'hidden',
+                          background:'rgba(255,255,255,0.06)' }}>
+                          {/* Segmento roxo — resultado esperado */}
+                          <div style={{
+                            position:'absolute', left:0, top:0, height:'100%',
+                            width:`${pctEsp}%`,
+                            background:'rgba(167,139,250,0.35)',
+                            borderRadius:6,
+                            transition:'width 0.6s'
+                          }}></div>
+                          {/* Segmento amarelo — movimentado real (dentro da faixa roxa) */}
+                          {p.movReal > 0 && (
+                            <div style={{
+                              position:'absolute', left:0, top:0, height:'100%',
+                              width:`${(pctEsp * pctMov) / 100}%`,
+                              background:'#f0b429',
+                              borderRadius:6,
+                              transition:'width 0.6s'
+                            }}></div>
+                          )}
                         </div>
+                        {/* Rodapé da barra */}
+                        {p.movReal > 0 && (
+                          <div style={{ display:'flex', justifyContent:'space-between', marginTop:5, fontSize:'0.65rem', color:'#6b7280' }}>
+                            <span style={{ color:'#f0b429' }}>
+                              Movimentado: {fmtPct(p.resultado > 0 ? (p.movReal/p.resultado)*100 : 0)} do esperado
+                            </span>
+                            <span>{fmt(p.movReal)} / {fmt(p.resultado)}</span>
+                          </div>
+                        )}
                       </div>
-                      <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                        <div className="bar-produto" style={{ background: '#f0b429', height: '100%', width: `${(p.resultado / maxProduto) * 100}%`, borderRadius: 4 }}></div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {produtosArray.length === 0 && <div style={s.semDados}>Sem produtos registrados</div>}
                 </div>
               </div>
