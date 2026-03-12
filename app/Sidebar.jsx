@@ -4,14 +4,12 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const nav = [
-  { href: '/',           icon: '◈', label: 'Início'     },
-  { href: '/previsao',   icon: '◉', label: 'Previsão'   },
-  { href: '/vendedor',   icon: '👤', label: 'Vendedor'   },
+  { href: '/',              icon: '◈',  label: 'Início'        },
+  { href: '/vendedor',      icon: '👤', label: 'Vendedor'      },
   { href: '/movimentacoes', icon: '💳', label: 'Movimentações' },
   { href: '/gestao',        icon: '⚙️', label: 'Gestão'        },
   { href: '/relatorios',    icon: '📋', label: 'Relatórios'    },
-  { href: '/fechamento',    icon: '◎', label: 'Fechamento'    },
-  { href: '/importar',      icon: '⊕', label: 'Importar'      },
+  { href: '/importar',      icon: '⊕',  label: 'Importar'      },
 ];
 
 export default function Sidebar() {
