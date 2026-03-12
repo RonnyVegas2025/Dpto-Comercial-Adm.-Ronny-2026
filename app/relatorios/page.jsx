@@ -240,7 +240,7 @@ export default function Relatorios() {
     if (!mesSel) return;
     setLoad('evolucao', true);
     try {
-      // Busca empresas com movimentação no mês selecionado
+      // Busca movimentações do mês
       const { data: movs } = await supabase
         .from('movimentacoes')
         .select('empresa_id, valor_movimentacao, receita_bruta, custo_taxa_negativa')
@@ -250,12 +250,12 @@ export default function Relatorios() {
       const movMap = {};
       (movs||[]).forEach(m => { movMap[m.empresa_id] = m; });
 
-      // Busca empresas
+      // Busca empresas com taxa_negativa
       const { data: empresas } = await supabase
         .from('empresas')
         .select(`
           id, produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria,
-          potencial_movimentacao,
+          potencial_movimentacao, taxa_negativa,
           consultor_principal:consultor_principal_id(id, nome),
           parceiro:parceiro_id(nome)
         `)
@@ -269,28 +269,45 @@ export default function Relatorios() {
         .gte('competencia', mesSel + '-01')
         .lte('competencia', mesSel + '-28');
 
-      const metaMap = {};
-      (metas||[]).forEach(m => { metaMap[m.consultor_id] = m.valor_total || m.valor_beneficio || 0; });
+      // Mapa: consultor_id → meta total do consultor no mês
+      const metaConsultorMap = {};
+      (metas||[]).forEach(m => {
+        metaConsultorMap[m.consultor_id] = m.valor_total || m.valor_beneficio || 0;
+      });
 
       // Filtra apenas empresas com movimentação no mês
       const empresasComMov = (empresas||[]).filter(e => movMap[e.id]);
 
+      // Potencial total por consultor (apenas empresas com mov no mês)
+      // Usado para calcular o peso proporcional de cada empresa na meta do consultor
+      const potencialTotalConsultor = {};
+      empresasComMov.forEach(e => {
+        const cId = e.consultor_principal?.id;
+        if (!cId) return;
+        potencialTotalConsultor[cId] = (potencialTotalConsultor[cId] || 0) + (e.potencial_movimentacao || 0);
+      });
+
       const colunas = [
         'Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Parceiro',
-        'Categoria','Produto Contratado','Peso (%)',
+        'Categoria','Produto Contratado','Taxa Negativa (%)','Peso (%)',
         'Potencial Bruto','Resultado Esperado','Movimentação Real',
         'Receita Bruta','Custo Taxa Neg.','Spread Líquido',
-        'Meta Consultor','Mês Ref.'
+        'Meta Proporcional','Mês Ref.'
       ];
 
       const linhas = empresasComMov.map(e => {
-        const mov      = movMap[e.id];
-        const potencial = e.potencial_movimentacao || 0;
-        const resultado = potencial * (e.peso_categoria || 1);
-        const movReal   = mov.valor_movimentacao   || 0;
-        const receita   = mov.receita_bruta        || 0;
-        const custo     = mov.custo_taxa_negativa  || 0;
-        const meta      = metaMap[e.consultor_principal?.id] || 0;
+        const mov        = movMap[e.id];
+        const potencial  = e.potencial_movimentacao || 0;
+        const resultado  = potencial * (e.peso_categoria || 1);
+        const movReal    = mov.valor_movimentacao  || 0;
+        const receita    = mov.receita_bruta       || 0;
+        const custo      = mov.custo_taxa_negativa || 0;
+        const cId        = e.consultor_principal?.id;
+        const metaTotal  = metaConsultorMap[cId]          || 0;
+        const potTotalC  = potencialTotalConsultor[cId]   || 1;
+        // Meta proporcional = meta do consultor × (potencial desta empresa / potencial total do consultor)
+        const metaProp   = potTotalC > 0 ? metaTotal * (potencial / potTotalC) : 0;
+        const txNeg      = `${((e.taxa_negativa||0)*100).toFixed(2)}%`;
         return [
           e.produto_id,
           e.nome,
@@ -299,6 +316,7 @@ export default function Relatorios() {
           e.parceiro?.nome            || '',
           e.categoria || '',
           e.produto_contratado || '',
+          txNeg,
           `${Math.round((e.peso_categoria||1)*100)}%`,
           potencial,
           resultado,
@@ -306,7 +324,7 @@ export default function Relatorios() {
           receita,
           custo,
           receita - custo,
-          meta,
+          Math.round(metaProp * 100) / 100,
           fmtMes(mesSel),
         ];
       });
@@ -432,7 +450,7 @@ export default function Relatorios() {
             </div>
             <div style={{ background:'rgba(96,165,250,0.06)', border:'1px solid rgba(96,165,250,0.15)',
               borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#9ca3af' }}>
-              📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#60a5fa'}}>Consultor Principal</strong> · Parceiro · Categoria · Produto · Peso · Potencial Bruto · Resultado Esperado · Movimentação Real · Receita Bruta · Custo Tax Neg · Spread Líquido · Meta Consultor · Mês Ref.
+              📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#60a5fa'}}>Consultor Principal</strong> · Parceiro · Categoria · Produto · Taxa Negativa · Peso · Potencial Bruto · Resultado Esperado · Movimentação Real · Receita Bruta · Custo Tax Neg · Spread Líquido · <strong style={{color:'#60a5fa'}}>Meta Proporcional</strong> · Mês Ref.
             </div>
             <button
               onClick={gerarEvolucao}
