@@ -51,7 +51,7 @@ export default function DashboardVendedor() {
     setGestores(gs);
     const meses = [...new Set((movMeses||[]).map(m => m.competencia?.substring(0,7)).filter(Boolean))];
     setMesesDisponiveis(meses);
-    if (meses.length > 0) setMesSelecionado(meses[0]); // mais recente primeiro
+    // Inicia em '' = Todos os meses
   }
 
   async function carregarDados() {
@@ -393,6 +393,11 @@ export default function DashboardVendedor() {
             {mesesDisponiveis.length === 0 && (
               <span style={{ color:'#4b5563', fontSize:'0.8rem', padding:'6px 0' }}>Nenhum mês importado</span>
             )}
+            <button
+              style={{ ...s.gestorBtn, ...(mesSelecionado === '' ? s.gestorBtnAtivo : {}) }}
+              onClick={() => setMesSelecionado('')}>
+              🌐 Todos
+            </button>
             {mesesDisponiveis.map(m => (
               <button key={m}
                 style={{ ...s.gestorBtn, ...(mesSelecionado === m ? s.gestorBtnAtivo : {}) }}
