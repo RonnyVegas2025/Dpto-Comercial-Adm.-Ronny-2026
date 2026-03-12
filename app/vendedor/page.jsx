@@ -203,9 +203,8 @@ export default function DashboardVendedor() {
       // 3. Metas
       const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
       const metaObjetivo     = meta * (mesesImportados || 1);          // meta_mensal dos consultores = objetivo (R$ 255.000)
-      const volumeMeta       = Object.values(metasPorMes).reduce((s, v) => s + v, 0); // soma metas_vendedor importadas = R$ 194.212,59
-      // Se não há metas_vendedor importadas, fallback para totalResultado
-      const volMetaFinal     = volumeMeta > 0 ? volumeMeta : totalResultado;
+      const volumeMeta       = Object.values(metasPorMes).reduce((s, v) => s + v, 0);
+      const volMetaFinal     = volumeMeta; // zero se não houver meta importada — sem fallback
       const pctMeta          = metaObjetivo > 0 ? (volMetaFinal / metaObjetivo) * 100 : 0;
       const metaAcumulada    = metaObjetivo; // mantém compatibilidade com outros usos
       const pctMovVsMeta     = metaObjetivo > 0 ? (totalMovReal / metaObjetivo) * 100 : 0;
