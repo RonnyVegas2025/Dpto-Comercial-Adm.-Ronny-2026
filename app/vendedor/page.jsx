@@ -20,10 +20,9 @@ const fmtMes = (d) => {
 
 const ABAS = [
   { key: 'resumo',       label: '📊 Resumo'      },
-  { key: 'movimentacao', label: '💰 Movimentação' },
+  { key: 'movimentacao', label: '📋 Carteira'     },
   { key: 'produtos',     label: '🎯 Produtos'     },
   { key: 'parceiros',    label: '🤝 Parceiros'    },
-  { key: 'carteira',     label: '📋 Carteira'     },
   { key: 'ranking',      label: '🏆 Ranking'      },
 ];
 
@@ -37,6 +36,9 @@ export default function DashboardVendedor() {
   const [aba, setAba]                 = useState('resumo');
   const [mesesDisponiveis, setMesesDisponiveis] = useState([]);
   const [mesSelecionado,   setMesSelecionado]   = useState('');
+  const [filtroBusca,      setFiltroBusca]      = useState('');
+  const [filtroProduto,    setFiltroProduto]    = useState('');
+  const [filtroSituacao,   setFiltroSituacao]   = useState('');
 
   useEffect(() => { carregarConsultores(); }, []);
   useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores, mesSelecionado]);
@@ -430,7 +432,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes, metaAcumPorConsultor } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes, metaAcumPorConsultor, metasPorMes } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0, e.resultadoEsperado || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -716,68 +718,125 @@ export default function DashboardVendedor() {
             )}
 
 
-            {/* ── MOVIMENTAÇÃO REAL ───────────────────────────────────── */}
-            {aba === 'movimentacao' && (
-              <div style={s.card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div style={s.cardTitle}>💰 Movimentação Real por Empresa</div>
-                  <div style={{ display: 'flex', gap: 12, fontSize: '0.75rem' }}>
-                    {[
-                      { cor: '#4b5563', label: 'sem movimentação' },
-                      { cor: '#f87171', label: 'abaixo' },
-                      { cor: '#f0b429', label: 'dentro' },
-                      { cor: '#34d399', label: 'acima' },
-                    ].map(({ cor, label }) => (
-                      <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: cor, display: 'inline-block' }}></span>
-                        <span style={{ color: '#6b7280' }}>{label}</span>
-                      </span>
-                    ))}
+            {/* ── CARTEIRA ────────────────────────────────────────────── */}
+            {aba === 'movimentacao' && (() => {
+              // Lista de produtos únicos para o filtro
+              const produtosUnicos = [...new Set(movRealPorEmpresa.map(e => e.produto_contratado).filter(Boolean))].sort();
+              // Aplica filtros
+              const lista = movRealPorEmpresa.filter(e => {
+                if (filtroBusca) {
+                  const q = filtroBusca.toLowerCase();
+                  if (!e.nome?.toLowerCase().includes(q) && !String(e.produto_id||'').includes(q)) return false;
+                }
+                if (filtroProduto && e.produto_contratado !== filtroProduto) return false;
+                if (filtroSituacao) {
+                  if (filtroSituacao === 'sem' && e.situacao !== 'sem movimentação') return false;
+                  if (filtroSituacao === 'abaixo' && e.situacao !== 'abaixo do esperado') return false;
+                  if (filtroSituacao === 'dentro' && e.situacao !== 'dentro do esperado') return false;
+                  if (filtroSituacao === 'acima' && e.situacao !== 'acima do esperado') return false;
+                }
+                return true;
+              });
+              return (
+                <div style={s.card}>
+                  {/* Header */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+                    <div style={s.cardTitle}>📋 Carteira de Empresas</div>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                      {[
+                        { cor:'#4b5563', label:'sem mov.', val:'sem' },
+                        { cor:'#f87171', label:'abaixo',   val:'abaixo' },
+                        { cor:'#f0b429', label:'dentro',   val:'dentro' },
+                        { cor:'#34d399', label:'acima',    val:'acima' },
+                      ].map(({ cor, label, val }) => (
+                        <span key={val} onClick={() => setFiltroSituacao(filtroSituacao===val?'':val)}
+                          style={{ display:'flex', alignItems:'center', gap:4, cursor:'pointer', opacity: filtroSituacao && filtroSituacao!==val ? 0.35 : 1 }}>
+                          <span style={{ width:8, height:8, borderRadius:'50%', background:cor, display:'inline-block' }}></span>
+                          <span style={{ color:'#6b7280', fontSize:'0.73rem' }}>{label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Filtros */}
+                  <div style={{ display:'flex', gap:10, marginBottom:12, flexWrap:'wrap' }}>
+                    <input
+                      placeholder="🔍 Buscar por nome ou ID..."
+                      value={filtroBusca}
+                      onChange={e => setFiltroBusca(e.target.value)}
+                      style={{ flex:2, minWidth:180, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 12px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
+                    />
+                    <select
+                      value={filtroProduto}
+                      onChange={e => setFiltroProduto(e.target.value)}
+                      style={{ flex:1, minWidth:140, background:'#1e2330', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 10px', color: filtroProduto ? '#e8eaf0' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
+                    >
+                      <option value=''>Todos os produtos</option>
+                      {produtosUnicos.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    {(filtroBusca || filtroProduto || filtroSituacao) && (
+                      <button onClick={() => { setFiltroBusca(''); setFiltroProduto(''); setFiltroSituacao(''); }}
+                        style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'7px 14px', color:'#f87171', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit' }}>
+                        ✕ Limpar
+                      </button>
+                    )}
+                    <span style={{ color:'#4b5563', fontSize:'0.75rem', alignSelf:'center', marginLeft:'auto' }}>
+                      {lista.length} de {movRealPorEmpresa.length} empresas
+                    </span>
+                  </div>
+
+                  {/* Tabela com scroll interno fixo */}
+                  <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:480, borderRadius:8, border:'1px solid rgba(255,255,255,0.05)' }}>
+                    <table style={{ ...s.table, fontSize:'0.78rem' }}>
+                      <thead>
+                        <tr style={{ position:'sticky', top:0, zIndex:2, background:'#161a26' }}>
+                          {['ID','Empresa','Produto','Dt. Cadastro','Parceiro','Potencial','Acum. Real','Meses','Média/Mês','% Aderência','Últ. Mov.','Situação'].map(h =>
+                            <th key={h} style={{ ...s.th, background:'#1a1f2e', position:'sticky', top:0 }}>{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lista.map((e, i) => {
+                          const corSit = e.situacao === 'acima do esperado' ? '#34d399'
+                            : e.situacao === 'dentro do esperado' ? '#f0b429'
+                            : e.situacao === 'abaixo do esperado' ? '#f87171' : '#4b5563';
+                          return (
+                            <tr key={i} className="row-hover" style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                              <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{e.produto_id||'—'}</td>
+                              <td style={{ ...s.td, fontWeight:600, minWidth:160 }}>{e.nome}</td>
+                              <td style={{ ...s.td, whiteSpace:'nowrap' }}>{e.produto_contratado||'—'}</td>
+                              <td style={{ ...s.td, color:'#6b7280', whiteSpace:'nowrap' }}>{e.data_cadastro ? e.data_cadastro.substring(0,10) : '—'}</td>
+                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.parceiro?.nome||'—'}</td>
+                              <td style={{ ...s.td, whiteSpace:'nowrap' }}>{fmt(e.potencial_movimentacao)}</td>
+                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.movReal > 0 ? fmt(e.movReal) : '—'}</td>
+                              <td style={{ ...s.td, textAlign:'center', color:'#6b7280' }}>{e.nMeses||0}</td>
+                              <td style={{ ...s.td, color:'#34d399', fontWeight:600, whiteSpace:'nowrap' }}>{e.mediaMovMensal > 0 ? fmt(e.mediaMovMensal) : '—'}</td>
+                              <td style={{ ...s.td, whiteSpace:'nowrap' }}>
+                                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                  <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:3, height:5, width:50, overflow:'hidden' }}>
+                                    <div style={{ background:corSit, height:'100%', width:`${Math.min(e.aderencia,100)}%`, borderRadius:3 }}></div>
+                                  </div>
+                                  <span style={{ color:corSit, fontWeight:600, fontSize:'0.75rem' }}>{fmtPct(e.aderencia)}</span>
+                                </div>
+                              </td>
+                              <td style={{ ...s.td, color:'#6b7280', whiteSpace:'nowrap' }}>{e.ultimaMov ? fmtMes(e.ultimaMov) : '—'}</td>
+                              <td style={{ ...s.td, whiteSpace:'nowrap' }}>
+                                <span style={{ background:`${corSit}18`, color:corSit, borderRadius:5, padding:'2px 7px', fontSize:'0.68rem', fontWeight:600 }}>
+                                  {e.situacao}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {lista.length === 0 && (
+                          <tr><td colSpan={12} style={{ ...s.td, textAlign:'center', color:'#4b5563', padding:32 }}>Nenhuma empresa encontrada</td></tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr>
-                        {['Empresa', 'Produto', 'Potencial Prev.', 'Mov. Real Acum.', 'Meses', 'Média Mensal', '% Aderência', 'Última Mov.', 'Situação'].map(h =>
-                          <th key={h} style={s.th}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movRealPorEmpresa.map((e, i) => {
-                        const corSit = e.situacao === 'acima do esperado' ? '#34d399'
-                          : e.situacao === 'dentro do esperado' ? '#f0b429'
-                          : e.situacao === 'abaixo do esperado' ? '#f87171' : '#4b5563';
-                        return (
-                          <tr key={i} className="row-hover" style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                            <td style={{ ...s.td, fontWeight: 600 }}>{e.nome}</td>
-                            <td style={s.td}>{e.produto_contratado || '—'}</td>
-                            <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                            <td style={{ ...s.td, color: '#9ca3af' }}>{fmt(e.movReal)}</td>
-                            <td style={{ ...s.td, textAlign:'center', color:'#6b7280' }}>{e.nMeses || 0}</td>
-                            <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.mediaMovMensal)}</td>
-                            <td style={s.td}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
-                                  <div style={{ background: corSit, height: '100%', width: `${Math.min(e.aderencia, 100)}%`, borderRadius: 4 }}></div>
-                                </div>
-                                <span style={{ color: corSit, fontWeight: 600, fontSize: '0.8rem' }}>{fmtPct(e.aderencia)}</span>
-                              </div>
-                            </td>
-                            <td style={{ ...s.td, color: '#6b7280' }}>{e.ultimaMov ? fmtMes(e.ultimaMov) : '—'}</td>
-                            <td style={s.td}>
-                              <span style={{ background: `${corSit}18`, color: corSit, borderRadius: 6, padding: '2px 8px', fontSize: '0.73rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                {e.situacao}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+              );
+            })()}
+
 
             {/* ── PRODUTOS ────────────────────────────────────────────── */}
             {aba === 'produtos' && (
@@ -868,41 +927,6 @@ export default function DashboardVendedor() {
                     );
                   })}
                   {produtosArray.length === 0 && <div style={s.semDados}>Sem produtos registrados</div>}
-                </div>
-              </div>
-            )}
-
-            {/* ── CARTEIRA ────────────────────────────────────────────── */}
-            {aba === 'carteira' && (
-              <div style={s.card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div style={s.cardTitle}>📋 Carteira Completa do Vendedor</div>
-                  <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{empresas.length} empresas</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr>
-                        {['Empresa', 'Produto', 'Categoria', 'Cidade/UF', 'Potencial', 'Resultado', 'Cartões', 'Data Cadastro', 'Parceiro'].map(h =>
-                          <th key={h} style={s.th}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empresas.map((e, i) => (
-                        <tr key={i} className="row-hover" style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{e.nome}</td>
-                          <td style={s.td}>{e.produto_contratado || '—'}</td>
-                          <td style={{ ...s.td, color: '#9ca3af' }}>{e.categoria || '—'}</td>
-                          <td style={s.td}>{e.cidade || '—'} / {e.estado || '—'}</td>
-                          <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                          <td style={{ ...s.td, color: '#f0b429', fontWeight: 600 }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1))}</td>
-                          <td style={{ ...s.td, textAlign: 'center' }}>{e.cartoes_emitidos || 0}</td>
-                          <td style={{ ...s.td, color: '#6b7280' }}>{e.data_cadastro || '—'}</td>
-                          <td style={{ ...s.td, color: '#9ca3af' }}>{e.parceiro?.nome || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             )}
