@@ -414,105 +414,122 @@ export default function DashboardVendedor() {
               </div>
             </div>
 
-            {/* KPIs */}
-            <div style={s.kpis}>
-              {(() => {
-                const pct       = kpis.pctMeta;
-                const corPct    = corMeta(pct);
-                const badgeMeta = pct >= 100
-                  ? { label: '✅ Meta atingida',  bg: 'rgba(52,211,153,0.15)',  cor: '#34d399' }
-                  : pct >= 70
-                  ? { label: '⚡ Quase lá',        bg: 'rgba(240,180,41,0.15)', cor: '#f0b429' }
-                  : { label: '⚠️ Abaixo da meta', bg: 'rgba(248,113,113,0.12)', cor: '#f87171' };
-
-                const kpiList = [
-                  { label: 'Empresas',           val: kpis.totalEmpresas,          cor: '#e8eaf0', icon: '🏢' },
-                  { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#e8eaf0', icon: '📊' },
-                  { label: 'Resultado Esperado', val: fmt(kpis.totalResultado),    cor: '#a78bfa', icon: '🎯',
-                    extra: <span style={{ fontSize:'0.68rem', color:'#6b7280', marginTop:3 }}>potencial × peso</span> },
-                  { label: 'Movimentação Real',  val: fmt(kpis.totalMovReal),      cor: '#f0b429', icon: '💰' },
-                  { label: `Meta (${kpis.mesesImportados} ${kpis.mesesImportados===1?'mês':'meses'})`,
-                    val: fmt(kpis.metaAcumulada), cor: '#e8eaf0', icon: '🏆',
-                    extra: (
-                      <span style={{ display:'inline-flex', alignItems:'center', gap:5, marginTop:5,
-                        background: badgeMeta.bg, border:`1px solid ${badgeMeta.cor}33`,
-                        borderRadius:6, padding:'2px 8px', fontSize:'0.65rem', fontWeight:700, color: badgeMeta.cor }}>
-                        {badgeMeta.label}
-                      </span>
-                    ) },
-                  { label: '% da Meta (Resultado)',  val: fmtPct(pct),                cor: corPct, icon: '📈',
-                    extra: (
-                      <div style={{ marginTop:5 }}>
-                        <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:4, height:5, overflow:'hidden', marginBottom:4 }}>
-                          <div style={{ background: corPct, height:'100%', width:`${Math.min(pct,100)}%`, borderRadius:4 }}></div>
-                        </div>
-                        <span style={{ fontSize:'0.65rem', color:'#6b7280' }}>Mov. Real: {fmtPct(kpis.pctMovVsMeta||0)}</span>
-                      </div>
-                    ) },
-                  { label: 'Vol. Meta Realizado', val: fmt(kpis.volumeMeta),        cor: '#34d399', icon: '💵',
-                    extra: (
-                      <span style={{ fontSize:'0.65rem', color:'#6b7280', marginTop:3, display:'block' }}>
-                        de {fmt(kpis.metaObjetivo)} objetivo
-                      </span>
-                    ) },
-                  { label: 'Cartões Emitidos',   val: kpis.totalCartoes,           cor: '#e8eaf0', icon: '💳' },
-                  { label: 'Ticket Médio',        val: fmt(kpis.ticketMedio),       cor: '#60a5fa', icon: '🎫' },
-                  { label: 'Receita Bruta (tx+)', val: `${Number(kpis.pctReceita||0).toFixed(2)}%`, cor: '#34d399', icon: '📥',
-                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.receitaBruta)}</span> },
-                  { label: 'Custo / Desc. (tx-)', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', icon: '📤',
-                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.descontoTotal)}</span> },
-                  { label: 'Spread Líquido',      val: `${Number(kpis.pctSpread||0).toFixed(2)}%`,
-                    cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171', icon: '💹',
-                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.spreadLiquido)}</span> },
-                ];
-                return kpiList.map(({ label, val, cor, icon, extra }) => (
-                  <div key={label} style={{ ...s.kpi, position:'relative', overflow:'hidden' }}>
-                    <div style={{ position:'absolute', top:10, right:12, fontSize:'1.1rem', opacity:0.15 }}>{icon}</div>
-                    <span style={s.kpiLabel}>{label}</span>
-                    <span style={{ ...s.kpiVal, color: cor }}>{val}</span>
-                    {extra}
-                  </div>
-                ));
-              })()}
-            </div>
-
-            {/* Barra de meta */}
+            {/* ── PAINEL DE MÉTRICAS ──────────────────────────────── */}
             {(() => {
-              const cor  = corMeta(kpis.pctMeta);
-              const pct  = Math.min(kpis.pctMeta, 100);
+              const pct    = kpis.pctMeta;
+              const cor    = corMeta(pct);
+              const badge  = pct >= 100
+                ? { label: '✅ Meta atingida',   bg: 'rgba(52,211,153,0.15)',   cor: '#34d399' }
+                : pct >= 70
+                ? { label: '⚡ Quase lá',         bg: 'rgba(240,180,41,0.15)',  cor: '#f0b429' }
+                : { label: '⚠️ Abaixo da meta',  bg: 'rgba(248,113,113,0.12)', cor: '#f87171' };
+
               return (
-                <div style={{ ...s.card, marginBottom: 20 }}>
-                  {/* Linha topo */}
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'0.9rem' }}>Progresso da Meta</div>
-                      <div style={{ color:'#6b7280', fontSize:'0.72rem', marginTop:2 }}>
-                        {kpis.mesesImportados} {kpis.mesesImportados===1?'mês':'meses'} importados
-                      </div>
+                <div style={{ marginBottom: 20 }}>
+
+                  {/* ── LINHA 1: 4 destaque grandes ───────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
+
+                    {/* Movimentação Real — DESTAQUE PRINCIPAL */}
+                    <div style={{ background: 'linear-gradient(135deg, rgba(240,180,41,0.12), rgba(240,180,41,0.04))', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>💰</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Movimentação Real</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#f0b429', lineHeight: 1 }}>{fmt(kpis.totalMovReal)}</div>
+                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>{kpis.totalEmpresas} empresas · {kpis.mesesImportados} {kpis.mesesImportados===1?'mês':'meses'}</div>
                     </div>
-                    <div style={{ textAlign:'right' }}>
-                      <div style={{ fontSize:'1.6rem', fontWeight:800, color: cor, lineHeight:1 }}>{fmtPct(kpis.pctMeta)}</div>
-                      <div style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:2 }}>
-                        {fmt(kpis.volumeMeta)} de {fmt(kpis.metaObjetivo)}
-                      </div>
+
+                    {/* Vol. Meta Realizado */}
+                    <div style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.1), rgba(52,211,153,0.03))', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>🏆</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Vol. Meta Realizado</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#34d399', lineHeight: 1 }}>{fmt(kpis.volumeMeta)}</div>
+                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>de {fmt(kpis.metaObjetivo)} objetivo</div>
                     </div>
-                  </div>
-                  {/* Barra única */}
-                  <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:8, height:14, overflow:'hidden', position:'relative' }}>
-                    <div style={{ background: cor, height:'100%', width:`${pct}%`, borderRadius:8, transition:'width 0.8s ease' }}></div>
-                  </div>
-                  {/* Rodapé */}
-                  <div style={{ display:'flex', justifyContent:'space-between', marginTop:8, fontSize:'0.72rem' }}>
-                    <span style={{ color:'#4b5563' }}>R$ 0</span>
-                    <div style={{ display:'flex', gap:20 }}>
-                      <span style={{ color: cor, fontWeight:600 }}>
-                        Vol. Meta: {fmt(kpis.volumeMeta)}
+
+                    {/* % da Meta — com badge */}
+                    <div style={{ background: `linear-gradient(135deg, ${cor}18, ${cor}05)`, border: `1px solid ${cor}44`, borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>📈</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>% da Meta</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: cor, lineHeight: 1 }}>{fmtPct(pct)}</div>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8,
+                        background: badge.bg, border: `1px solid ${badge.cor}44`,
+                        borderRadius: 6, padding: '3px 10px', fontSize: '0.65rem', fontWeight: 700, color: badge.cor }}>
+                        {badge.label}
                       </span>
-                      <span style={{ color:'#6b7280' }}>
-                        Objetivo: {fmt(kpis.metaObjetivo)}
+                    </div>
+
+                    {/* Empresas */}
+                    <div style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>🏢</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Empresas Ativas</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#e8eaf0', lineHeight: 1 }}>{kpis.totalEmpresas}</div>
+                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>{kpis.totalCartoes} cartões emitidos</div>
+                    </div>
+                  </div>
+
+                  {/* ── LINHA 2: Barra de progresso ────────────────────── */}
+                  <div style={{ background: '#111420', border: `1px solid ${cor}33`, borderRadius: 14, padding: '16px 22px', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#9ca3af' }}>Progresso da Meta</span>
+                      <span style={{ fontSize: '0.75rem', color: '#4b5563' }}>
+                        {fmt(kpis.volumeMeta)} <span style={{ color: '#6b7280' }}>/ {fmt(kpis.metaObjetivo)}</span>
+                      </span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, height: 12, overflow: 'hidden', position: 'relative' }}>
+                      {/* Faixa movimentação real (mais escura, atrás) */}
+                      <div style={{ position: 'absolute', left: 0, top: 0, height: '100%',
+                        width: `${Math.min(kpis.pctMovVsMeta||0, 100)}%`,
+                        background: 'rgba(240,180,41,0.25)', borderRadius: 8 }}></div>
+                      {/* Faixa vol. meta (na frente) */}
+                      <div style={{ position: 'absolute', left: 0, top: 0, height: '100%',
+                        width: `${Math.min(pct, 100)}%`,
+                        background: cor, borderRadius: 8, transition: 'width 0.8s ease' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: '0.68rem', color: '#4b5563' }}>
+                      <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <span style={{ width:8, height:8, borderRadius:2, background: cor, display:'inline-block' }}></span>
+                        Vol. Meta {fmtPct(pct)}
+                      </span>
+                      <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <span style={{ width:8, height:8, borderRadius:2, background:'rgba(240,180,41,0.4)', display:'inline-block' }}></span>
+                        Mov. Real {fmtPct(kpis.pctMovVsMeta||0)}
                       </span>
                     </div>
                   </div>
+
+                  {/* ── LINHA 3: Secundários ────────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+                    {[
+                      { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#e8eaf0' },
+                      { label: 'Resultado Esperado', val: fmt(kpis.totalResultado),    cor: '#a78bfa', sub: 'potencial × peso' },
+                      { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#e8eaf0' },
+                      { label: 'Ticket Médio',       val: fmt(kpis.ticketMedio),       cor: '#60a5fa' },
+                    ].map(({ label, val, cor: c, sub }) => (
+                      <div key={label} style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: '14px 16px' }}>
+                        <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{label}</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: c }}>{val}</div>
+                        {sub && <div style={{ color: '#4b5563', fontSize: '0.62rem', marginTop: 4 }}>{sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ── LINHA 4: Spread ─────────────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Receita Bruta (tx+)', pct: `${Number(kpis.pctReceita||0).toFixed(2)}%`,  val: fmt(kpis.receitaBruta),   cor: '#34d399' },
+                      { label: 'Custo / Desc. (tx-)', pct: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, val: fmt(kpis.descontoTotal),  cor: '#f87171' },
+                      { label: 'Spread Líquido',       pct: `${Number(kpis.pctSpread||0).toFixed(2)}%`,  val: fmt(kpis.spreadLiquido),  cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171' },
+                    ].map(({ label, pct: p, val, cor: c }) => (
+                      <div key={label} style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: '1rem', fontWeight: 700, color: c }}>{p}</div>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#6b7280' }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+
                 </div>
               );
             })()}
