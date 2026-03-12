@@ -35,19 +35,23 @@ export default function DashboardVendedor() {
   const [dados, setDados]             = useState(null);
   const [loading, setLoading]         = useState(false);
   const [aba, setAba]                 = useState('resumo');
+  const [mesesDisponiveis, setMesesDisponiveis] = useState([]);
+  const [mesSelecionado,   setMesSelecionado]   = useState('');
 
   useEffect(() => { carregarConsultores(); }, []);
-  useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores]);
+  useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores, mesSelecionado]);
 
   async function carregarConsultores() {
-    const { data } = await supabase
-      .from('consultores')
-      .select('id, nome, meta_mensal, setor, gestor')
-      .eq('ativo', true)
-      .order('nome');
+    const [{ data }, { data: movMeses }] = await Promise.all([
+      supabase.from('consultores').select('id, nome, meta_mensal, setor, gestor').eq('ativo', true).order('nome'),
+      supabase.from('movimentacoes').select('competencia').order('competencia', { ascending: false }),
+    ]);
     setConsultores(data || []);
     const gs = ['Geral', ...new Set((data || []).map(c => c.gestor).filter(Boolean))];
     setGestores(gs);
+    const meses = [...new Set((movMeses||[]).map(m => m.competencia?.substring(0,7)).filter(Boolean))];
+    setMesesDisponiveis(meses);
+    if (meses.length > 0) setMesSelecionado(meses[0]); // mais recente primeiro
   }
 
   async function carregarDados() {
@@ -90,10 +94,14 @@ export default function DashboardVendedor() {
       const empresaIds = (empresas || []).map(e => e.id);
       let movimentacoes = [];
       if (empresaIds.length > 0) {
+        const mesInicio = mesSelecionado ? mesSelecionado + '-01' : '2000-01-01';
+        const mesFim    = mesSelecionado ? mesSelecionado + '-28' : '2099-12-31';
         const { data: movs } = await supabase
           .from('movimentacoes')
           .select('empresa_id, competencia, valor_movimentacao, receita_bruta, custo_taxa_negativa, spread_liquido')
           .in('empresa_id', empresaIds)
+          .gte('competencia', mesInicio)
+          .lte('competencia', mesFim)
           .order('competencia', { ascending: false });
         movimentacoes = movs || [];
       }
@@ -104,10 +112,14 @@ export default function DashboardVendedor() {
         : consultores.filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro).map(c => c.id);
       let metasPorMes = {};
       if (consultorIds.length > 0) {
+        const mesMetaInicio = mesSelecionado ? mesSelecionado + '-01' : '2000-01-01';
+        const mesMetaFim    = mesSelecionado ? mesSelecionado + '-28' : '2099-12-31';
         const { data: metas } = await supabase
           .from('metas_vendedor')
           .select('consultor_id, competencia, valor_beneficio, valor_convenio, valor_total')
-          .in('consultor_id', consultorIds);
+          .in('consultor_id', consultorIds)
+          .gte('competencia', mesMetaInicio)
+          .lte('competencia', mesMetaFim);
         (metas || []).forEach(m => {
           const mes = m.competencia?.substring(0, 7);
           if (!mes) return;
@@ -375,6 +387,21 @@ export default function DashboardVendedor() {
               <option key={c.id} value={c.id}>{c.nome}</option>
             ))}
           </select>
+        </div>
+        <div style={s.filtroGrupo}>
+          <label style={s.filtroLabel}>MÊS DE REFERÊNCIA</label>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {mesesDisponiveis.length === 0 && (
+              <span style={{ color:'#4b5563', fontSize:'0.8rem', padding:'6px 0' }}>Nenhum mês importado</span>
+            )}
+            {mesesDisponiveis.map(m => (
+              <button key={m}
+                style={{ ...s.gestorBtn, ...(mesSelecionado === m ? s.gestorBtnAtivo : {}) }}
+                onClick={() => setMesSelecionado(m)}>
+                📅 {fmtMes(m + '-01')}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
