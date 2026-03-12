@@ -648,85 +648,8 @@ export default function DashboardVendedor() {
                   }
                 </div>
 
-                {/* Por produto resumo — barra dupla previsão + movimentado */}
-                <div style={s.card}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={s.cardTitle}>🎯 Distribuição por Produto</div>
-                    <div style={{ display: 'flex', gap: 12, fontSize: '0.7rem' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#a78bfa', display: 'inline-block' }}></span>
-                        <span style={{ color: '#9ca3af' }}>Previsão (peso)</span>
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#f0b429', display: 'inline-block' }}></span>
-                        <span style={{ color: '#9ca3af' }}>Movimentado</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {(() => {
-                      // Agrupa movimentação real por produto
-                      const movPorProd = {};
-                      movRealPorEmpresa.forEach(e => {
-                        const p = e.produto_contratado || 'Outros';
-                        if (!movPorProd[p]) movPorProd[p] = 0;
-                        movPorProd[p] += e.mediaMovMensal || 0; // média mensal, não acumulado
-                      });
-                      const maxVal = Math.max(...produtosArray.map(p => Math.max(p.resultado, movPorProd[p.nome]||0)), 1);
-                      return produtosArray.map((p, i) => {
-                        const movReal = movPorProd[p.nome] || 0;
-                        const pctPrev = (p.resultado / maxVal) * 100;
-                        const pctMov  = (movReal     / maxVal) * 100;
-                        return (
-                          <div key={i}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                              <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{p.nome}</span>
-                              <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>{p.contratos} empresa{p.contratos > 1 ? 's' : ''}</span>
-                            </div>
-                            {/* Barra Previsão */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 7, flex: 1, overflow: 'hidden' }}>
-                                <div style={{ background: '#a78bfa', height: '100%', width: `${pctPrev}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
-                              </div>
-                              <span style={{ color: '#a78bfa', fontSize: '0.68rem', fontWeight: 600, minWidth: 72, textAlign: 'right' }}>{fmt(p.resultado)}</span>
-                            </div>
-                            {/* Barra Movimentado */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 7, flex: 1, overflow: 'hidden' }}>
-                                <div style={{ background: '#f0b429', height: '100%', width: `${pctMov}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
-                              </div>
-                              <span style={{ color: movReal > 0 ? '#f0b429' : '#4b5563', fontSize: '0.68rem', fontWeight: 600, minWidth: 72, textAlign: 'right' }}>{movReal > 0 ? fmt(movReal) : '—'}</span>
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                    {produtosArray.length === 0 && <div style={s.semDados}>Sem dados</div>}
-                  </div>
-                </div>
-
-                {/* Timeline */}
-                <div style={s.card}>
-                  <div style={s.cardTitle}>🕐 Timeline Comercial</div>
-                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 300, overflowY: 'auto' }}>
-                    {timeline.slice(0, 10).map((t, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: 14, position: 'relative' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.tipo === 'cadastro' ? '#60a5fa' : '#34d399', flexShrink: 0, marginTop: 4 }}></div>
-                          {i < timeline.slice(0, 10).length - 1 && <div style={{ width: 1, flex: 1, background: 'rgba(255,255,255,0.06)', marginTop: 4 }}></div>}
-                        </div>
-                        <div style={{ flex: 1, paddingBottom: 4 }}>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 500 }}>{t.desc}</div>
-                          <div style={{ color: '#4b5563', fontSize: '0.72rem', marginTop: 2 }}>{t.data}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {timeline.length === 0 && <div style={s.semDados}>Sem eventos registrados</div>}
-                  </div>
-                </div>
               </div>
             )}
-
 
             {/* ── CARTEIRA ────────────────────────────────────────────── */}
             {aba === 'movimentacao' && (() => {
