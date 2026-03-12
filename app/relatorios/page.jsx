@@ -262,30 +262,19 @@ export default function Relatorios() {
         .eq('ativo', true)
         .order('nome');
 
-      // Busca metas do mês por consultor
-      const { data: metas } = await supabase
-        .from('metas_vendedor')
-        .select('consultor_id, valor_beneficio, valor_total')
+      // Busca meta real por empresa no mês selecionado
+      const { data: metasEmp } = await supabase
+        .from('metas_empresa')
+        .select('empresa_id, valor_meta')
         .gte('competencia', mesSel + '-01')
         .lte('competencia', mesSel + '-28');
 
-      // Mapa: consultor_id → meta total do consultor no mês
-      const metaConsultorMap = {};
-      (metas||[]).forEach(m => {
-        metaConsultorMap[m.consultor_id] = m.valor_total || m.valor_beneficio || 0;
-      });
+      // Mapa: empresa_id → valor_meta real
+      const metaEmpMap = {};
+      (metasEmp||[]).forEach(m => { metaEmpMap[m.empresa_id] = m.valor_meta || 0; });
 
       // Filtra apenas empresas com movimentação no mês
       const empresasComMov = (empresas||[]).filter(e => movMap[e.id]);
-
-      // Potencial total por consultor (apenas empresas com mov no mês)
-      // Usado para calcular o peso proporcional de cada empresa na meta do consultor
-      const potencialTotalConsultor = {};
-      empresasComMov.forEach(e => {
-        const cId = e.consultor_principal?.id;
-        if (!cId) return;
-        potencialTotalConsultor[cId] = (potencialTotalConsultor[cId] || 0) + (e.potencial_movimentacao || 0);
-      });
 
       const colunas = [
         'Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Parceiro',
@@ -302,11 +291,7 @@ export default function Relatorios() {
         const movReal    = mov.valor_movimentacao  || 0;
         const receita    = mov.receita_bruta       || 0;
         const custo      = mov.custo_taxa_negativa || 0;
-        const cId        = e.consultor_principal?.id;
-        const metaTotal  = metaConsultorMap[cId]          || 0;
-        const potTotalC  = potencialTotalConsultor[cId]   || 1;
-        // Meta proporcional = meta do consultor × (potencial desta empresa / potencial total do consultor)
-        const metaProp   = potTotalC > 0 ? metaTotal * (potencial / potTotalC) : 0;
+        const metaProp   = metaEmpMap[e.id] || 0;
         const txNeg      = `${((e.taxa_negativa||0)*100).toFixed(2)}%`;
         return [
           e.produto_id,
