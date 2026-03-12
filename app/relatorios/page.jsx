@@ -134,11 +134,11 @@ export default function Relatorios() {
     try {
       const { data: empresas } = await supabase
         .from('empresas')
-        .select('produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria, consultor_principal:consultor_principal_id(nome)')
+        .select('produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria, taxa_negativa, consultor_principal:consultor_principal_id(nome)')
         .eq('ativo', true)
         .order('nome');
 
-      const colunas = ['Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Categoria','Produto Contratado','Peso (%)','Movimentação Real','Taxa Negativa (%)','Taxa Negativa (R$)','Taxa Adm Bruta','Mês Referencia'];
+      const colunas = ['Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Categoria','Produto Contratado','Peso (%)','Taxa Negativa (%)','Movimentação Real','Taxa Negativa (R$)','Taxa Adm Bruta','Mês Referencia'];
       const linhas  = (empresas||[]).map(e => [
         e.produto_id,
         e.nome,
@@ -147,8 +147,11 @@ export default function Relatorios() {
         e.categoria || '',
         e.produto_contratado || '',
         `${Math.round((e.peso_categoria||1)*100)}%`,
-        0, 0, 0, 0,
-        '', // Mês Ref — preenchido manualmente
+        `${((e.taxa_negativa||0)*100).toFixed(2)}%`, // ← vem do cadastro
+        0, // Movimentação Real — preencher
+        0, // Taxa Negativa (R$) — preencher
+        0, // Taxa Adm Bruta — preencher
+        '', // Mês Ref — preencher
       ]);
       await baixarExcel(`modelo_movimentacao_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
     } catch(err) { alert('Erro: ' + err.message); }
