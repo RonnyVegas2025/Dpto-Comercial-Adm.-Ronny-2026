@@ -271,15 +271,18 @@ export default function DashboardVendedor() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([mes, v]) => ({ mes, ...v }));
 
-      // Por produto — apenas empresas com movimentação, valor mensal
+      // Por produto — apenas empresas com movimentação, usando média mensal por empresa
       const porProduto = {};
       empresasComMov.forEach(e => {
         const p = e.produto_contratado || 'Outros';
+        const mov = movPorEmpresa[e.id] || { total: 0, meses: new Set() };
+        const nMeses = mov.meses.size || 1;
+        const mediaEmpresa = mov.total / nMeses; // média mensal desta empresa
         if (!porProduto[p]) porProduto[p] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0 };
         porProduto[p].contratos++;
         porProduto[p].potencial  += (e.potencial_movimentacao || 0);
         porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
-        porProduto[p].movReal    += movPorEmpresa[e.id]?.total || 0;
+        porProduto[p].movReal    += mediaEmpresa; // soma das médias mensais = movimentação mensal do produto
       });
       const produtosArray = Object.entries(porProduto)
         .map(([nome, v]) => ({ nome, ...v }))
@@ -310,28 +313,28 @@ export default function DashboardVendedor() {
         return { ...e, movReal: mov.total, mediaMovMensal, nMeses, ultimaMov: mov.ultima, aderencia: ader, situacao };
       }).sort((a, b) => b.movReal - a.movReal);
 
-      // Por parceiro — apenas empresas com movimentação, valor mensal
+      // Por parceiro — usando média mensal por empresa
       const porParceiro = {};
       empresasComMov.forEach(e => {
         const parc = e.parceiro?.nome || 'Sem Parceiro';
-        const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null, receita: 0, custo: 0 };
-        if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0, receita: 0, custo: 0, totalMeses: 0 };
+        const mov  = movPorEmpresa[e.id] || { total: 0, meses: new Set(), receita: 0, custo: 0 };
+        const nMeses = mov.meses.size || 1;
+        const mediaEmpresa = mov.total / nMeses;
+        if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0, receita: 0, custo: 0 };
         porParceiro[parc].contratos++;
-        porParceiro[parc].potencial   += (e.potencial_movimentacao || 0);
-        porParceiro[parc].resultado   += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
-        porParceiro[parc].movReal     += mov.total;
-        porParceiro[parc].receita     += mov.receita || 0;
-        porParceiro[parc].custo       += mov.custo   || 0;
-        porParceiro[parc].totalMeses  += 1;
+        porParceiro[parc].potencial  += (e.potencial_movimentacao || 0);
+        porParceiro[parc].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+        porParceiro[parc].movReal    += mediaEmpresa; // soma das médias = total mensal do parceiro
+        porParceiro[parc].receita    += mov.receita || 0;
+        porParceiro[parc].custo      += mov.custo   || 0;
       });
       const parceirosArray = Object.entries(porParceiro)
         .map(([nome, v]) => ({
           nome, ...v,
           spread:          v.receita - v.custo,
-          // Média mensal = mov real total ÷ meses médios das empresas do parceiro
-          mesesMedios:     v.contratos > 0 ? v.totalMeses / v.contratos : 1,
-          mediaMovMensal:  v.totalMeses > 0 ? v.movReal / (v.totalMeses / v.contratos) : 0,
-          potencialMensal: v.contratos > 0 ? v.potencial / (v.totalMeses / v.contratos) : 0,
+          mediaMovMensal:  v.movReal, // já é média (soma das médias das empresas)
+          mesesMedios:     1,
+          potencialMensal: v.potencial,
         }))
         .sort((a, b) => b.movReal - a.movReal);
 
@@ -667,7 +670,7 @@ export default function DashboardVendedor() {
                       movRealPorEmpresa.forEach(e => {
                         const p = e.produto_contratado || 'Outros';
                         if (!movPorProd[p]) movPorProd[p] = 0;
-                        movPorProd[p] += e.movReal || 0;
+                        movPorProd[p] += e.mediaMovMensal || 0; // média mensal, não acumulado
                       });
                       const maxVal = Math.max(...produtosArray.map(p => Math.max(p.resultado, movPorProd[p.nome]||0)), 1);
                       return produtosArray.map((p, i) => {
