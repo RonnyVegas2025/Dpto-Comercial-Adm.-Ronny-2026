@@ -178,10 +178,11 @@ export default function DashboardVendedor() {
       // 1. Movimentação real acumulada por empresa (precisa vir primeiro)
       const movPorEmpresa = {};
       movimentacoes.forEach(m => {
-        if (!movPorEmpresa[m.empresa_id]) movPorEmpresa[m.empresa_id] = { total: 0, receita: 0, custo: 0, ultima: null };
+        if (!movPorEmpresa[m.empresa_id]) movPorEmpresa[m.empresa_id] = { total: 0, receita: 0, custo: 0, ultima: null, meses: new Set() };
         movPorEmpresa[m.empresa_id].total   += m.valor_movimentacao  || 0;
         movPorEmpresa[m.empresa_id].receita += m.receita_bruta       || 0;
         movPorEmpresa[m.empresa_id].custo   += m.custo_taxa_negativa || 0;
+        movPorEmpresa[m.empresa_id].meses.add(m.competencia?.substring(0,7));
         if (!movPorEmpresa[m.empresa_id].ultima || m.competencia > movPorEmpresa[m.empresa_id].ultima)
           movPorEmpresa[m.empresa_id].ultima = m.competencia;
       });
@@ -241,18 +242,18 @@ export default function DashboardVendedor() {
         if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0, resultadoEsperado: 0 };
         evolucao[mes].meta = val;
       });
-      // Resultado esperado mensal = potencial × peso das empresas com mov nesse mês
-      const movPorMesEmpresa = {};
-      movimentacoes.forEach(m => {
-        const mes = m.competencia?.substring(0,7);
-        if (!mes) return;
-        if (!movPorMesEmpresa[mes]) movPorMesEmpresa[mes] = new Set();
-        movPorMesEmpresa[mes].add(m.empresa_id);
-      });
-      Object.entries(movPorMesEmpresa).forEach(([mes, idsSet]) => {
+      // Resultado esperado mensal = potencial × peso das empresas cadastradas ATÉ aquele mês
+      // (acumulativo: jan inclui tudo até jan, fev inclui tudo até fev, etc.)
+      const mesesNoGrafico = Object.keys(evolucao).sort();
+      mesesNoGrafico.forEach(mes => {
+        const mesLimite = mes + '-31'; // tudo cadastrado até o fim desse mês
         if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0, resultadoEsperado: 0 };
         evolucao[mes].resultadoEsperado = (empresas || [])
-          .filter(e => idsSet.has(e.id))
+          .filter(e => {
+            // Inclui empresa se: não tem data_cadastro (legado) OU foi cadastrada até este mês
+            if (!e.data_cadastro) return true;
+            return e.data_cadastro <= mesLimite;
+          })
           .reduce((s, e) => s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1), 0);
       });
       const evolucaoArray = Object.entries(evolucao)
@@ -286,14 +287,16 @@ export default function DashboardVendedor() {
 
       // Movimentação real por empresa
       const movRealPorEmpresa = (empresas || []).map(e => {
-        const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null };
-        const prev = (e.potencial_movimentacao || 0);
-        const ader = prev > 0 ? (mov.total / prev) * 100 : 0;
+        const mov    = movPorEmpresa[e.id] || { total: 0, ultima: null, meses: new Set() };
+        const prev   = e.potencial_movimentacao || 0;
+        const nMeses = mov.meses.size || 1;
+        const mediaMovMensal = mov.total / nMeses; // média mensal real
+        const ader   = prev > 0 ? (mediaMovMensal / prev) * 100 : 0;
         let situacao = 'sem movimentação';
         if (mov.total > 0 && ader < 50)  situacao = 'abaixo do esperado';
         if (ader >= 50 && ader < 90)     situacao = 'dentro do esperado';
         if (ader >= 90)                  situacao = 'acima do esperado';
-        return { ...e, movReal: mov.total, ultimaMov: mov.ultima, aderencia: ader, situacao };
+        return { ...e, movReal: mov.total, mediaMovMensal, nMeses, ultimaMov: mov.ultima, aderencia: ader, situacao };
       }).sort((a, b) => b.movReal - a.movReal);
 
       // Por parceiro — apenas empresas com movimentação, valor mensal
@@ -731,7 +734,7 @@ export default function DashboardVendedor() {
                   <table style={s.table}>
                     <thead>
                       <tr>
-                        {['Empresa', 'Produto', 'Potencial Previsto', 'Mov. Real Acum.', '% Aderência', 'Última Mov.', 'Situação'].map(h =>
+                        {['Empresa', 'Produto', 'Potencial Prev.', 'Mov. Real Acum.', 'Meses', 'Média Mensal', '% Aderência', 'Última Mov.', 'Situação'].map(h =>
                           <th key={h} style={s.th}>{h}</th>)}
                       </tr>
                     </thead>
@@ -745,7 +748,9 @@ export default function DashboardVendedor() {
                             <td style={{ ...s.td, fontWeight: 600 }}>{e.nome}</td>
                             <td style={s.td}>{e.produto_contratado || '—'}</td>
                             <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                            <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.movReal)}</td>
+                            <td style={{ ...s.td, color: '#9ca3af' }}>{fmt(e.movReal)}</td>
+                            <td style={{ ...s.td, textAlign:'center', color:'#6b7280' }}>{e.nMeses || 0}</td>
+                            <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.mediaMovMensal)}</td>
                             <td style={s.td}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
