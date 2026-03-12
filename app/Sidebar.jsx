@@ -9,7 +9,6 @@ const nav = [
   { href: '/movimentacoes', icon: '💳', label: 'Movimentações' },
   { href: '/gestao',        icon: '⚙️', label: 'Gestão'        },
   { href: '/relatorios',    icon: '📋', label: 'Relatórios'    },
-  { href: '/importar',      icon: '⊕',  label: 'Importar'      },
 ];
 
 export default function Sidebar() {
