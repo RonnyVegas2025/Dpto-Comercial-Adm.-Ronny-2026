@@ -136,21 +136,15 @@ export default function DashboardVendedor() {
       const totalCustoMov   = Object.values(movPorEmpresa).reduce((s, m) => s + m.custo,   0);
 
       // 2. KPIs básicos
-      const totalEmpresas    = (empresas || []).length;
-      // Potencial e resultado × meses de cada empresa (base acumulada = mesma base da mov. real)
-      const totalPotencial   = (empresas || []).reduce((s, e) => {
-        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
-          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
-        return s + (e.potencial_movimentacao || 0) * mesesE;
-      }, 0);
-      const totalResultado   = (empresas || []).reduce((s, e) => {
-        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
-          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
-        return s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesE;
-      }, 0);
-      const totalCartoes     = (empresas || []).reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
+      // Apenas empresas que têm movimentação importada no período
+      const empresasComMov   = (empresas || []).filter(e => movPorEmpresa[e.id]);
+      const totalEmpresas    = empresasComMov.length;
+      // Potencial e resultado — só empresas com movimentação, valor mensal (sem multiplicar por meses)
+      const totalPotencial   = empresasComMov.reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
+      const totalResultado   = empresasComMov.reduce((s, e) => s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1), 0);
+      const totalCartoes     = empresasComMov.reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
       const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
-      const ticketMedio      = totalEmpresas > 0 ? totalResultado / totalEmpresas : 0;
+      const ticketMedio      = totalEmpresas > 0 ? totalMovReal / totalEmpresas : 0;
 
       // 3. Meta acumulada
       const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
@@ -188,16 +182,14 @@ export default function DashboardVendedor() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([mes, v]) => ({ mes, ...v }));
 
-      // Por produto — também acumulado
+      // Por produto — apenas empresas com movimentação, valor mensal
       const porProduto = {};
-      (empresas || []).forEach(e => {
+      empresasComMov.forEach(e => {
         const p = e.produto_contratado || 'Outros';
-        const mesesE = movimentacoes.filter(m => m.empresa_id === e.id)
-          .map(m => m.competencia?.substring(0,7)).filter((v,i,a) => v && a.indexOf(v)===i).length || 1;
         if (!porProduto[p]) porProduto[p] = { contratos: 0, potencial: 0, resultado: 0 };
         porProduto[p].contratos++;
-        porProduto[p].potencial  += (e.potencial_movimentacao || 0) * mesesE;
-        porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesE;
+        porProduto[p].potencial  += (e.potencial_movimentacao || 0);
+        porProduto[p].resultado  += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
       });
       const produtosArray = Object.entries(porProduto)
         .map(([nome, v]) => ({ nome, ...v }))
@@ -226,24 +218,19 @@ export default function DashboardVendedor() {
         return { ...e, movReal: mov.total, ultimaMov: mov.ultima, aderencia: ader, situacao };
       }).sort((a, b) => b.movReal - a.movReal);
 
-      // Por parceiro — potencial e resultado acumulados (× meses importados)
-      // para ficarem na mesma base da movimentação real acumulada
+      // Por parceiro — apenas empresas com movimentação, valor mensal
       const porParceiro = {};
-      (empresas || []).forEach(e => {
+      empresasComMov.forEach(e => {
         const parc = e.parceiro?.nome || 'Sem Parceiro';
         const mov  = movPorEmpresa[e.id] || { total: 0, ultima: null, receita: 0, custo: 0 };
-        // Meses com movimentação real para essa empresa especificamente
-        const mesesEmpresa = movimentacoes.filter(m => m.empresa_id === e.id)
-          .map(m => m.competencia?.substring(0,7))
-          .filter((v, i, a) => v && a.indexOf(v) === i).length || 1;
         if (!porParceiro[parc]) porParceiro[parc] = { contratos: 0, potencial: 0, resultado: 0, movReal: 0, receita: 0, custo: 0, totalMeses: 0 };
         porParceiro[parc].contratos++;
-        porParceiro[parc].potencial   += (e.potencial_movimentacao || 0) * mesesEmpresa;
-        porParceiro[parc].resultado   += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * mesesEmpresa;
+        porParceiro[parc].potencial   += (e.potencial_movimentacao || 0);
+        porParceiro[parc].resultado   += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
         porParceiro[parc].movReal     += mov.total;
         porParceiro[parc].receita     += mov.receita || 0;
         porParceiro[parc].custo       += mov.custo   || 0;
-        porParceiro[parc].totalMeses  += mesesEmpresa; // soma meses de todas as empresas do parceiro
+        porParceiro[parc].totalMeses  += 1;
       });
       const parceirosArray = Object.entries(porParceiro)
         .map(([nome, v]) => ({
