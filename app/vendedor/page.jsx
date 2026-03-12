@@ -124,18 +124,41 @@ export default function DashboardVendedor() {
           ? consultores
           : consultores.filter(c => c.gestor === gestorFiltro);
 
-      // Ranking: busca resultado de TODOS os consultores da equipe
+      // Ranking: movimentação real do último mês importado por consultor
+      // 1. Descobre qual é o último mês com movimentação no banco
+      const { data: ultimaMov } = await supabase
+        .from('movimentacoes')
+        .select('competencia')
+        .order('competencia', { ascending: false })
+        .limit(1);
+      const ultimoMes = ultimaMov?.[0]?.competencia?.substring(0, 7);
+
+      // 2. Busca todas as empresas com seus consultores
       const { data: todasEmpresas } = await supabase
         .from('empresas')
-        .select('consultor_principal_id, potencial_movimentacao, peso_categoria')
+        .select('id, consultor_principal_id')
         .eq('ativo', true);
 
-      const resultadoPorConsultor = {};
+      // 3. Busca movimentações apenas do último mês
+      const { data: movsUltimoMes } = ultimoMes ? await supabase
+        .from('movimentacoes')
+        .select('empresa_id, valor_movimentacao')
+        .gte('competencia', ultimoMes + '-01')
+        .lte('competencia', ultimoMes + '-28') : { data: [] };
+
+      // 4. Monta mapa empresa → consultor
+      const empresaConsultorMap = {};
       (todasEmpresas || []).forEach(e => {
-        const cid = e.consultor_principal_id;
+        if (e.consultor_principal_id) empresaConsultorMap[e.id] = e.consultor_principal_id;
+      });
+
+      // 5. Agrupa movimentação do último mês por consultor
+      const resultadoPorConsultor = {};
+      (movsUltimoMes || []).forEach(m => {
+        const cid = empresaConsultorMap[m.empresa_id];
         if (!cid) return;
         if (!resultadoPorConsultor[cid]) resultadoPorConsultor[cid] = 0;
-        resultadoPorConsultor[cid] += (e.potencial_movimentacao || 0) * (e.peso_categoria || 1);
+        resultadoPorConsultor[cid] += m.valor_movimentacao || 0;
       });
 
       // ── Processamento ───────────────────────────────────────────────────────
@@ -291,6 +314,7 @@ export default function DashboardVendedor() {
         consultor,
         consultoresDaVisao,
         metasPorMes,
+        ultimoMes,
         kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, metaObjetivo, volumeMeta: volMetaFinal, mesesImportados, pctMeta, pctMovVsMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
         movRealPorEmpresa,
@@ -367,7 +391,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0, e.resultadoEsperado || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -947,35 +971,62 @@ export default function DashboardVendedor() {
             )}
 
             {/* ── RANKING ─────────────────────────────────────────────── */}
-            {aba === 'ranking' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                <div style={{ ...s.card, gridColumn: '1 / -1' }}>
-                  <div style={s.cardTitle}>🏆 Ranking Geral da Equipe</div>
-                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {consultores
-                      .filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro)
-                      .map(c => ({ ...c }))
-                      .sort((a, b) => (resultadoPorConsultor[b.id] || 0) - (resultadoPorConsultor[a.id] || 0))
-                      .map((c, i) => {
-                        const isAtual = c.id === consultorId;
-                        return (
-                          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', borderRadius: 10, background: isAtual ? 'rgba(240,180,41,0.08)' : 'rgba(255,255,255,0.03)', border: isAtual ? '1px solid rgba(240,180,41,0.3)' : '1px solid transparent' }}>
-                            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: i === 0 ? '#f0b429' : i === 1 ? '#9ca3af' : i === 2 ? '#cd7c2f' : '#4b5563', minWidth: 28, textAlign: 'center' }}>
-                              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
+            {aba === 'ranking' && (() => {
+              const rankingList = consultores
+                .filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro)
+                .map(c => ({ ...c, movMes: resultadoPorConsultor[c.id] || 0 }))
+                .sort((a, b) => b.movMes - a.movMes);
+              const maxMov = Math.max(...rankingList.map(c => c.movMes), 1);
+              const mesMes = ultimoMes ? fmtMes(ultimoMes + '-01') : '—';
+              return (
+                <div style={s.card}>
+                  {/* Header */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+                    <div style={s.cardTitle}>🏆 Ranking — Movimentação Real</div>
+                    <div style={{ background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.25)', borderRadius:8, padding:'4px 12px', fontSize:'0.75rem', color:'#f0b429', fontWeight:700 }}>
+                      {mesMes}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {rankingList.map((c, i) => {
+                      const isAtual  = c.id === consultorId;
+                      const pctBarra = (c.movMes / maxMov) * 100;
+                      const medal    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}º`;
+                      const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#9ca3af' : i === 2 ? '#cd7c2f' : '#4b5563';
+                      return (
+                        <div key={c.id} style={{
+                          borderRadius:10, overflow:'hidden',
+                          background: isAtual ? 'rgba(240,180,41,0.06)' : 'rgba(255,255,255,0.02)',
+                          border: isAtual ? '1px solid rgba(240,180,41,0.25)' : '1px solid rgba(255,255,255,0.04)',
+                        }}>
+                          {/* Linha info */}
+                          <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
+                            <span style={{ fontWeight:700, fontSize:'1rem', color: corMedal, minWidth:32, textAlign:'center' }}>{medal}</span>
+                            <span style={{ flex:1, fontWeight: isAtual ? 700 : 500, fontSize:'0.88rem', color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</span>
+                            <span style={{ color:'#4b5563', fontSize:'0.75rem' }}>{c.gestor || '—'}</span>
+                            <span style={{ color: c.movMes > 0 ? '#34d399' : '#4b5563', fontWeight:700, fontSize:'0.9rem', minWidth:110, textAlign:'right' }}>
+                              {c.movMes > 0 ? fmt(c.movMes) : '—'}
                             </span>
-                            <span style={{ flex: 1, fontWeight: isAtual ? 700 : 500, color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</span>
-                            <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{c.gestor || '—'}</span>
-                            <span style={{ color: '#f0b429', fontSize: '0.85rem', fontWeight: 600 }}>{fmt(resultadoPorConsultor[c.id] || 0)}</span>
-                            <span style={{ color: '#4b5563', fontSize: '0.75rem' }}>resultado</span>
-                            {isAtual && <span style={{ background: 'rgba(240,180,41,0.2)', color: '#f0b429', borderRadius: 6, padding: '2px 8px', fontSize: '0.72rem', fontWeight: 700 }}>você</span>}
+                            {isAtual && (
+                              <span style={{ background:'rgba(240,180,41,0.2)', color:'#f0b429', borderRadius:6, padding:'2px 8px', fontSize:'0.68rem', fontWeight:700 }}>você</span>
+                            )}
                           </div>
-                        );
-                      })
-                    }
+                          {/* Barra de progresso */}
+                          {c.movMes > 0 && (
+                            <div style={{ height:3, background:'rgba(255,255,255,0.04)' }}>
+                              <div style={{ height:'100%', width:`${pctBarra}%`, background: isAtual ? '#f0b429' : i < 3 ? '#34d399' : 'rgba(255,255,255,0.15)', transition:'width 0.6s' }}></div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {rankingList.every(c => c.movMes === 0) && (
+                      <div style={s.semDados}>Nenhuma movimentação encontrada para {mesMes}</div>
+                    )}
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         );
       })()}
