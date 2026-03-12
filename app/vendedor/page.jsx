@@ -1,3 +1,4 @@
+// VERSAO 3 - 2026-03-12 01:42 - grafico 3 barras + badge meta + produto duplo
 'use client';
 
 import { useState, useEffect } from 'react';
