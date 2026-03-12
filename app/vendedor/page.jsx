@@ -1,4 +1,4 @@
-// VERSAO 3 - 2026-03-12 01:42 - grafico 3 barras + badge meta + produto duplo
+// VERSAO 4 - 2026-03-12 - barra dupla + pctMeta por resultado + card vol.financeiro
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -168,7 +168,10 @@ export default function DashboardVendedor() {
       // 3. Meta acumulada
       const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
       const metaAcumulada    = meta * (mesesImportados || 1);
-      const pctMeta          = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
+      // % da Meta = Resultado Esperado (potencial × peso) vs Meta — volume financeiro da meta
+      const pctMeta          = metaAcumulada > 0 ? (totalResultado / metaAcumulada) * 100 : 0;
+      // % Movimentação Real vs Meta (separado, para referência na barra)
+      const pctMovVsMeta     = metaAcumulada > 0 ? (totalMovReal / metaAcumulada) * 100 : 0;
 
       // 4. Spread — usa valores salvos nas movimentações (receita_bruta e custo_taxa_negativa)
       //    Se movimentações não têm spread (importação antiga), fallback para taxa do cadastro
@@ -285,7 +288,7 @@ export default function DashboardVendedor() {
         consultor,
         consultoresDaVisao,
         metasPorMes,
-        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
+        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, pctMovVsMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
         movRealPorEmpresa,
         evolucaoArray,
@@ -410,11 +413,20 @@ export default function DashboardVendedor() {
                         {badgeMeta.label}
                       </span>
                     ) },
-                  { label: '% da Meta',          val: fmtPct(pct),                cor: corPct, icon: '📈',
+                  { label: '% da Meta (Resultado)',  val: fmtPct(pct),                cor: corPct, icon: '📈',
                     extra: (
-                      <div style={{ marginTop:6, background:'rgba(255,255,255,0.06)', borderRadius:4, height:5, overflow:'hidden' }}>
-                        <div style={{ background: corPct, height:'100%', width:`${Math.min(pct,100)}%`, borderRadius:4 }}></div>
+                      <div style={{ marginTop:5 }}>
+                        <div style={{ background:'rgba(255,255,255,0.06)', borderRadius:4, height:5, overflow:'hidden', marginBottom:4 }}>
+                          <div style={{ background: corPct, height:'100%', width:`${Math.min(pct,100)}%`, borderRadius:4 }}></div>
+                        </div>
+                        <span style={{ fontSize:'0.65rem', color:'#6b7280' }}>Mov. Real: {fmtPct(kpis.pctMovVsMeta||0)}</span>
                       </div>
+                    ) },
+                  { label: 'Vol. Financeiro Meta', val: fmt(kpis.totalResultado),   cor: '#34d399', icon: '💵',
+                    extra: (
+                      <span style={{ fontSize:'0.65rem', color:'#6b7280', marginTop:3, display:'block' }}>
+                        base: potencial × peso
+                      </span>
                     ) },
                   { label: 'Cartões Emitidos',   val: kpis.totalCartoes,           cor: '#e8eaf0', icon: '💳' },
                   { label: 'Ticket Médio',        val: fmt(kpis.ticketMedio),       cor: '#60a5fa', icon: '🎫' },
@@ -437,18 +449,47 @@ export default function DashboardVendedor() {
               })()}
             </div>
 
-            {/* Barra de meta */}
+            {/* Barra de meta dupla */}
             <div style={{ ...s.card, marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Progresso da Meta</span>
-                <span style={{ color: corMeta(kpis.pctMeta), fontWeight: 700 }}>{fmtPct(kpis.pctMeta)} · {kpis.mesesImportados} {kpis.mesesImportados === 1 ? 'mês' : 'meses'} importados</span>
+                <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem' }}>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{ width:8, height:8, borderRadius:2, background:'#a78bfa', display:'inline-block' }}></span>
+                    <span style={{ color:'#9ca3af' }}>Resultado Esperado</span>
+                  </span>
+                  <span style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{ width:8, height:8, borderRadius:2, background:'#f0b429', display:'inline-block' }}></span>
+                    <span style={{ color:'#9ca3af' }}>Movimentação Real</span>
+                  </span>
+                </div>
+                <span style={{ color: corMeta(kpis.pctMeta), fontWeight: 700, fontSize:'0.85rem' }}>
+                  {fmtPct(kpis.pctMeta)} · {kpis.mesesImportados} {kpis.mesesImportados === 1 ? 'mês' : 'meses'}
+                </span>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-                <div style={{ background: corMeta(kpis.pctMeta), height: '100%', width: `${Math.min(kpis.pctMeta, 100)}%`, borderRadius: 8, transition: 'width 0.8s ease' }}></div>
+              {/* Barra Resultado Esperado (volume meta) */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72rem', color:'#9ca3af', marginBottom:4 }}>
+                  <span>Resultado Esperado</span>
+                  <span style={{ color: corMeta(kpis.pctMeta), fontWeight:700 }}>{fmt(kpis.totalResultado)} / {fmt(kpis.metaAcumulada)} ({fmtPct(kpis.pctMeta)})</span>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 6, height: 10, overflow: 'hidden' }}>
+                  <div style={{ background: corMeta(kpis.pctMeta), height: '100%', width: `${Math.min(kpis.pctMeta, 100)}%`, borderRadius: 6, transition: 'width 0.8s ease' }}></div>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: '0.75rem', color: '#6b7280' }}>
+              {/* Barra Movimentação Real */}
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72rem', color:'#9ca3af', marginBottom:4 }}>
+                  <span>Movimentação Real</span>
+                  <span style={{ color:'#f0b429', fontWeight:700 }}>{fmt(kpis.totalMovReal)} ({fmtPct(kpis.pctMovVsMeta||0)})</span>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 6, height: 10, overflow: 'hidden' }}>
+                  <div style={{ background: '#f0b429', height: '100%', width: `${Math.min(kpis.pctMovVsMeta||0, 100)}%`, borderRadius: 6, transition: 'width 0.8s ease' }}></div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.7rem', color: '#4b5563' }}>
                 <span>R$ 0</span>
-                <span>{fmt(kpis.metaAcumulada)}</span>
+                <span>Meta: {fmt(kpis.metaAcumulada)}</span>
               </div>
             </div>
 
