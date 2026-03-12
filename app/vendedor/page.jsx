@@ -193,6 +193,11 @@ export default function DashboardVendedor() {
           movPorEmpresa[m.empresa_id].ultima = m.competencia;
       });
       const totalMovReal    = Object.values(movPorEmpresa).reduce((s, m) => s + m.total,   0);
+      // Média mensal real = para cada empresa, total ÷ nMeses dela, somado
+      const totalMovRealMedia = Object.values(movPorEmpresa).reduce((s, m) => {
+        const nMeses = m.meses.size || 1;
+        return s + (m.total / nMeses);
+      }, 0);
       const totalReceitaMov = Object.values(movPorEmpresa).reduce((s, m) => s + m.receita, 0);
       const totalCustoMov   = Object.values(movPorEmpresa).reduce((s, m) => s + m.custo,   0);
 
@@ -205,7 +210,7 @@ export default function DashboardVendedor() {
       const totalResultado   = empresasComMov.reduce((s, e) => s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1), 0);
       const totalCartoes     = empresasComMov.reduce((s, e) => s + (e.cartoes_emitidos || 0), 0);
       const meta             = consultoresDaVisao.reduce((s, c) => s + (c?.meta_mensal || 0), 0);
-      const ticketMedio      = totalEmpresas > 0 ? totalMovReal / totalEmpresas : 0;
+      const ticketMedio      = totalEmpresas > 0 ? totalMovRealMedia / totalEmpresas : 0;
 
       // 3. Metas
       const mesesImportados  = new Set(movimentacoes.map(m => m.competencia?.substring(0,7)).filter(Boolean)).size;
@@ -214,7 +219,7 @@ export default function DashboardVendedor() {
       const volMetaFinal     = volumeMeta; // zero se não houver meta importada — sem fallback
       const pctMeta          = metaObjetivo > 0 ? (volMetaFinal / metaObjetivo) * 100 : 0;
       const metaAcumulada    = metaObjetivo; // mantém compatibilidade com outros usos
-      const pctMovVsMeta     = metaObjetivo > 0 ? (totalMovReal / metaObjetivo) * 100 : 0;
+      const pctMovVsMeta     = metaObjetivo > 0 ? (totalMovRealMedia / metaObjetivo) * 100 : 0;
 
       // 4. Spread — usa valores salvos nas movimentações (receita_bruta e custo_taxa_negativa)
       //    Se movimentações não têm spread (importação antiga), fallback para taxa do cadastro
@@ -336,7 +341,7 @@ export default function DashboardVendedor() {
         metasPorMes,
         metaAcumPorConsultor,
         ultimoMes,
-        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, metaObjetivo, volumeMeta: volMetaFinal, mesesImportados, pctMeta, pctMovVsMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
+        kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, metaObjetivo, volumeMeta: volMetaFinal, mesesImportados, pctMeta, pctMovVsMeta, totalMovReal, totalMovRealMedia, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
         movRealPorEmpresa,
         evolucaoArray,
@@ -474,9 +479,11 @@ export default function DashboardVendedor() {
                     {/* Movimentação Real — DESTAQUE PRINCIPAL */}
                     <div style={{ background: 'linear-gradient(135deg, rgba(240,180,41,0.12), rgba(240,180,41,0.04))', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>💰</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Movimentação Real</div>
-                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#f0b429', lineHeight: 1 }}>{fmt(kpis.totalMovReal)}</div>
-                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>{kpis.totalEmpresas} empresas · {kpis.mesesImportados} {kpis.mesesImportados===1?'mês':'meses'}</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Mov. Real (Média Mensal)</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#f0b429', lineHeight: 1 }}>{fmt(kpis.totalMovRealMedia)}</div>
+                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>
+                        {kpis.totalEmpresas} empresas · acum. {fmt(kpis.totalMovReal)} / {kpis.mesesImportados} {kpis.mesesImportados===1?'mês':'meses'}
+                      </div>
                     </div>
 
                     {/* Vol. Meta Realizado */}
