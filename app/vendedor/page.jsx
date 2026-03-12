@@ -111,6 +111,7 @@ export default function DashboardVendedor() {
         ? [consultorId]
         : consultores.filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro).map(c => c.id);
       let metasPorMes = {};
+      let metaAcumPorConsultor = {}; // vol. meta acumulado por consultor (todos os meses)
       if (consultorIds.length > 0) {
         const mesMetaInicio = mesSelecionado ? mesSelecionado + '-01' : '2000-01-01';
         const mesMetaFim    = mesSelecionado ? mesSelecionado + '-28' : '2099-12-31';
@@ -125,6 +126,9 @@ export default function DashboardVendedor() {
           if (!mes) return;
           if (!metasPorMes[mes]) metasPorMes[mes] = 0;
           metasPorMes[mes] += (m.valor_total || m.valor_beneficio || 0);
+          // Acumula por consultor
+          if (!metaAcumPorConsultor[m.consultor_id]) metaAcumPorConsultor[m.consultor_id] = 0;
+          metaAcumPorConsultor[m.consultor_id] += (m.valor_total || m.valor_beneficio || 0);
         });
       }
 
@@ -328,6 +332,7 @@ export default function DashboardVendedor() {
         consultor,
         consultoresDaVisao,
         metasPorMes,
+        metaAcumPorConsultor,
         ultimoMes,
         kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, metaObjetivo, volumeMeta: volMetaFinal, mesesImportados, pctMeta, pctMovVsMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
@@ -425,7 +430,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes, metaAcumPorConsultor } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0, e.resultadoEsperado || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -1027,23 +1032,27 @@ export default function DashboardVendedor() {
             {aba === 'ranking' && (() => {
               const rankingList = consultores
                 .filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro)
-                .map(c => ({ ...c, movMes: resultadoPorConsultor[c.id] || 0 }))
-                .sort((a, b) => b.movMes - a.movMes);
-              const maxMov = Math.max(...rankingList.map(c => c.movMes), 1);
-              const mesMes = ultimoMes ? fmtMes(ultimoMes + '-01') : '—';
+                .map(c => ({
+                  ...c,
+                  movMes:      resultadoPorConsultor[c.id]   || 0, // mov do último mês
+                  volMetaAcum: metaAcumPorConsultor[c.id]    || 0, // meta acumulada
+                }))
+                .sort((a, b) => b.volMetaAcum - a.volMetaAcum);
+              const maxVal  = Math.max(...rankingList.map(c => c.volMetaAcum), 1);
+              const mesesLabel = Object.keys(metasPorMes || {}).sort().map(m => fmtMes(m+'-01')).join(' + ') || '—';
               return (
                 <div style={s.card}>
                   {/* Header */}
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-                    <div style={s.cardTitle}>🏆 Ranking — Movimentação Real</div>
-                    <div style={{ background:'rgba(240,180,41,0.1)', border:'1px solid rgba(240,180,41,0.25)', borderRadius:8, padding:'4px 12px', fontSize:'0.75rem', color:'#f0b429', fontWeight:700 }}>
-                      {mesMes}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:8 }}>
+                    <div style={s.cardTitle}>🏆 Ranking — Vol. Meta Realizado</div>
+                    <div style={{ background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.25)', borderRadius:8, padding:'4px 12px', fontSize:'0.75rem', color:'#34d399', fontWeight:700 }}>
+                      Acumulado: {mesesLabel}
                     </div>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                     {rankingList.map((c, i) => {
                       const isAtual  = c.id === consultorId;
-                      const pctBarra = (c.movMes / maxMov) * 100;
+                      const pctBarra = (c.volMetaAcum / maxVal) * 100;
                       const medal    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}º`;
                       const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#9ca3af' : i === 2 ? '#cd7c2f' : '#4b5563';
                       return (
@@ -1052,20 +1061,25 @@ export default function DashboardVendedor() {
                           background: isAtual ? 'rgba(240,180,41,0.06)' : 'rgba(255,255,255,0.02)',
                           border: isAtual ? '1px solid rgba(240,180,41,0.25)' : '1px solid rgba(255,255,255,0.04)',
                         }}>
-                          {/* Linha info */}
                           <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
                             <span style={{ fontWeight:700, fontSize:'1rem', color: corMedal, minWidth:32, textAlign:'center' }}>{medal}</span>
-                            <span style={{ flex:1, fontWeight: isAtual ? 700 : 500, fontSize:'0.88rem', color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</span>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontWeight: isAtual ? 700 : 500, fontSize:'0.88rem', color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</div>
+                              {c.movMes > 0 && (
+                                <div style={{ fontSize:'0.72rem', color:'#4b5563', marginTop:2 }}>
+                                  Últ. mov: {fmt(c.movMes)} · {fmtMes((ultimoMes||'') + '-01')}
+                                </div>
+                              )}
+                            </div>
                             <span style={{ color:'#4b5563', fontSize:'0.75rem' }}>{c.gestor || '—'}</span>
-                            <span style={{ color: c.movMes > 0 ? '#34d399' : '#4b5563', fontWeight:700, fontSize:'0.9rem', minWidth:110, textAlign:'right' }}>
-                              {c.movMes > 0 ? fmt(c.movMes) : '—'}
+                            <span style={{ color: c.volMetaAcum > 0 ? '#34d399' : '#4b5563', fontWeight:700, fontSize:'0.9rem', minWidth:120, textAlign:'right' }}>
+                              {c.volMetaAcum > 0 ? fmt(c.volMetaAcum) : '—'}
                             </span>
                             {isAtual && (
                               <span style={{ background:'rgba(240,180,41,0.2)', color:'#f0b429', borderRadius:6, padding:'2px 8px', fontSize:'0.68rem', fontWeight:700 }}>você</span>
                             )}
                           </div>
-                          {/* Barra de progresso */}
-                          {c.movMes > 0 && (
+                          {c.volMetaAcum > 0 && (
                             <div style={{ height:3, background:'rgba(255,255,255,0.04)' }}>
                               <div style={{ height:'100%', width:`${pctBarra}%`, background: isAtual ? '#f0b429' : i < 3 ? '#34d399' : 'rgba(255,255,255,0.15)', transition:'width 0.6s' }}></div>
                             </div>
@@ -1073,8 +1087,8 @@ export default function DashboardVendedor() {
                         </div>
                       );
                     })}
-                    {rankingList.every(c => c.movMes === 0) && (
-                      <div style={s.semDados}>Nenhuma movimentação encontrada para {mesMes}</div>
+                    {rankingList.every(c => c.volMetaAcum === 0) && (
+                      <div style={s.semDados}>Nenhuma meta importada ainda</div>
                     )}
                   </div>
                 </div>
