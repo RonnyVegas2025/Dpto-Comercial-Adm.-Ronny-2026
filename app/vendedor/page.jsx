@@ -97,6 +97,24 @@ export default function DashboardVendedor() {
         movimentacoes = movs || [];
       }
 
+      // Metas por consultor (metas_vendedor)
+      const consultorIds = consultorId
+        ? [consultorId]
+        : consultores.filter(c => gestorFiltro === 'Geral' || c.gestor === gestorFiltro).map(c => c.id);
+      let metasPorMes = {};
+      if (consultorIds.length > 0) {
+        const { data: metas } = await supabase
+          .from('metas_vendedor')
+          .select('consultor_id, competencia, valor_beneficio, valor_convenio, valor_total')
+          .in('consultor_id', consultorIds);
+        (metas || []).forEach(m => {
+          const mes = m.competencia?.substring(0, 7);
+          if (!mes) return;
+          if (!metasPorMes[mes]) metasPorMes[mes] = 0;
+          metasPorMes[mes] += (m.valor_total || m.valor_beneficio || 0);
+        });
+      }
+
       // Consultor atual ou equipe
       const consultor = consultorId ? consultores.find(c => c.id === consultorId) : null;
       const consultoresDaVisao = consultorId
@@ -175,8 +193,13 @@ export default function DashboardVendedor() {
       movimentacoes.forEach(m => {
         const mes = m.competencia?.substring(0, 7);
         if (!mes) return;
-        if (!evolucao[mes]) evolucao[mes] = { movReal: 0 };
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0 };
         evolucao[mes].movReal += m.valor_movimentacao || 0;
+      });
+      // Adiciona meta de cada mês no evolucaoArray
+      Object.entries(metasPorMes).forEach(([mes, val]) => {
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0 };
+        evolucao[mes].meta = val;
       });
       const evolucaoArray = Object.entries(evolucao)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -246,6 +269,7 @@ export default function DashboardVendedor() {
       setDados({
         consultor,
         consultoresDaVisao,
+        metasPorMes,
         kpis: { totalEmpresas, totalPotencial, totalResultado, totalCartoes, meta, metaAcumulada, mesesImportados, pctMeta, totalMovReal, ticketMedio, receitaBruta, pctReceita, descontoTotal, pctDesconto, spreadLiquido, pctSpread },
         empresas: empresas || [],
         movRealPorEmpresa,
@@ -323,7 +347,7 @@ export default function DashboardVendedor() {
       {/* Conteúdo */}
       {dados && !loading && (() => {
         const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray } = dados;
-        const maxEvolucao = Math.max(...evolucaoArray.map(e => e.movReal), 1);
+        const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
         return (
@@ -400,15 +424,35 @@ export default function DashboardVendedor() {
 
                 {/* Evolução mensal */}
                 <div style={{ ...s.card, gridColumn: '1 / -1' }}>
-                  <div style={s.cardTitle}>📈 Evolução Mensal — Movimentação Real</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={s.cardTitle}>📈 Evolução Mensal</div>
+                    <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: 3, background: '#f0b429', display: 'inline-block' }}></span>
+                        <span style={{ color: '#9ca3af' }}>Movimentação Real</span>
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: 3, background: '#34d399', display: 'inline-block' }}></span>
+                        <span style={{ color: '#9ca3af' }}>Meta</span>
+                      </span>
+                    </div>
+                  </div>
                   {evolucaoArray.length === 0
                     ? <div style={s.semDados}>Nenhuma movimentação registrada</div>
                     : (
-                      <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-end', gap: 8, height: 140, overflowX: 'auto', paddingBottom: 8 }}>
+                      <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-end', gap: 16, height: 160, overflowX: 'auto', paddingBottom: 8 }}>
                         {evolucaoArray.map((e, i) => (
-                          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 52 }}>
-                            <span style={{ color: '#f0b429', fontSize: '0.65rem', fontWeight: 600 }}>{fmt(e.movReal).replace('R$', '').trim()}</span>
-                            <div style={{ background: 'rgba(240,180,41,0.2)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: '4px 4px 0 0', width: 36, height: `${Math.max((e.movReal / maxEvolucao) * 100, 4)}px`, transition: 'height 0.6s' }}></div>
+                          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 80 }}>
+                            {/* Valores acima das barras */}
+                            <div style={{ display: 'flex', gap: 4, fontSize: '0.58rem', fontWeight: 600, marginBottom: 2 }}>
+                              <span style={{ color: '#f0b429' }}>{fmt(e.movReal).replace('R$','').trim()}</span>
+                              {e.meta > 0 && <span style={{ color: '#34d399' }}>/ {fmt(e.meta).replace('R$','').trim()}</span>}
+                            </div>
+                            {/* Barras lado a lado */}
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3 }}>
+                              <div style={{ background: 'rgba(240,180,41,0.25)', border: '1px solid rgba(240,180,41,0.4)', borderRadius: '4px 4px 0 0', width: 28, height: `${Math.max((e.movReal / maxEvolucao) * 120, e.movReal > 0 ? 4 : 0)}px`, transition: 'height 0.6s' }}></div>
+                              {e.meta > 0 && <div style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: '4px 4px 0 0', width: 28, height: `${Math.max((e.meta / maxEvolucao) * 120, 4)}px`, transition: 'height 0.6s' }}></div>}
+                            </div>
                             <span style={{ color: '#6b7280', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{fmtMes(e.mes + '-01')}</span>
                           </div>
                         ))}
