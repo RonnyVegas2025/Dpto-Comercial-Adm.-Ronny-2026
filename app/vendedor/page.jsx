@@ -193,13 +193,27 @@ export default function DashboardVendedor() {
       movimentacoes.forEach(m => {
         const mes = m.competencia?.substring(0, 7);
         if (!mes) return;
-        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0 };
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0, resultadoEsperado: 0 };
         evolucao[mes].movReal += m.valor_movimentacao || 0;
       });
-      // Adiciona meta de cada mês no evolucaoArray
+      // Adiciona meta de cada mês
       Object.entries(metasPorMes).forEach(([mes, val]) => {
-        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0 };
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0, resultadoEsperado: 0 };
         evolucao[mes].meta = val;
+      });
+      // Resultado esperado mensal = potencial × peso das empresas com mov nesse mês
+      const movPorMesEmpresa = {};
+      movimentacoes.forEach(m => {
+        const mes = m.competencia?.substring(0,7);
+        if (!mes) return;
+        if (!movPorMesEmpresa[mes]) movPorMesEmpresa[mes] = new Set();
+        movPorMesEmpresa[mes].add(m.empresa_id);
+      });
+      Object.entries(movPorMesEmpresa).forEach(([mes, idsSet]) => {
+        if (!evolucao[mes]) evolucao[mes] = { movReal: 0, meta: 0, resultadoEsperado: 0 };
+        evolucao[mes].resultadoEsperado = (empresas || [])
+          .filter(e => idsSet.has(e.id))
+          .reduce((s, e) => s + (e.potencial_movimentacao || 0) * (e.peso_categoria || 1), 0);
       });
       const evolucaoArray = Object.entries(evolucao)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -347,7 +361,7 @@ export default function DashboardVendedor() {
       {/* Conteúdo */}
       {dados && !loading && (() => {
         const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray } = dados;
-        const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0)), 1);
+        const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0, e.resultadoEsperado || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
         return (
@@ -371,25 +385,55 @@ export default function DashboardVendedor() {
 
             {/* KPIs */}
             <div style={s.kpis}>
-              {[
-                { label: 'Empresas', val: kpis.totalEmpresas, cor: '#e8eaf0' },
-                { label: 'Potencial Bruto', val: fmt(kpis.totalPotencial), cor: '#e8eaf0' },
-                { label: 'Resultado Esperado', val: fmt(kpis.totalResultado), cor: '#f0b429' },
-                { label: 'Movimentação Real', val: fmt(kpis.totalMovReal), cor: '#34d399' },
-                { label: `Meta Acumulada (${kpis.mesesImportados} ${kpis.mesesImportados === 1 ? 'mês' : 'meses'})`, val: fmt(kpis.metaAcumulada), cor: '#e8eaf0' },
-                { label: '% da Meta', val: fmtPct(kpis.pctMeta), cor: corMeta(kpis.pctMeta) },
-                { label: 'Cartões Emitidos', val: kpis.totalCartoes, cor: '#e8eaf0' },
-                { label: 'Ticket Médio', val: fmt(kpis.ticketMedio), cor: '#60a5fa' },
-                { label: 'Receita Bruta (tx+)', val: `${Number(kpis.pctReceita||0).toFixed(2)}%`, cor: '#34d399', extra: fmt(kpis.receitaBruta) },
-                { label: 'Custo / Desconto (tx-)', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', extra: fmt(kpis.descontoTotal) },
-                { label: 'Spread Líquido', val: `${Number(kpis.pctSpread||0).toFixed(2)}%`, cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171', extra: fmt(kpis.spreadLiquido) },
-              ].map(({ label, val, cor, extra }) => (
-                <div key={label} style={s.kpi}>
-                  <span style={s.kpiLabel}>{label}</span>
-                  <span style={{ ...s.kpiVal, color: cor }}>{val}</span>
-                  {extra && <span style={{ color: '#6b7280', fontSize: '0.7rem', marginTop: 4 }}>{extra}</span>}
-                </div>
-              ))}
+              {(() => {
+                const pct       = kpis.pctMeta;
+                const corPct    = corMeta(pct);
+                const badgeMeta = pct >= 100
+                  ? { label: '✅ Meta atingida',  bg: 'rgba(52,211,153,0.15)',  cor: '#34d399' }
+                  : pct >= 70
+                  ? { label: '⚡ Quase lá',        bg: 'rgba(240,180,41,0.15)', cor: '#f0b429' }
+                  : { label: '⚠️ Abaixo da meta', bg: 'rgba(248,113,113,0.12)', cor: '#f87171' };
+
+                const kpiList = [
+                  { label: 'Empresas',           val: kpis.totalEmpresas,          cor: '#e8eaf0', icon: '🏢' },
+                  { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#e8eaf0', icon: '📊' },
+                  { label: 'Resultado Esperado', val: fmt(kpis.totalResultado),    cor: '#a78bfa', icon: '🎯',
+                    extra: <span style={{ fontSize:'0.68rem', color:'#6b7280', marginTop:3 }}>potencial × peso</span> },
+                  { label: 'Movimentação Real',  val: fmt(kpis.totalMovReal),      cor: '#f0b429', icon: '💰' },
+                  { label: `Meta (${kpis.mesesImportados} ${kpis.mesesImportados===1?'mês':'meses'})`,
+                    val: fmt(kpis.metaAcumulada), cor: '#e8eaf0', icon: '🏆',
+                    extra: (
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5, marginTop:5,
+                        background: badgeMeta.bg, border:`1px solid ${badgeMeta.cor}33`,
+                        borderRadius:6, padding:'2px 8px', fontSize:'0.65rem', fontWeight:700, color: badgeMeta.cor }}>
+                        {badgeMeta.label}
+                      </span>
+                    ) },
+                  { label: '% da Meta',          val: fmtPct(pct),                cor: corPct, icon: '📈',
+                    extra: (
+                      <div style={{ marginTop:6, background:'rgba(255,255,255,0.06)', borderRadius:4, height:5, overflow:'hidden' }}>
+                        <div style={{ background: corPct, height:'100%', width:`${Math.min(pct,100)}%`, borderRadius:4 }}></div>
+                      </div>
+                    ) },
+                  { label: 'Cartões Emitidos',   val: kpis.totalCartoes,           cor: '#e8eaf0', icon: '💳' },
+                  { label: 'Ticket Médio',        val: fmt(kpis.ticketMedio),       cor: '#60a5fa', icon: '🎫' },
+                  { label: 'Receita Bruta (tx+)', val: `${Number(kpis.pctReceita||0).toFixed(2)}%`, cor: '#34d399', icon: '📥',
+                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.receitaBruta)}</span> },
+                  { label: 'Custo / Desc. (tx-)', val: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, cor: '#f87171', icon: '📤',
+                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.descontoTotal)}</span> },
+                  { label: 'Spread Líquido',      val: `${Number(kpis.pctSpread||0).toFixed(2)}%`,
+                    cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171', icon: '💹',
+                    extra: <span style={{ fontSize:'0.7rem', color:'#6b7280', marginTop:3 }}>{fmt(kpis.spreadLiquido)}</span> },
+                ];
+                return kpiList.map(({ label, val, cor, icon, extra }) => (
+                  <div key={label} style={{ ...s.kpi, position:'relative', overflow:'hidden' }}>
+                    <div style={{ position:'absolute', top:10, right:12, fontSize:'1.1rem', opacity:0.15 }}>{icon}</div>
+                    <span style={s.kpiLabel}>{label}</span>
+                    <span style={{ ...s.kpiVal, color: cor }}>{val}</span>
+                    {extra}
+                  </div>
+                ));
+              })()}
             </div>
 
             {/* Barra de meta */}
@@ -424,59 +468,105 @@ export default function DashboardVendedor() {
 
                 {/* Evolução mensal */}
                 <div style={{ ...s.card, gridColumn: '1 / -1' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <div style={s.cardTitle}>📈 Evolução Mensal</div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 12, height: 12, borderRadius: 3, background: '#f0b429', display: 'inline-block' }}></span>
-                        <span style={{ color: '#9ca3af' }}>Movimentação Real</span>
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 12, height: 12, borderRadius: 3, background: '#34d399', display: 'inline-block' }}></span>
-                        <span style={{ color: '#9ca3af' }}>Meta</span>
-                      </span>
+                    <div style={{ display: 'flex', gap: 14, fontSize: '0.72rem', flexWrap: 'wrap' }}>
+                      {[
+                        { cor: '#a78bfa', label: 'Resultado Esperado (Peso)' },
+                        { cor: '#f0b429', label: 'Movimentação Real' },
+                        { cor: '#34d399', label: 'Meta' },
+                      ].map(({ cor, label }) => (
+                        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, background: cor, display: 'inline-block' }}></span>
+                          <span style={{ color: '#9ca3af' }}>{label}</span>
+                        </span>
+                      ))}
                     </div>
                   </div>
                   {evolucaoArray.length === 0
                     ? <div style={s.semDados}>Nenhuma movimentação registrada</div>
                     : (
-                      <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-end', gap: 16, height: 160, overflowX: 'auto', paddingBottom: 8 }}>
-                        {evolucaoArray.map((e, i) => (
-                          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 80 }}>
-                            {/* Valores acima das barras */}
-                            <div style={{ display: 'flex', gap: 4, fontSize: '0.58rem', fontWeight: 600, marginBottom: 2 }}>
-                              <span style={{ color: '#f0b429' }}>{fmt(e.movReal).replace('R$','').trim()}</span>
-                              {e.meta > 0 && <span style={{ color: '#34d399' }}>/ {fmt(e.meta).replace('R$','').trim()}</span>}
+                      <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-end', gap: 20, minHeight: 180, overflowX: 'auto', paddingBottom: 8 }}>
+                        {evolucaoArray.map((e, i) => {
+                          const hEsp  = Math.max((( e.resultadoEsperado||0) / maxEvolucao) * 140, e.resultadoEsperado > 0 ? 4 : 0);
+                          const hMov  = Math.max(((e.movReal||0)           / maxEvolucao) * 140, e.movReal > 0           ? 4 : 0);
+                          const hMeta = Math.max(((e.meta||0)              / maxEvolucao) * 140, e.meta > 0              ? 4 : 0);
+                          return (
+                            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 100 }}>
+                              {/* Valores acima */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, fontSize: '0.58rem', fontWeight: 600, marginBottom: 4 }}>
+                                {e.resultadoEsperado > 0 && <span style={{ color: '#a78bfa' }}>{fmt(e.resultadoEsperado).replace('R$','').trim()}</span>}
+                                <span style={{ color: '#f0b429' }}>{fmt(e.movReal).replace('R$','').trim()}</span>
+                                {e.meta > 0 && <span style={{ color: '#34d399' }}>{fmt(e.meta).replace('R$','').trim()}</span>}
+                              </div>
+                              {/* 3 barras lado a lado */}
+                              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3 }}>
+                                <div title="Resultado Esperado" style={{ background: 'rgba(167,139,250,0.25)', border: '1px solid rgba(167,139,250,0.5)', borderRadius: '4px 4px 0 0', width: 24, height: `${hEsp}px`, transition: 'height 0.6s' }}></div>
+                                <div title="Movimentação Real" style={{ background: 'rgba(240,180,41,0.3)',  border: '1px solid rgba(240,180,41,0.5)',  borderRadius: '4px 4px 0 0', width: 24, height: `${hMov}px`,  transition: 'height 0.6s' }}></div>
+                                {e.meta > 0 && <div title="Meta" style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.5)', borderRadius: '4px 4px 0 0', width: 24, height: `${hMeta}px`, transition: 'height 0.6s' }}></div>}
+                              </div>
+                              <span style={{ color: '#6b7280', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{fmtMes(e.mes + '-01')}</span>
                             </div>
-                            {/* Barras lado a lado */}
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3 }}>
-                              <div style={{ background: 'rgba(240,180,41,0.25)', border: '1px solid rgba(240,180,41,0.4)', borderRadius: '4px 4px 0 0', width: 28, height: `${Math.max((e.movReal / maxEvolucao) * 120, e.movReal > 0 ? 4 : 0)}px`, transition: 'height 0.6s' }}></div>
-                              {e.meta > 0 && <div style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.4)', borderRadius: '4px 4px 0 0', width: 28, height: `${Math.max((e.meta / maxEvolucao) * 120, 4)}px`, transition: 'height 0.6s' }}></div>}
-                            </div>
-                            <span style={{ color: '#6b7280', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{fmtMes(e.mes + '-01')}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )
                   }
                 </div>
 
-                {/* Por produto resumo */}
+                {/* Por produto resumo — barra dupla previsão + movimentado */}
                 <div style={s.card}>
-                  <div style={s.cardTitle}>🎯 Distribuição por Produto</div>
-                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {produtosArray.slice(0, 5).map((p, i) => (
-                      <div key={i}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{p.nome}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#f0b429' }}>{p.contratos} contrato{p.contratos > 1 ? 's' : ''}</span>
-                        </div>
-                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                          <div className="bar-produto" style={{ background: '#f0b429', height: '100%', width: `${(p.resultado / maxProduto) * 100}%`, borderRadius: 4 }}></div>
-                        </div>
-                        <div style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 2 }}>{fmt(p.resultado)}</div>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={s.cardTitle}>🎯 Distribuição por Produto</div>
+                    <div style={{ display: 'flex', gap: 12, fontSize: '0.7rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#a78bfa', display: 'inline-block' }}></span>
+                        <span style={{ color: '#9ca3af' }}>Previsão (peso)</span>
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#f0b429', display: 'inline-block' }}></span>
+                        <span style={{ color: '#9ca3af' }}>Movimentado</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {(() => {
+                      // Agrupa movimentação real por produto
+                      const movPorProd = {};
+                      movRealPorEmpresa.forEach(e => {
+                        const p = e.produto_contratado || 'Outros';
+                        if (!movPorProd[p]) movPorProd[p] = 0;
+                        movPorProd[p] += e.movReal || 0;
+                      });
+                      const maxVal = Math.max(...produtosArray.map(p => Math.max(p.resultado, movPorProd[p.nome]||0)), 1);
+                      return produtosArray.map((p, i) => {
+                        const movReal = movPorProd[p.nome] || 0;
+                        const pctPrev = (p.resultado / maxVal) * 100;
+                        const pctMov  = (movReal     / maxVal) * 100;
+                        return (
+                          <div key={i}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{p.nome}</span>
+                              <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>{p.contratos} empresa{p.contratos > 1 ? 's' : ''}</span>
+                            </div>
+                            {/* Barra Previsão */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 7, flex: 1, overflow: 'hidden' }}>
+                                <div style={{ background: '#a78bfa', height: '100%', width: `${pctPrev}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
+                              </div>
+                              <span style={{ color: '#a78bfa', fontSize: '0.68rem', fontWeight: 600, minWidth: 72, textAlign: 'right' }}>{fmt(p.resultado)}</span>
+                            </div>
+                            {/* Barra Movimentado */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 7, flex: 1, overflow: 'hidden' }}>
+                                <div style={{ background: '#f0b429', height: '100%', width: `${pctMov}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
+                              </div>
+                              <span style={{ color: movReal > 0 ? '#f0b429' : '#4b5563', fontSize: '0.68rem', fontWeight: 600, minWidth: 72, textAlign: 'right' }}>{movReal > 0 ? fmt(movReal) : '—'}</span>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                     {produtosArray.length === 0 && <div style={s.semDados}>Sem dados</div>}
                   </div>
                 </div>
