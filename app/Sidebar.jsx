@@ -8,7 +8,8 @@ const nav = [
   { href: '/vendedor',      icon: '👤', label: 'Vendedor'      },
   { href: '/movimentacoes', icon: '💳', label: 'Movimentações' },
   { href: '/gestao',        icon: '⚙️', label: 'Gestão'        },
-  { href: '/relatorios',    icon: '📋', label: 'Relatórios'    },
+  { href: '/relatorios',          icon: '📋', label: 'Relatórios'        },
+  { href: '/relatorio-empresas',  icon: '📑', label: 'Rel. Empresas'      },
 ];
 
 export default function Sidebar() {
