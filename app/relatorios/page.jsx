@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -8,363 +8,455 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const fmt     = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtPct  = (v) => v != null ? `${Number(v * 100).toFixed(2)}%` : '—';
-const fmtDate = (d) => { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
+const fmt  = (v) => Number(v||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+const fmtMes = (d) => {
+  if (!d) return '—';
+  const [y, m] = String(d).substring(0,7).split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${meses[parseInt(m)-1]}/${y}`;
+};
 
-// ─── Definição de todas as colunas disponíveis ─────────────────────────────
-const TODAS_COLUNAS = [
-  // Identificação
-  { key: 'produto_id',          grupo: 'Identificação',   label: 'ID Produto',           render: e => e.produto_id || '—' },
-  { key: 'nome',                grupo: 'Identificação',   label: 'Empresa',              render: e => e.nome || '—' },
-  { key: 'cnpj',                grupo: 'Identificação',   label: 'CNPJ',                 render: e => e.cnpj || '—' },
-  { key: 'data_cadastro',       grupo: 'Identificação',   label: 'Data Cadastro',        render: e => fmtDate(e.data_cadastro) },
-  { key: 'ativo',               grupo: 'Identificação',   label: 'Ativo',                render: e => e.ativo ? 'Sim' : 'Não' },
+// ── Gera e baixa Excel ──────────────────────────────────────────────────────
+async function baixarExcel(nomeArquivo, colunas, linhas) {
+  const XLSX = await import('xlsx');
+  const ws   = XLSX.utils.aoa_to_sheet([colunas, ...linhas]);
 
-  // Produto & Categoria
-  { key: 'produto_contratado',  grupo: 'Produto',         label: 'Produto Contratado',   render: e => e.produto_contratado || '—' },
-  { key: 'categoria',           grupo: 'Produto',         label: 'Categoria',            render: e => e.categoria || '—' },
-  { key: 'peso_categoria',      grupo: 'Produto',         label: 'Peso (%)',             render: e => e.peso_categoria != null ? `${(e.peso_categoria * 100).toFixed(0)}%` : '—' },
-  { key: 'tipo_boleto',         grupo: 'Produto',         label: 'Tipo Boleto',          render: e => e.tipo_boleto || '—' },
-  { key: 'cartoes_emitidos',    grupo: 'Produto',         label: 'Cartões Emitidos',     render: e => e.cartoes_emitidos ?? 0 },
-  { key: 'dias_prazo',          grupo: 'Produto',         label: 'Dias Prazo',           render: e => e.dias_prazo ?? '—' },
-  { key: 'confeccao_cartao',    grupo: 'Produto',         label: 'Confecção Cartão',     render: e => e.confeccao_cartao != null ? fmt(e.confeccao_cartao) : '—' },
+  // Largura automática das colunas
+  ws['!cols'] = colunas.map((_, ci) => ({
+    wch: Math.max(colunas[ci].length, ...linhas.map(r => String(r[ci]||'').length)) + 2
+  }));
 
-  // Localização
-  { key: 'cidade',              grupo: 'Localização',     label: 'Cidade',               render: e => e.cidade || '—' },
-  { key: 'estado',              grupo: 'Localização',     label: 'Estado',               render: e => e.estado || '—' },
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+  XLSX.writeFile(wb, nomeArquivo);
+}
 
-  // Financeiro
-  { key: 'potencial_movimentacao', grupo: 'Financeiro',   label: 'Potencial Mensal',     render: e => fmt(e.potencial_movimentacao) },
-  { key: 'resultado_esperado',  grupo: 'Financeiro',      label: 'Resultado Esperado',   render: e => fmt((e.potencial_movimentacao||0)*(e.peso_categoria||1)) },
-  { key: 'taxa_positiva',       grupo: 'Financeiro',      label: 'Taxa Positiva',        render: e => fmtPct(e.taxa_positiva) },
-  { key: 'taxa_negativa',       grupo: 'Financeiro',      label: 'Taxa Negativa',        render: e => fmtPct(e.taxa_negativa) },
-
-  // Comercial
-  { key: 'consultor_principal', grupo: 'Comercial',       label: 'Consultor Principal',  render: e => e.consultor_principal?.nome || '—' },
-  { key: 'gestor',              grupo: 'Comercial',       label: 'Gestor',               render: e => e.consultor_principal?.gestor || '—' },
-  { key: 'consultor_agregado',  grupo: 'Comercial',       label: 'Consultor Agregado',   render: e => e.consultor_agregado?.nome || '—' },
-  { key: 'parceiro',            grupo: 'Comercial',       label: 'Parceiro Comercial',   render: e => e.parceiro?.nome || '—' },
-];
-
-const COLUNAS_PADRAO = [
-  'produto_id','nome','cnpj','data_cadastro','produto_contratado','categoria',
-  'cidade','estado','potencial_movimentacao','taxa_positiva','taxa_negativa',
-  'consultor_principal','parceiro',
-];
-
-const GRUPOS = [...new Set(TODAS_COLUNAS.map(c => c.grupo))];
-
-export default function RelatorioEmpresas() {
-  const [xlsxLib, setXlsxLib]   = useState(null);
-  const [empresas, setEmpresas] = useState([]);
-  const [loading, setLoading]   = useState(true);
-
-  // Filtros de linha
-  const [busca,            setBusca]           = useState('');
-  const [filtroCategoria,  setFiltroCategoria] = useState('');
-  const [filtroGestor,     setFiltroGestor]    = useState('');
-  const [filtroConsultor,  setFiltroConsultor] = useState('');
-  const [filtroParceiro,   setFiltroParceiro]  = useState('');
-  const [filtroProduto,    setFiltroProduto]   = useState('');
-  const [filtroAtivo,      setFiltroAtivo]     = useState('');
-
-  // Seleção de colunas
-  const [colsSelecionadas, setColsSelecionadas] = useState(new Set(COLUNAS_PADRAO));
-  const [painelCols, setPainelCols]             = useState(false);
-
-  useEffect(() => { import('xlsx').then(m => setXlsxLib(m)); carregarEmpresas(); }, []);
-
-  async function carregarEmpresas() {
-    setLoading(true);
-    const { data } = await supabase
-      .from('empresas')
-      .select(`
-        id, produto_id, nome, cnpj, produto_contratado, categoria,
-        cidade, estado, potencial_movimentacao, peso_categoria,
-        cartoes_emitidos, data_cadastro, taxa_positiva, taxa_negativa,
-        tipo_boleto, confeccao_cartao, dias_prazo, ativo,
-        consultor_principal:consultor_principal_id (id, nome, gestor),
-        consultor_agregado:consultor_agregado_id (id, nome),
-        parceiro:parceiro_id (nome)
-      `)
-      .order('nome');
-    setEmpresas(data || []);
-    setLoading(false);
-  }
-
-  // Opções únicas para filtros
-  const opts = useMemo(() => ({
-    categorias:  [...new Set(empresas.map(e => e.categoria).filter(Boolean))].sort(),
-    gestores:    [...new Set(empresas.map(e => e.consultor_principal?.gestor).filter(Boolean))].sort(),
-    consultores: [...new Set(empresas.map(e => e.consultor_principal?.nome).filter(Boolean))].sort(),
-    parceiros:   [...new Set(empresas.map(e => e.parceiro?.nome).filter(Boolean))].sort(),
-    produtos:    [...new Set(empresas.map(e => e.produto_contratado).filter(Boolean))].sort(),
-  }), [empresas]);
-
-  // Empresas filtradas
-  const lista = useMemo(() => empresas.filter(e => {
-    if (busca) {
-      const q = busca.toLowerCase();
-      if (!e.nome?.toLowerCase().includes(q) &&
-          !e.cnpj?.includes(q) &&
-          !String(e.produto_id||'').includes(q)) return false;
-    }
-    if (filtroCategoria && e.categoria !== filtroCategoria) return false;
-    if (filtroGestor    && e.consultor_principal?.gestor !== filtroGestor) return false;
-    if (filtroConsultor && e.consultor_principal?.nome !== filtroConsultor) return false;
-    if (filtroParceiro  && e.parceiro?.nome !== filtroParceiro) return false;
-    if (filtroProduto   && e.produto_contratado !== filtroProduto) return false;
-    if (filtroAtivo === 'sim' && !e.ativo) return false;
-    if (filtroAtivo === 'nao' && e.ativo)  return false;
-    return true;
-  }), [empresas, busca, filtroCategoria, filtroGestor, filtroConsultor, filtroParceiro, filtroProduto, filtroAtivo]);
-
-  // Colunas visíveis na ordem definida
-  const colunas = TODAS_COLUNAS.filter(c => colsSelecionadas.has(c.key));
-
-  // Toggle coluna individual
-  const toggleCol = (key) => {
-    setColsSelecionadas(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-
-  // Toggle grupo inteiro
-  const toggleGrupo = (grupo) => {
-    const keys = TODAS_COLUNAS.filter(c => c.grupo === grupo).map(c => c.key);
-    const todosAtivos = keys.every(k => colsSelecionadas.has(k));
-    setColsSelecionadas(prev => {
-      const next = new Set(prev);
-      keys.forEach(k => todosAtivos ? next.delete(k) : next.add(k));
-      return next;
-    });
-  };
-
-  const selecionarTodas = () => setColsSelecionadas(new Set(TODAS_COLUNAS.map(c => c.key)));
-  const limparTodas     = () => setColsSelecionadas(new Set(['nome']));
-  const resetarPadrao   = () => setColsSelecionadas(new Set(COLUNAS_PADRAO));
-
-  const temFiltro = busca || filtroCategoria || filtroGestor || filtroConsultor || filtroParceiro || filtroProduto || filtroAtivo;
-  const limparFiltros = () => {
-    setBusca(''); setFiltroCategoria(''); setFiltroGestor('');
-    setFiltroConsultor(''); setFiltroParceiro(''); setFiltroProduto(''); setFiltroAtivo('');
-  };
-
-  async function exportar() {
-    if (!xlsxLib) return;
-    const headers = colunas.map(c => c.label);
-    const rows = lista.map(e => colunas.map(c => {
-      const raw = c.render(e);
-      return raw === '—' ? '' : raw;
-    }));
-    const ws = xlsxLib.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = headers.map((h, i) => ({
-      wch: Math.max(h.length, ...rows.map(r => String(r[i]||'').length), 10)
-    }));
-    const wb = xlsxLib.utils.book_new();
-    xlsxLib.utils.book_append_sheet(wb, ws, 'Empresas');
-    xlsxLib.writeFile(wb, `relatorio-empresas-${new Date().toISOString().substring(0,10)}.xlsx`);
-  }
-
+// ── Modal de seleção ────────────────────────────────────────────────────────
+function Modal({ titulo, children, onClose }) {
   return (
-    <div style={s.page}>
-
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div style={s.header}>
-        <div>
-          <div style={s.tag}>♠ Vegas Card</div>
-          <h1 style={s.title}>Relatório de Empresas</h1>
-          <p style={s.sub}>Escolha filtros e colunas para montar seu relatório</p>
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+      onClick={onClose}>
+      <div style={{ background:'#111420', border:'1px solid rgba(255,255,255,0.1)',
+        borderRadius:20, padding:32, width:'100%', maxWidth:480, position:'relative' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
+          <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.1rem' }}>{titulo}</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#6b7280',
+            fontSize:'1.3rem', cursor:'pointer', lineHeight:1 }}>✕</button>
         </div>
-        <button onClick={exportar} disabled={!xlsxLib || lista.length === 0} style={{
-          ...s.btnPri,
-          opacity: (!xlsxLib || lista.length === 0) ? 0.5 : 1,
-          cursor: (!xlsxLib || lista.length === 0) ? 'not-allowed' : 'pointer',
-        }}>
-          📥 Exportar Excel ({lista.length})
-        </button>
+        {children}
       </div>
-
-      {/* ── Filtros de linha ────────────────────────────────────────── */}
-      <div style={s.filtrosBox}>
-        <div style={{ color:'#f0b429', fontSize:'0.72rem', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>
-          🔽 Filtrar registros
-        </div>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          <input
-            placeholder="🔍 Nome, CNPJ ou ID..."
-            value={busca} onChange={e => setBusca(e.target.value)}
-            style={{ ...s.input, minWidth:200, flex:2 }}
-          />
-          {[
-            { val: filtroProduto,    set: setFiltroProduto,    opts: opts.produtos,    ph: 'Produto'    },
-            { val: filtroCategoria,  set: setFiltroCategoria,  opts: opts.categorias,  ph: 'Categoria'  },
-            { val: filtroGestor,     set: setFiltroGestor,     opts: opts.gestores,    ph: 'Gestor'     },
-            { val: filtroConsultor,  set: setFiltroConsultor,  opts: opts.consultores, ph: 'Consultor'  },
-            { val: filtroParceiro,   set: setFiltroParceiro,   opts: opts.parceiros,   ph: 'Parceiro'   },
-          ].map(({ val, set, opts: o, ph }) => (
-            <select key={ph} value={val} onChange={e => set(e.target.value)} style={{ ...s.input, minWidth:140 }}>
-              <option value=''>{ph} — Todos</option>
-              {o.map(op => <option key={op} value={op}>{op}</option>)}
-            </select>
-          ))}
-          <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)} style={{ ...s.input, minWidth:110 }}>
-            <option value=''>Ativos — Todos</option>
-            <option value='sim'>✅ Ativos</option>
-            <option value='nao'>❌ Inativos</option>
-          </select>
-          {temFiltro && (
-            <button onClick={limparFiltros} style={s.btnClear}>✕ Limpar filtros</button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Seletor de colunas ──────────────────────────────────────── */}
-      <div style={s.colsBar}>
-        <button
-          onClick={() => setPainelCols(v => !v)}
-          style={{ ...s.btnCols, ...(painelCols ? s.btnColsAtivo : {}) }}
-        >
-          ⚙️ Colunas selecionadas: {colsSelecionadas.size} de {TODAS_COLUNAS.length}
-          <span style={{ marginLeft:6, fontSize:'0.7rem' }}>{painelCols ? '▲' : '▼'}</span>
-        </button>
-        <button onClick={selecionarTodas} style={s.btnMini}>Todas</button>
-        <button onClick={resetarPadrao}   style={s.btnMini}>Padrão</button>
-        <button onClick={limparTodas}     style={s.btnMini}>Mínimo</button>
-        <span style={{ color:'#4b5563', fontSize:'0.75rem', marginLeft:8 }}>
-          {lista.length} empresa{lista.length !== 1 ? 's' : ''} · {colunas.length} coluna{colunas.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* ── Painel de checkboxes ─────────────────────────────────────── */}
-      {painelCols && (
-        <div style={s.painelCols}>
-          {GRUPOS.map(grupo => {
-            const cols = TODAS_COLUNAS.filter(c => c.grupo === grupo);
-            const nAtivos = cols.filter(c => colsSelecionadas.has(c.key)).length;
-            const todosAtivos = nAtivos === cols.length;
-            return (
-              <div key={grupo} style={s.grupoBox}>
-                {/* Header do grupo — clica para toggle */}
-                <div style={s.grupoHeader} onClick={() => toggleGrupo(grupo)}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <span style={{
-                      width:14, height:14, borderRadius:4, border:`2px solid ${todosAtivos ? '#f0b429' : '#4b5563'}`,
-                      background: todosAtivos ? '#f0b429' : 'transparent',
-                      display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'0.6rem',
-                    }}>
-                      {todosAtivos ? '✓' : nAtivos > 0 ? '–' : ''}
-                    </span>
-                    <span style={{ fontWeight:700, fontSize:'0.82rem', color: nAtivos > 0 ? '#e8eaf0' : '#6b7280' }}>{grupo}</span>
-                  </div>
-                  <span style={{ fontSize:'0.68rem', color:'#4b5563' }}>{nAtivos}/{cols.length}</span>
-                </div>
-                {/* Itens */}
-                <div style={s.grupoItens}>
-                  {cols.map(c => {
-                    const ativo = colsSelecionadas.has(c.key);
-                    return (
-                      <label key={c.key} style={{ ...s.checkLabel, opacity: ativo ? 1 : 0.55 }}>
-                        <input
-                          type="checkbox"
-                          checked={ativo}
-                          onChange={() => toggleCol(c.key)}
-                          style={{ accentColor:'#f0b429', width:13, height:13 }}
-                        />
-                        <span style={{ color: ativo ? '#e8eaf0' : '#6b7280', fontSize:'0.8rem' }}>{c.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Tabela ──────────────────────────────────────────────────── */}
-      <div style={s.card}>
-        {loading ? (
-          <div style={{ textAlign:'center', padding:48 }}>
-            <div style={s.spin}></div>
-            <div style={{ color:'#6b7280', marginTop:12 }}>Carregando empresas...</div>
-          </div>
-        ) : (
-          <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'62vh', borderRadius:8, border:'1px solid rgba(255,255,255,0.05)' }}>
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  <th style={{ ...s.th, width:36, textAlign:'center' }}>#</th>
-                  {colunas.map(c => <th key={c.key} style={s.th}>{c.label}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {lista.map((e, i) => (
-                  <tr key={e.id} className="row-hover" style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
-                    <td style={{ ...s.td, color:'#4b5563', textAlign:'center', fontSize:'0.7rem' }}>{i+1}</td>
-                    {colunas.map(c => (
-                      <td key={c.key} style={{
-                        ...s.td,
-                        fontWeight: c.key === 'nome' ? 600 : 400,
-                        color:
-                          c.key === 'potencial_movimentacao' || c.key === 'resultado_esperado' ? '#34d399' :
-                          c.key === 'taxa_positiva'  ? '#f0b429' :
-                          c.key === 'taxa_negativa'  ? '#f87171' :
-                          c.key === 'ativo'          ? (e.ativo ? '#34d399' : '#f87171') :
-                          undefined,
-                      }}>
-                        {c.render(e)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {lista.length === 0 && (
-                  <tr>
-                    <td colSpan={colunas.length + 1} style={{ ...s.td, textAlign:'center', color:'#4b5563', padding:48 }}>
-                      Nenhuma empresa encontrada com os filtros aplicados
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .row-hover:hover { background: rgba(240,180,41,0.04) !important; }
-        select option { background: #1e2330; color: #e8eaf0; }
-      `}</style>
     </div>
   );
 }
 
-const s = {
-  page:        { maxWidth:1400, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' },
-  header:      { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:16 },
-  tag:         { color:'#f0b429', fontWeight:800, fontSize:'0.9rem', letterSpacing:2, marginBottom:8, textTransform:'uppercase' },
-  title:       { fontSize:'1.8rem', fontWeight:700, margin:'0 0 6px' },
-  sub:         { color:'#6b7280', fontSize:'0.9rem' },
-  btnPri:      { background:'#f0b429', color:'#000', border:'none', borderRadius:10, padding:'11px 24px', fontWeight:700, fontSize:'0.9rem', fontFamily:'inherit', whiteSpace:'nowrap' },
-  filtrosBox:  { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 20px', marginBottom:14 },
-  input:       { background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 11px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
-  btnClear:    { background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'7px 14px', color:'#f87171', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' },
-  colsBar:     { display:'flex', alignItems:'center', gap:8, marginBottom:12, flexWrap:'wrap' },
-  btnCols:     { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'8px 16px', color:'#9ca3af', fontSize:'0.82rem', cursor:'pointer', fontFamily:'inherit', fontWeight:600, display:'flex', alignItems:'center', gap:4 },
-  btnColsAtivo:{ background:'rgba(240,180,41,0.12)', border:'1px solid rgba(240,180,41,0.3)', color:'#f0b429' },
-  btnMini:     { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:7, padding:'6px 13px', color:'#6b7280', fontSize:'0.75rem', cursor:'pointer', fontFamily:'inherit' },
-  painelCols:  { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:20, marginBottom:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:16 },
-  grupoBox:    { display:'flex', flexDirection:'column', gap:8 },
-  grupoHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer', paddingBottom:8, borderBottom:'1px solid rgba(255,255,255,0.07)' },
-  grupoItens:  { display:'flex', flexDirection:'column', gap:6, paddingLeft:4 },
-  checkLabel:  { display:'flex', alignItems:'center', gap:7, cursor:'pointer', userSelect:'none' },
-  card:        { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:20 },
-  table:       { width:'100%', borderCollapse:'collapse', fontSize:'0.79rem' },
-  th:          { padding:'8px 12px', textAlign:'left', color:'#6b7280', fontWeight:500, borderBottom:'1px solid rgba(255,255,255,0.07)', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.67rem', letterSpacing:0.5, position:'sticky', top:0, background:'#1a1f2e', zIndex:2 },
-  td:          { padding:'9px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
-  spin:        { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto', animation:'spin 0.8s linear infinite', display:'block' },
-};
+// ── Card de Relatório ───────────────────────────────────────────────────────
+function RelCard({ icon, titulo, desc, cor, onClick, loading }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: hover ? `linear-gradient(135deg, ${cor}14, ${cor}06)` : '#111420',
+        border: `1px solid ${hover ? cor+'55' : 'rgba(255,255,255,0.06)'}`,
+        borderRadius: 20,
+        padding: '32px 28px',
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'all 0.2s',
+        transform: hover ? 'translateY(-3px)' : 'none',
+        fontFamily: "'DM Sans', sans-serif",
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+      {/* Glow de fundo */}
+      <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100,
+        borderRadius:'50%', background: cor, opacity: hover ? 0.06 : 0.03,
+        transition:'opacity 0.2s', filter:'blur(30px)' }} />
+
+      {/* Ícone */}
+      <div style={{ width:52, height:52, borderRadius:14, background:`${cor}18`,
+        border:`1px solid ${cor}33`, display:'flex', alignItems:'center',
+        justifyContent:'center', fontSize:'1.5rem', marginBottom:18 }}>
+        {icon}
+      </div>
+
+      <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.05rem',
+        color:'#e8eaf0', marginBottom:8 }}>{titulo}</div>
+
+      <div style={{ color:'#4b5563', fontSize:'0.82rem', lineHeight:1.6 }}>{desc}</div>
+
+      {/* Botão de ação */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:20 }}>
+        <div style={{ background: cor, borderRadius:8, padding:'6px 16px',
+          fontSize:'0.78rem', fontWeight:700, color: cor === '#f0b429' ? '#000' : '#fff',
+          opacity: loading ? 0.6 : 1 }}>
+          {loading ? 'Gerando...' : 'Gerar Relatório'}
+        </div>
+        {!loading && <span style={{ color: cor, fontSize:'0.9rem' }}>→</span>}
+      </div>
+    </button>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+export default function Relatorios() {
+  const [consultores,     setConsultores]     = useState([]);
+  const [mesesDisponiveis,setMesesDisponiveis] = useState([]);
+  const [loading,         setLoading]         = useState({});
+  const [modal,           setModal]           = useState(null); // 'carteira' | 'evolucao' | 'movimentacao' | 'meta'
+
+  // Seleções nos modais
+  const [consultorSel, setConsultorSel] = useState('');
+  const [mesSel,       setMesSel]       = useState('');
+
+  useEffect(() => {
+    // Carrega consultores e meses disponíveis
+    Promise.all([
+      supabase.from('consultores').select('id, nome, gestor').eq('ativo', true).order('nome'),
+      supabase.from('movimentacoes').select('competencia').order('competencia', { ascending:false }),
+    ]).then(([{ data: conss }, { data: movs }]) => {
+      setConsultores(conss || []);
+      const meses = [...new Set((movs||[]).map(m => m.competencia?.substring(0,7)).filter(Boolean))];
+      setMesesDisponiveis(meses);
+      if (meses.length > 0) setMesSel(meses[0]);
+    });
+  }, []);
+
+  function setLoad(key, val) { setLoading(l => ({ ...l, [key]: val })); }
+
+  // ── 1. Modelo de Importação — Movimentação Real ───────────────────────────
+  async function gerarModeloMovimentacao() {
+    setLoad('mov', true);
+    try {
+      const { data: empresas } = await supabase
+        .from('empresas')
+        .select('produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria, taxa_negativa, consultor_principal:consultor_principal_id(nome)')
+        .eq('ativo', true)
+        .order('nome');
+
+      const colunas = ['Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Categoria','Produto Contratado','Peso (%)','Taxa Negativa (%)','Movimentação Real','Taxa Negativa (R$)','Taxa Adm Bruta','Mês Referencia'];
+      const linhas  = (empresas||[]).map(e => [
+        e.produto_id,
+        e.nome,
+        e.cnpj || '',
+        e.consultor_principal?.nome || '',
+        e.categoria || '',
+        e.produto_contratado || '',
+        `${Math.round((e.peso_categoria||1)*100)}%`,
+        `${((e.taxa_negativa||0)*100).toFixed(2)}%`, // ← vem do cadastro
+        0, // Movimentação Real — preencher
+        0, // Taxa Negativa (R$) — preencher
+        0, // Taxa Adm Bruta — preencher
+        '', // Mês Ref — preencher
+      ]);
+      await baixarExcel(`modelo_movimentacao_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
+    } catch(err) { alert('Erro: ' + err.message); }
+    setLoad('mov', false);
+  }
+
+  // ── 2. Modelo de Importação — Meta ────────────────────────────────────────
+  async function gerarModeloMeta() {
+    setLoad('meta', true);
+    try {
+      const { data: empresas } = await supabase
+        .from('empresas')
+        .select('produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria, consultor_principal:consultor_principal_id(nome)')
+        .eq('ativo', true)
+        .order('nome');
+
+      const colunas = ['Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Categoria','Produto Contratado','Peso (%)','Resultado Meta','Mês Referencia'];
+      const linhas  = (empresas||[]).map(e => [
+        e.produto_id,
+        e.nome,
+        e.cnpj || '',
+        e.consultor_principal?.nome || '',
+        e.categoria || '',
+        e.produto_contratado || '',
+        `${Math.round((e.peso_categoria||1)*100)}%`,
+        0,
+        '', // Mês Ref — preenchido manualmente
+      ]);
+      await baixarExcel(`modelo_meta_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
+    } catch(err) { alert('Erro: ' + err.message); }
+    setLoad('meta', false);
+  }
+
+  // ── 3. Carteira por Vendedor ──────────────────────────────────────────────
+  async function gerarCarteira() {
+    if (!consultorSel) return;
+    setLoad('carteira', true);
+    try {
+      const consultor = consultores.find(c => c.id === consultorSel);
+      const { data: empresas } = await supabase
+        .from('empresas')
+        .select(`
+          produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria,
+          potencial_movimentacao, cartoes_emitidos, taxa_positiva, taxa_negativa,
+          cidade, estado, data_cadastro,
+          consultor_principal:consultor_principal_id(nome),
+          consultor_agregado:consultor_agregado_id(nome),
+          parceiro:parceiro_id(nome)
+        `)
+        .or(`consultor_principal_id.eq.${consultorSel},consultor_agregado_id.eq.${consultorSel}`)
+        .eq('ativo', true)
+        .order('nome');
+
+      const colunas = [
+        'Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Consultor Agregado',
+        'Parceiro','Categoria','Produto Contratado','Peso (%)','Potencial Bruto',
+        'Resultado Esperado','Cartões Emitidos','Taxa Positiva (%)','Taxa Negativa (%)',
+        'Cidade','UF','Data Cadastro'
+      ];
+      const linhas = (empresas||[]).map(e => [
+        e.produto_id,
+        e.nome,
+        e.cnpj || '',
+        e.consultor_principal?.nome || '',
+        e.consultor_agregado?.nome  || '',
+        e.parceiro?.nome            || '',
+        e.categoria || '',
+        e.produto_contratado || '',
+        `${Math.round((e.peso_categoria||1)*100)}%`,
+        e.potencial_movimentacao || 0,
+        (e.potencial_movimentacao||0) * (e.peso_categoria||1),
+        e.cartoes_emitidos || 0,
+        `${((e.taxa_positiva||0)*100).toFixed(2)}%`,
+        `${((e.taxa_negativa||0)*100).toFixed(2)}%`,
+        e.cidade || '',
+        e.estado || '',
+        e.data_cadastro || '',
+      ]);
+
+      const nome = consultor?.nome?.replace(/\s+/g,'_') || 'consultor';
+      await baixarExcel(`carteira_${nome}_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
+      setModal(null);
+    } catch(err) { alert('Erro: ' + err.message); }
+    setLoad('carteira', false);
+  }
+
+  // ── 4. Evolução Mensal ────────────────────────────────────────────────────
+  async function gerarEvolucao() {
+    if (!mesSel) return;
+    setLoad('evolucao', true);
+    try {
+      // Busca movimentações do mês
+      const { data: movs } = await supabase
+        .from('movimentacoes')
+        .select('empresa_id, valor_movimentacao, receita_bruta, custo_taxa_negativa')
+        .gte('competencia', mesSel + '-01')
+        .lte('competencia', mesSel + '-28');
+
+      const movMap = {};
+      (movs||[]).forEach(m => { movMap[m.empresa_id] = m; });
+
+      // Busca empresas com taxa_negativa
+      const { data: empresas } = await supabase
+        .from('empresas')
+        .select(`
+          id, produto_id, nome, cnpj, categoria, produto_contratado, peso_categoria,
+          potencial_movimentacao, taxa_negativa,
+          consultor_principal:consultor_principal_id(id, nome),
+          parceiro:parceiro_id(nome)
+        `)
+        .eq('ativo', true)
+        .order('nome');
+
+      // Busca meta real por empresa no mês selecionado
+      const { data: metasEmp } = await supabase
+        .from('metas_empresa')
+        .select('empresa_id, valor_meta')
+        .gte('competencia', mesSel + '-01')
+        .lte('competencia', mesSel + '-28');
+
+      // Mapa: empresa_id → valor_meta real
+      const metaEmpMap = {};
+      (metasEmp||[]).forEach(m => { metaEmpMap[m.empresa_id] = m.valor_meta || 0; });
+
+      // Filtra apenas empresas com movimentação no mês
+      const empresasComMov = (empresas||[]).filter(e => movMap[e.id]);
+
+      const colunas = [
+        'Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Parceiro',
+        'Categoria','Produto Contratado','Taxa Negativa (%)','Peso (%)',
+        'Potencial Bruto','Resultado Esperado','Movimentação Real',
+        'Receita Bruta','Custo Taxa Neg.','Spread Líquido',
+        'Meta Proporcional','Mês Ref.'
+      ];
+
+      const linhas = empresasComMov.map(e => {
+        const mov        = movMap[e.id];
+        const potencial  = e.potencial_movimentacao || 0;
+        const resultado  = potencial * (e.peso_categoria || 1);
+        const movReal    = mov.valor_movimentacao  || 0;
+        const receita    = mov.receita_bruta       || 0;
+        const custo      = mov.custo_taxa_negativa || 0;
+        const metaProp   = metaEmpMap[e.id] || 0;
+        const txNeg      = `${((e.taxa_negativa||0)*100).toFixed(2)}%`;
+        return [
+          e.produto_id,
+          e.nome,
+          e.cnpj || '',
+          e.consultor_principal?.nome || '',
+          e.parceiro?.nome            || '',
+          e.categoria || '',
+          e.produto_contratado || '',
+          txNeg,
+          `${Math.round((e.peso_categoria||1)*100)}%`,
+          potencial,
+          resultado,
+          movReal,
+          receita,
+          custo,
+          receita - custo,
+          Math.round(metaProp * 100) / 100,
+          fmtMes(mesSel),
+        ];
+      });
+
+      await baixarExcel(`evolucao_${mesSel}_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
+      setModal(null);
+    } catch(err) { alert('Erro: ' + err.message); }
+    setLoad('evolucao', false);
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const cards = [
+    {
+      key:   'mov',
+      icon:  '📥',
+      titulo:'Modelo — Importação Movimentação',
+      desc:  'Baixa planilha Excel pronta com todas as empresas ativas, consultor e colunas para preencher a movimentação real do mês.',
+      cor:   '#f0b429',
+      acao:  gerarModeloMovimentacao,
+    },
+    {
+      key:   'meta',
+      icon:  '🎯',
+      titulo:'Modelo — Importação Meta',
+      desc:  'Baixa planilha Excel com todas as empresas ativas e colunas para preencher o resultado meta de cada empresa.',
+      cor:   '#34d399',
+      acao:  gerarModeloMeta,
+    },
+    {
+      key:   'carteira',
+      icon:  '👤',
+      titulo:'Carteira por Vendedor',
+      desc:  'Selecione um consultor e exporte todas as suas empresas com potencial, resultado esperado, taxas e dados cadastrais.',
+      cor:   '#a78bfa',
+      acao:  () => setModal('carteira'),
+    },
+    {
+      key:   'evolucao',
+      icon:  '📈',
+      titulo:'Evolução Mensal',
+      desc:  'Selecione o mês e exporte: potencial bruto, resultado esperado, movimentação real, receita, custo, spread e meta por empresa.',
+      cor:   '#60a5fa',
+      acao:  () => setModal('evolucao'),
+    },
+  ];
+
+  return (
+    <div style={{ maxWidth:1100, margin:'0 auto', padding:'40px 24px',
+      fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 48 }}>
+        <div style={{ color:'#f0b429', fontFamily:"'Syne', sans-serif", fontWeight:800,
+          fontSize:'0.75rem', letterSpacing:3, textTransform:'uppercase', marginBottom:14 }}>
+          ♠ Vegas Card
+        </div>
+        <h1 style={{ fontFamily:"'Syne', sans-serif", fontSize:'2rem', fontWeight:700,
+          margin:'0 0 10px', color:'#e8eaf0' }}>
+          Relatórios
+        </h1>
+        <p style={{ color:'#4b5563', fontSize:'0.9rem', margin:0 }}>
+          Gere e exporte relatórios padronizados para conferência e importação
+        </p>
+      </div>
+
+      {/* Cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16 }}>
+        {cards.map(c => (
+          <RelCard
+            key={c.key}
+            icon={c.icon}
+            titulo={c.titulo}
+            desc={c.desc}
+            cor={c.cor}
+            loading={loading[c.key]}
+            onClick={c.acao}
+          />
+        ))}
+      </div>
+
+      {/* ── MODAL: Carteira por Vendedor ─────────────────────────────────── */}
+      {modal === 'carteira' && (
+        <Modal titulo="👤 Carteira por Vendedor" onClose={() => setModal(null)}>
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            <div>
+              <label style={sLabel}>Consultor</label>
+              <select style={sSelect} value={consultorSel} onChange={e => setConsultorSel(e.target.value)}>
+                <option value="">— Selecione —</option>
+                {consultores.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome} {c.gestor ? `(${c.gestor})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ background:'rgba(167,139,250,0.06)', border:'1px solid rgba(167,139,250,0.15)',
+              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#9ca3af' }}>
+              📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#a78bfa'}}>Consultor Principal</strong> · Cons. Agregado · Parceiro · Categoria · Produto · Peso · Potencial · Resultado · Cartões · Taxas · Cidade · UF · Data Cadastro
+            </div>
+            <button
+              onClick={gerarCarteira}
+              disabled={!consultorSel || loading.carteira}
+              style={{ background: consultorSel ? '#a78bfa' : 'rgba(255,255,255,0.06)',
+                color: consultorSel ? '#fff' : '#4b5563', border:'none', borderRadius:10,
+                padding:'12px 24px', fontWeight:700, fontSize:'0.9rem', cursor: consultorSel ? 'pointer' : 'not-allowed',
+                fontFamily:'inherit', transition:'all 0.2s' }}>
+              {loading.carteira ? '⏳ Gerando...' : '⬇️ Baixar Excel'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Evolução Mensal ────────────────────────────────────────── */}
+      {modal === 'evolucao' && (
+        <Modal titulo="📈 Evolução Mensal" onClose={() => setModal(null)}>
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            <div>
+              <label style={sLabel}>Mês de Referência</label>
+              <select style={sSelect} value={mesSel} onChange={e => setMesSel(e.target.value)}>
+                <option value="">— Selecione —</option>
+                {mesesDisponiveis.map(m => (
+                  <option key={m} value={m}>{fmtMes(m)}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ background:'rgba(96,165,250,0.06)', border:'1px solid rgba(96,165,250,0.15)',
+              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#9ca3af' }}>
+              📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#60a5fa'}}>Consultor Principal</strong> · Parceiro · Categoria · Produto · Taxa Negativa · Peso · Potencial Bruto · Resultado Esperado · Movimentação Real · Receita Bruta · Custo Tax Neg · Spread Líquido · <strong style={{color:'#60a5fa'}}>Meta Proporcional</strong> · Mês Ref.
+            </div>
+            <button
+              onClick={gerarEvolucao}
+              disabled={!mesSel || loading.evolucao}
+              style={{ background: mesSel ? '#60a5fa' : 'rgba(255,255,255,0.06)',
+                color: mesSel ? '#fff' : '#4b5563', border:'none', borderRadius:10,
+                padding:'12px 24px', fontWeight:700, fontSize:'0.9rem', cursor: mesSel ? 'pointer' : 'not-allowed',
+                fontFamily:'inherit', transition:'all 0.2s' }}>
+              {loading.evolucao ? '⏳ Gerando...' : '⬇️ Baixar Excel'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+const sLabel  = { display:'block', color:'#6b7280', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:1, marginBottom:8, fontWeight:600 };
+const sSelect = { width:'100%', background:'#1a1f2e', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'10px 14px', color:'#e8eaf0', fontSize:'0.9rem', fontFamily:"'DM Sans', sans-serif", cursor:'pointer' };
