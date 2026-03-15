@@ -186,6 +186,17 @@ export default function Relatorios() {
   }
 
   // ── 3. Carteira por Vendedor ──────────────────────────────────────────────
+  function getMesReferencia(data_cadastro) {
+    if (!data_cadastro) return '';
+    const [ano, mes] = data_cadastro.substring(0, 7).split('-');
+    const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const anoAtual = new Date().getFullYear();
+    // Empresas de anos anteriores ao atual → "Carteira AAAA"
+    if (parseInt(ano) < anoAtual) return `Carteira ${ano}`;
+    // Empresas do ano atual → "Jan/25", "Fev/25" etc.
+    return `${meses[parseInt(mes)-1]}/${String(ano).slice(2)}`;
+  }
+
   async function gerarCarteira() {
     if (!consultorSel) return;
     setLoad('carteira', true);
@@ -206,7 +217,7 @@ export default function Relatorios() {
         .order('nome');
 
       const colunas = [
-        'Produto ID','Nome da Empresa','CNPJ','Consultor Principal','Consultor Agregado',
+        'Produto ID','Nome da Empresa','CNPJ','Mês Referência','Consultor Principal','Consultor Agregado',
         'Parceiro','Categoria','Produto Contratado','Peso (%)','Potencial Bruto',
         'Resultado Esperado','Cartões Emitidos','Taxa Positiva (%)','Taxa Negativa (%)',
         'Cidade','UF','Data Cadastro'
@@ -215,6 +226,7 @@ export default function Relatorios() {
         e.produto_id,
         e.nome,
         e.cnpj || '',
+        getMesReferencia(e.data_cadastro),
         e.consultor_principal?.nome || '',
         e.consultor_agregado?.nome  || '',
         e.parceiro?.nome            || '',
