@@ -201,12 +201,14 @@ export default function GestaoEmpresas() {
                   return (
                     <tr key={i}
                       style={{...(i%2===0?{background:'rgba(255,255,255,0.02)'}:{}),
-                        cursor:temC?'pointer':'default',transition:'background 0.15s',
+                        cursor:'pointer',transition:'background 0.15s',
                         borderLeft:`3px solid ${bordaCor}`}}
                       onMouseEnter={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.04)'}
                       onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'rgba(255,255,255,0.02)':'transparent'}
-                      onClick={()=>{if(temC)router.push(`/gestao/${e.cartoes[0].id}`);}}>
-
+                      onClick={()=>{
+                        if(temC) router.push(`/gestao/${e.cartoes[0].id}`);
+                        else if(temA) router.push(`/agregados/${e.empresa_agregada_id}`);
+                      }}>
                       <td style={{...s.td,fontWeight:600,minWidth:180,maxWidth:240,
                         overflow:'hidden',textOverflow:'ellipsis'}} title={e.nome}>{e.nome}</td>
 
