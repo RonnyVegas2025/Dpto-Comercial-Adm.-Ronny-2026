@@ -187,7 +187,7 @@ export default function GestaoEmpresas() {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {['Empresa','CNPJ','Cartões','Agregados','Potencial','Consultor','Cidade/UF','Status',''].map(h=>
+                  {['Empresa','CNPJ','Cartões','Agregados','Potencial','Consultor','Cidade/UF','Status'].map(h=>
                     <th key={h} style={{...s.th,position:'sticky',top:0,background:'#1a1f2e',zIndex:2}}>{h}</th>)}
                 </tr>
               </thead>
@@ -218,38 +218,58 @@ export default function GestaoEmpresas() {
 
                       <td style={{...s.td,color:'#6b7280',fontSize:'0.72rem'}}>{e.cnpj||'—'}</td>
 
-                      {/* Cartões */}
+                      {/* Cartões — cada produto com botão clicável */}
                       <td style={{...s.td,maxWidth:220}}>
                         {temC ? (
-                          <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                          <div style={{display:'flex',flexDirection:'column',gap:4}}>
                             {e.cartoes.map((c,ci)=>{
-                              const cor=COR_CAT[c.categoria]||'#9ca3af';
+                              const COR_CAT2={'Benefícios':'#60a5fa','Bônus':'#a78bfa','Convênio':'#34d399','Taxa Negativa':'#f87171'};
+                              const cor=COR_CAT2[c.categoria]||'#9ca3af';
                               return (
-                                <span key={ci} style={{display:'flex',alignItems:'center',gap:4}}>
-                                  <span style={{background:`${cor}18`,color:cor,border:`1px solid ${cor}30`,
-                                    borderRadius:5,padding:'1px 6px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
+                                <button key={ci}
+                                  onClick={ev=>{ev.stopPropagation();router.push(`/gestao/${c.id}`);}}
+                                  style={{display:'flex',alignItems:'center',gap:6,background:`${cor}10`,
+                                    border:`1px solid ${cor}30`,borderRadius:7,padding:'4px 10px',
+                                    cursor:'pointer',fontFamily:'inherit',textAlign:'left',
+                                    transition:'background 0.15s'}}
+                                  onMouseEnter={ev=>ev.currentTarget.style.background=`${cor}25`}
+                                  onMouseLeave={ev=>ev.currentTarget.style.background=`${cor}10`}
+                                >
+                                  <span style={{background:`${cor}25`,color:cor,borderRadius:4,
+                                    padding:'1px 6px',fontSize:'0.62rem',fontWeight:700,whiteSpace:'nowrap'}}>
                                     {c.categoria}
                                   </span>
-                                  <span style={{color:'#9ca3af',fontSize:'0.75rem'}}>{c.produto}</span>
-                                </span>
+                                  <span style={{color:'#e8eaf0',fontSize:'0.78rem',fontWeight:500}}>{c.produto}</span>
+                                  <span style={{color:'#4b5563',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
+                                </button>
                               );
                             })}
                           </div>
                         ):<span style={{color:'#374151',fontSize:'0.75rem'}}>—</span>}
                       </td>
 
-                      {/* Agregados */}
-                      <td style={{...s.td,maxWidth:220}}>
+                      {/* Agregados — botão clicável */}
+                      <td style={{...s.td,maxWidth:200}}>
                         {temA ? (
-                          <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                            {e.agregados.map((a,ai)=>(
-                              <span key={ai} style={{display:'flex',alignItems:'center',gap:4}}>
-                                <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',
-                                  border:'1px solid rgba(240,180,41,0.25)',borderRadius:5,
-                                  padding:'1px 6px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
-                                  {a.isCombo?'🔗':' 📦'}
-                                </span>
-                                <span style={{color:'#9ca3af',fontSize:'0.75rem',whiteSpace:'nowrap'}}>{a.label}</span>
+                          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                            <button
+                              onClick={ev=>{ev.stopPropagation();router.push(`/agregados/${e.empresa_agregada_id}`);}}
+                              style={{display:'flex',alignItems:'center',gap:6,
+                                background:'rgba(240,180,41,0.08)',border:'1px solid rgba(240,180,41,0.2)',
+                                borderRadius:7,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',
+                                transition:'background 0.15s'}}
+                              onMouseEnter={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.18)'}
+                              onMouseLeave={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.08)'}
+                            >
+                              <span style={{fontSize:'0.75rem'}}>📦</span>
+                              <span style={{color:'#f0b429',fontSize:'0.78rem',fontWeight:600}}>
+                                {e.agregados.length} produto{e.agregados.length!==1?'s':''}
+                              </span>
+                              <span style={{color:'#4b5563',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
+                            </button>
+                            {e.agregados.slice(0,2).map((a,ai)=>(
+                              <span key={ai} style={{color:'#6b7280',fontSize:'0.7rem',paddingLeft:4}}>
+                                {a.label}
                               </span>
                             ))}
                           </div>
@@ -270,35 +290,6 @@ export default function GestaoEmpresas() {
                           borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600}}>
                           {e.ativo?'Ativa':'Inativa'}
                         </span>
-                      </td>
-                      <td style={s.td} onClick={ev=>ev.stopPropagation()}>
-                        <div style={{display:'flex',gap:5,flexWrap:'wrap',maxWidth:280}}>
-                          {/* Um botão por cartão */}
-                          {e.cartoes.map((c,ci)=>{
-                            const COR_CAT2={'Benefícios':'#60a5fa','Bônus':'#a78bfa','Convênio':'#34d399','Taxa Negativa':'#f87171'};
-                            const cor = COR_CAT2[c.categoria]||'#f0b429';
-                            return (
-                              <button key={ci}
-                                onClick={()=>router.push(`/gestao/${c.id}`)}
-                                title={`${c.produto} — ${c.categoria}`}
-                                style={{...s.btnAcao,background:`${cor}15`,
-                                  border:`1px solid ${cor}35`,color:cor,
-                                  maxWidth:130,overflow:'hidden',textOverflow:'ellipsis'}}>
-                                🃏 {c.produto||'Cartão'}
-                              </button>
-                            );
-                          })}
-                          {/* Um botão para agregados (vai para detalhe da empresa) */}
-                          {temA&&(
-                            <button
-                              onClick={()=>router.push(`/agregados/${e.empresa_agregada_id}`)}
-                              title="Ver produtos agregados"
-                              style={{...s.btnAcao,background:'rgba(240,180,41,0.08)',
-                                border:'1px solid rgba(240,180,41,0.2)',color:'#f0b429'}}>
-                              📦 Agregados ({e.agregados.length})
-                            </button>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   );
