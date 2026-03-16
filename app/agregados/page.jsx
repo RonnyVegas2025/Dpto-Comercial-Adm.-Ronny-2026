@@ -38,11 +38,25 @@ function cleanDate(v) {
     const d = new Date(v.getTime() - v.getTimezoneOffset()*60000);
     return d.toISOString().split('T')[0];
   }
+  // Número serial do Excel (ex: 46023 = 2026-01-01)
+  if (typeof v === 'number') {
+    if (v < 1000) return null; // número pequeno demais — não é data válida (ex: linha 32, 33...)
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    const d2 = new Date(d.getTime() - d.getTimezoneOffset()*60000);
+    return d2.toISOString().split('T')[0];
+  }
   const s = String(v).trim();
   if (s.match(/^\d{4}-\d{2}/)) return s.substring(0,10);
   const p = s.split('/');
   if (p.length===3) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
   return null;
+}
+
+// Para mês de referência: sempre força dia 01
+function cleanMesRef(v) {
+  const d = cleanDate(v);
+  if (!d) return null;
+  return d.substring(0,7) + '-01'; // garante sempre dia 01
 }
 
 const ABAS_DASH = [
@@ -94,7 +108,7 @@ export default function Agregados() {
     const vt3   = parseFloat(row[18])||0;
     const vd3   = parseFloat(row[19])||0;
     const boleto= parseFloat(row[20])||0;
-    const mesRef= cleanDate(row[21]);
+    const mesRef= cleanMesRef(row[21]);
 
     if (!nome || !cnpj || !p1) return null;
 
@@ -209,8 +223,9 @@ export default function Agregados() {
             contId = contNew.id;
           }
 
-          // 3. Fechamento — calcula custo manualmente no front (evita depender da RPC)
-          if (r.mesRef && contId) {
+          // 3. Fechamento — usa mesRef ou fallback para 2026-01-01
+          const competencia = r.mesRef || '2026-01-01';
+          if (contId) {
             const totalTit = r.tit1 + r.tit2 + r.tit3;
             const totalDep = r.dep1 + r.dep2 + r.dep3;
 
@@ -253,7 +268,7 @@ export default function Agregados() {
               .from('fechamentos_agregados')
               .upsert({
                 contrato_id: contId,
-                competencia: r.mesRef,
+                competencia: competencia,
                 titulares_mes: totalTit,
                 dependentes_mes: totalDep,
                 valor_boleto: r.boleto,
