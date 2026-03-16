@@ -206,8 +206,12 @@ export default function GestaoEmpresas() {
                       onMouseEnter={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.04)'}
                       onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'rgba(255,255,255,0.02)':'transparent'}
                       onClick={()=>{
-                        if(temC) router.push(`/gestao/${e.cartoes[0].id}`);
-                        else if(temA) router.push(`/agregados/${e.empresa_agregada_id}`);
+                        const totalProdutos = e.cartoes.length + (temA?1:0);
+                        if(totalProdutos === 1) {
+                          if(temC) router.push(`/gestao/${e.cartoes[0].id}`);
+                          else if(temA) router.push(`/agregados/${e.empresa_agregada_id}`);
+                        }
+                        // se tiver múltiplos produtos, não navega — usuário clica no botão específico
                       }}>
                       <td style={{...s.td,fontWeight:600,minWidth:180,maxWidth:240,
                         overflow:'hidden',textOverflow:'ellipsis'}} title={e.nome}>{e.nome}</td>
@@ -268,17 +272,32 @@ export default function GestaoEmpresas() {
                         </span>
                       </td>
                       <td style={s.td} onClick={ev=>ev.stopPropagation()}>
-                        <div style={{display:'flex',gap:6}}>
-                          {temC&&<button onClick={()=>router.push(`/gestao/${e.cartoes[0].id}`)}
-                            style={{...s.btnAcao,background:'rgba(240,180,41,0.1)',
-                              border:'1px solid rgba(240,180,41,0.25)',color:'#f0b429'}}>
-                            🃏 Cartão
-                          </button>}
-                          {temA&&<button onClick={()=>router.push(`/agregados/${e.empresa_agregada_id}`)}
-                            style={{...s.btnAcao,background:'rgba(240,180,41,0.06)',
-                              border:'1px solid rgba(240,180,41,0.15)',color:'#9ca3af'}}>
-                            📦 Agregado
-                          </button>}
+                        <div style={{display:'flex',gap:5,flexWrap:'wrap',maxWidth:280}}>
+                          {/* Um botão por cartão */}
+                          {e.cartoes.map((c,ci)=>{
+                            const COR_CAT2={'Benefícios':'#60a5fa','Bônus':'#a78bfa','Convênio':'#34d399','Taxa Negativa':'#f87171'};
+                            const cor = COR_CAT2[c.categoria]||'#f0b429';
+                            return (
+                              <button key={ci}
+                                onClick={()=>router.push(`/gestao/${c.id}`)}
+                                title={`${c.produto} — ${c.categoria}`}
+                                style={{...s.btnAcao,background:`${cor}15`,
+                                  border:`1px solid ${cor}35`,color:cor,
+                                  maxWidth:130,overflow:'hidden',textOverflow:'ellipsis'}}>
+                                🃏 {c.produto||'Cartão'}
+                              </button>
+                            );
+                          })}
+                          {/* Um botão para agregados (vai para detalhe da empresa) */}
+                          {temA&&(
+                            <button
+                              onClick={()=>router.push(`/agregados/${e.empresa_agregada_id}`)}
+                              title="Ver produtos agregados"
+                              style={{...s.btnAcao,background:'rgba(240,180,41,0.08)',
+                                border:'1px solid rgba(240,180,41,0.2)',color:'#f0b429'}}>
+                              📦 Agregados ({e.agregados.length})
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
