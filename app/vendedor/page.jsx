@@ -49,6 +49,7 @@ export default function DashboardVendedor() {
   const [filtroBusca,      setFiltroBusca]      = useState('');
   const [filtroProduto,    setFiltroProduto]    = useState('');
   const [filtroSituacao,   setFiltroSituacao]   = useState('');
+  const [filtroMesRef,     setFiltroMesRef]     = useState('');
   const [expandidoContrato, setExpandidoContrato] = useState(null);
 
   useEffect(() => { carregarConsultores(); }, []);
@@ -75,7 +76,7 @@ export default function DashboardVendedor() {
       let query = supabase
         .from('empresas')
         .select(`
-          id, nome, cnpj, produto_contratado, categoria, cidade, estado,
+          id, produto_id, nome, cnpj, produto_contratado, categoria, cidade, estado,
           potencial_movimentacao, peso_categoria, cartoes_emitidos,
           data_cadastro, taxa_positiva, taxa_negativa,
           consultor_principal:consultor_principal_id (id, nome, gestor),
@@ -859,6 +860,7 @@ export default function DashboardVendedor() {
                   if (!e.nome?.toLowerCase().includes(q) && !String(e.produto_id||'').includes(q)) return false;
                 }
                 if (filtroProduto && e.produto_contratado !== filtroProduto) return false;
+                if (filtroMesRef  && getMesReferencia(e.data_cadastro) !== filtroMesRef) return false;
                 if (filtroSituacao) {
                   if (filtroSituacao === 'sem' && e.situacao !== 'sem movimentação') return false;
                   if (filtroSituacao === 'abaixo' && e.situacao !== 'abaixo do esperado') return false;
@@ -904,8 +906,23 @@ export default function DashboardVendedor() {
                       <option value=''>Todos os produtos</option>
                       {produtosUnicos.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    {(filtroBusca || filtroProduto || filtroSituacao) && (
-                      <button onClick={() => { setFiltroBusca(''); setFiltroProduto(''); setFiltroSituacao(''); }}
+                    <select
+                      value={filtroMesRef}
+                      onChange={e => setFiltroMesRef(e.target.value)}
+                      style={{ flex:1, minWidth:150, background:'#1e2330', border:`1px solid ${filtroMesRef ? 'rgba(96,165,250,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius:8, padding:'7px 10px', color: filtroMesRef ? '#60a5fa' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none', fontWeight: filtroMesRef ? 600 : 400 }}
+                    >
+                      <option value=''>Mês Ref. — Todos</option>
+                      {[...new Set(movRealPorEmpresa.map(e => getMesReferencia(e.data_cadastro)).filter(Boolean))]
+                        .sort((a, b) => {
+                          const aC = a.startsWith('Carteira'); const bC = b.startsWith('Carteira');
+                          if (aC && bC) return a.localeCompare(b);
+                          if (aC) return -1; if (bC) return 1;
+                          return a.localeCompare(b);
+                        })
+                        .map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    {(filtroBusca || filtroProduto || filtroSituacao || filtroMesRef) && (
+                      <button onClick={() => { setFiltroBusca(''); setFiltroProduto(''); setFiltroSituacao(''); setFiltroMesRef(''); }}
                         style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'7px 14px', color:'#f87171', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit' }}>
                         ✕ Limpar
                       </button>
