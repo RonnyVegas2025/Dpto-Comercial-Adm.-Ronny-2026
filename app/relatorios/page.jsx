@@ -335,6 +335,105 @@ export default function Relatorios() {
     setLoad('evolucao', false);
   }
 
+  // ── Relatório Agregados ───────────────────────────────────────────────────
+  async function gerarRelatorioAgregados() {
+    setLoad('agregados', true);
+    try {
+      // Busca fechamentos com todos os dados
+      const { data: fechamentos } = await supabase
+        .from('fechamentos_agregados')
+        .select(`
+          competencia, valor_boleto, custo_mes, lucro_mes, grupo,
+          titulares_mes, dependentes_mes,
+          contrato:contratos_agregados (
+            is_combo, combo_nome,
+            valor_cobrado_titular_p1, valor_cobrado_dependente_p1,
+            produto_1:produto_1_id (nome, custo),
+            produto_2:produto_2_id (nome, custo),
+            produto_3:produto_3_id (nome, custo),
+            empresa:empresa_agregada_id (
+              nome, cnpj, data_cadastro,
+              consultor_principal:consultor_principal_id (nome),
+              consultor_agregado:consultor_agregado_id (nome)
+            )
+          )
+        `)
+        .order('competencia', { ascending: false });
+
+      const colunas = [
+        'Mês Ref.',
+        'Empresa',
+        'CNPJ',
+        'Consultor Principal',
+        'Consultor Agregado',
+        'Produto Contratado',
+        'É Combo?',
+        'Titulares',
+        'Dependentes',
+        'Total Vidas',
+        'Custo Vegas/Vida (P1)',
+        'Custo Vegas/Vida (P2)',
+        'Custo Vegas/Vida (P3)',
+        'Custo Total Vegas',
+        'Valor Cobrado/Titular',
+        'Valor Cobrado/Dep.',
+        'Valor Boleto Empresa',
+        'Lucro Vegas',
+        'Grupo',
+        'Data Cadastro',
+      ];
+
+      const linhas = (fechamentos || []).map(f => {
+        const c   = f.contrato || {};
+        const emp = c.empresa  || {};
+        const p1  = c.produto_1;
+        const p2  = c.produto_2;
+        const p3  = c.produto_3;
+
+        // Monta label do produto
+        const prodLabel = c.combo_nome ||
+          [p1?.nome, p2?.nome, p3?.nome].filter(Boolean).join(' + ') || '—';
+
+        // Custo por vida calculado
+        const totalVidas = (f.titulares_mes||0) + (f.dependentes_mes||0);
+        const custoVidaP1 = p1 ? (p1.nome?.toLowerCase().includes('wellhub') || p1.nome?.toLowerCase().includes('gympass')
+          ? (f.custo_mes / (totalVidas||1)).toFixed(2) + ' (PEPM)'
+          : `R$ ${Number(p1.custo||0).toFixed(2)}`) : '—';
+        const custoVidaP2 = p2 ? `R$ ${Number(p2.custo||0).toFixed(2)}` : '—';
+        const custoVidaP3 = p3 ? `R$ ${Number(p3.custo||0).toFixed(2)}` : '—';
+
+        const grupoLabel = f.grupo === 'lucrativo' ? 'Lucrativo'
+          : f.grupo === 'subsidio' ? 'Subsídio' : 'Retenção';
+
+        return [
+          fmtMes(f.competencia),
+          emp.nome || '—',
+          emp.cnpj || '—',
+          emp.consultor_principal?.nome || '—',
+          emp.consultor_agregado?.nome  || '—',
+          prodLabel,
+          c.is_combo ? 'Sim' : 'Não',
+          f.titulares_mes  || 0,
+          f.dependentes_mes|| 0,
+          totalVidas,
+          custoVidaP1,
+          custoVidaP2,
+          custoVidaP3,
+          Number(f.custo_mes   || 0).toFixed(2),
+          Number(c.valor_cobrado_titular_p1   || 0).toFixed(2),
+          Number(c.valor_cobrado_dependente_p1|| 0).toFixed(2),
+          Number(f.valor_boleto|| 0).toFixed(2),
+          Number(f.lucro_mes   || 0).toFixed(2),
+          grupoLabel,
+          emp.data_cadastro ? (() => { const [y,m,d]=emp.data_cadastro.split('-'); return `${d}/${m}/${y}`; })() : '—',
+        ];
+      });
+
+      await baixarExcel(`relatorio_agregados_${new Date().toISOString().substring(0,10)}.xlsx`, colunas, linhas);
+    } catch(err) { alert('Erro: ' + err.message); }
+    setLoad('agregados', false);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   const cards = [
     {
@@ -368,6 +467,14 @@ export default function Relatorios() {
       desc:  'Selecione o mês e exporte: potencial bruto, resultado esperado, movimentação real, receita, custo, spread e meta por empresa.',
       cor:   '#60a5fa',
       acao:  () => setModal('evolucao'),
+    },
+    {
+      key:   'agregados',
+      icon:  '📦',
+      titulo:'Conferência de Agregados',
+      desc:  'Exporta todos os fechamentos de agregados com empresa, CNPJ, produto, custo Vegas por licença, valor cobrado, boleto, lucro e grupo (Lucrativo/Subsídio/Retenção).',
+      cor:   '#f0b429',
+      acao:  gerarRelatorioAgregados,
     },
   ];
 
