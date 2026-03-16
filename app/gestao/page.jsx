@@ -272,7 +272,7 @@ export default function GestaoEmpresas() {
                               border:'1px solid rgba(240,180,41,0.25)',color:'#f0b429'}}>
                             🃏 Cartão
                           </button>}
-                          {temA&&<button onClick={()=>router.push('/agregados')}
+                          {temA&&<button onClick={()=>router.push(`/agregados/${e.empresa_agregada_id}`)}
                             style={{...s.btnAcao,background:'rgba(240,180,41,0.06)',
                               border:'1px solid rgba(240,180,41,0.15)',color:'#9ca3af'}}>
                             📦 Agregado
