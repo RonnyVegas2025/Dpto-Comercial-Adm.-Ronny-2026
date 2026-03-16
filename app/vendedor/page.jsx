@@ -1,7 +1,7 @@
 // VERSAO 5 - 2026-03-12 - pctMeta = volumeMeta/metaObjetivo (194k/255k=76%)
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -18,8 +18,18 @@ const fmtMes = (d) => {
   return `${meses[parseInt(m) - 1]}/${y}`;
 };
 
+function getMesReferencia(data_cadastro) {
+  if (!data_cadastro) return '';
+  const [ano, mes] = data_cadastro.substring(0, 7).split('-');
+  const anoAtual = new Date().getFullYear();
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  if (parseInt(ano) < anoAtual) return `Carteira ${ano}`;
+  return `${meses[parseInt(mes)-1]}/${String(ano).slice(2)}`;
+}
+
 const ABAS = [
   { key: 'resumo',       label: '📊 Resumo'      },
+  { key: 'contratos',    label: '🌡️ Contratos'   },
   { key: 'movimentacao', label: '📋 Carteira'     },
   { key: 'produtos',     label: '🎯 Produtos'     },
   { key: 'parceiros',    label: '🤝 Parceiros'    },
@@ -39,6 +49,7 @@ export default function DashboardVendedor() {
   const [filtroBusca,      setFiltroBusca]      = useState('');
   const [filtroProduto,    setFiltroProduto]    = useState('');
   const [filtroSituacao,   setFiltroSituacao]   = useState('');
+  const [expandidoContrato, setExpandidoContrato] = useState(null);
 
   useEffect(() => { carregarConsultores(); }, []);
   useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores, mesSelecionado]);
@@ -338,6 +349,34 @@ export default function DashboardVendedor() {
         }))
         .sort((a, b) => b.movReal - a.movReal);
 
+      // ── Contratos por mês (data_cadastro) ─────────────────────────────────
+      // Agrupa todas as empresas por "Mês Referência" (getMesReferencia)
+      const contratosMap = {};
+      (empresas || []).forEach(e => {
+        const mesRef = getMesReferencia(e.data_cadastro) || 'Sem data';
+        const ano    = e.data_cadastro?.substring(0, 4) || '0';
+        const sort   = e.data_cadastro?.substring(0, 7) || '0000-00';
+        if (!contratosMap[mesRef]) contratosMap[mesRef] = {
+          mesRef, sort, ano,
+          contratos: 0, potencial: 0, resultado: 0,
+          empresas: [],
+        };
+        contratosMap[mesRef].contratos++;
+        contratosMap[mesRef].potencial  += e.potencial_movimentacao || 0;
+        contratosMap[mesRef].resultado  += (e.potencial_movimentacao||0) * (e.peso_categoria||1);
+        contratosMap[mesRef].empresas.push(e);
+      });
+      // Ordena: anos antigos primeiro (Carteira 2025), depois meses do ano atual
+      const contratosArray = Object.values(contratosMap).sort((a, b) => {
+        // "Carteira XXXX" vai antes dos meses
+        const aIsCarteira = a.mesRef.startsWith('Carteira');
+        const bIsCarteira = b.mesRef.startsWith('Carteira');
+        if (aIsCarteira && bIsCarteira) return a.ano.localeCompare(b.ano);
+        if (aIsCarteira) return -1;
+        if (bIsCarteira) return 1;
+        return a.sort.localeCompare(b.sort);
+      });
+
       setDados({
         consultor,
         consultoresDaVisao,
@@ -352,6 +391,7 @@ export default function DashboardVendedor() {
         timeline: timeline.slice(0, 30),
         resultadoPorConsultor,
         parceirosArray,
+        contratosArray,
       });
     } catch (err) { console.error(err); }
     setLoading(false);
@@ -440,7 +480,7 @@ export default function DashboardVendedor() {
 
       {/* Conteúdo */}
       {dados && !loading && (() => {
-        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes, metaAcumPorConsultor, metasPorMes } = dados;
+        const { kpis, empresas, movRealPorEmpresa, evolucaoArray, produtosArray, timeline, consultor, resultadoPorConsultor, consultoresDaVisao, parceirosArray, ultimoMes, metaAcumPorConsultor, metasPorMes, contratosArray } = dados;
         const maxEvolucao = Math.max(...evolucaoArray.map(e => Math.max(e.movReal, e.meta || 0, e.resultadoEsperado || 0)), 1);
         const maxProduto  = Math.max(...produtosArray.map(p => p.resultado), 1);
 
@@ -650,6 +690,163 @@ export default function DashboardVendedor() {
 
               </div>
             )}
+
+            {/* ── CONTRATOS ───────────────────────────────────────────── */}
+            {aba === 'contratos' && (() => {
+              const metaMensal = kpis.meta || 0;
+              // Mês atual para destacar
+              const hoje = new Date();
+              const anoAtual = hoje.getFullYear();
+              const mesAtual = hoje.getMonth(); // 0-indexed
+              const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+              const mesAtualLabel = `${meses[mesAtual]}/${String(anoAtual).slice(2)}`;
+              // Detalhamento expandido — usa estado do componente
+              const aberto = (gi) => expandidoContrato === gi;
+              const toggleExpandido = (gi) => setExpandidoContrato(expandidoContrato === gi ? null : gi);
+              const totalContratos = contratosArray.reduce((s,c) => s + c.contratos, 0);
+              const totalPotencial = contratosArray.reduce((s,c) => s + c.potencial, 0);
+
+              return (
+                <div>
+                  {/* KPIs topo */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px,1fr))', gap:14, marginBottom:20 }}>
+                    {[
+                      { label:'Total de Contratos', val: totalContratos, cor:'#f0b429', icone:'📋' },
+                      { label:'Potencial Total',    val: fmt(totalPotencial), cor:'#34d399', icone:'💰' },
+                      { label:'Meta Mensal',        val: fmt(metaMensal), cor:'#a78bfa', icone:'🎯' },
+                      { label:'Mês Atual',          val: mesAtualLabel, cor:'#60a5fa', icone:'📅' },
+                    ].map(k => (
+                      <div key={k.label} style={{ background:'#161a26', border:`1px solid ${k.cor}22`, borderRadius:14, padding:'16px 20px' }}>
+                        <div style={{ fontSize:'1.3rem', marginBottom:6 }}>{k.icone}</div>
+                        <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{k.label}</div>
+                        <div style={{ fontSize:'1.25rem', fontWeight:800, color:k.cor }}>{k.val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cards por período */}
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    {contratosArray.map((grupo, gi) => {
+                      const isMesAtual  = grupo.mesRef === mesAtualLabel;
+                      const isCarteira  = grupo.mesRef.startsWith('Carteira');
+                      const pctMeta     = metaMensal > 0 ? (grupo.resultado / metaMensal) * 100 : 0;
+                      const corAlerta   = pctMeta >= 100 ? '#34d399' : pctMeta >= 50 ? '#f0b429' : pctMeta > 0 ? '#f87171' : '#4b5563';
+                      const emoji       = pctMeta >= 100 ? '🔥' : pctMeta >= 50 ? '⚡' : pctMeta > 0 ? '⚠️' : '❄️';
+                      const aberto2     = aberto(gi);
+
+                      return (
+                        <div key={gi} style={{
+                          background: isMesAtual ? 'rgba(240,180,41,0.06)' : '#161a26',
+                          border: `1px solid ${isMesAtual ? 'rgba(240,180,41,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                          borderRadius:14, overflow:'hidden',
+                        }}>
+                          {/* Header do card */}
+                          <div
+                            onClick={() => toggleExpandido(gi)}
+                            style={{ padding:'16px 20px', cursor:'pointer', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}
+                          >
+                            {/* Período */}
+                            <div style={{ minWidth:120 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                <span style={{ fontSize:'1.1rem' }}>{emoji}</span>
+                                <span style={{ fontWeight:700, fontSize:'0.95rem', color: isMesAtual ? '#f0b429' : '#e8eaf0' }}>
+                                  {grupo.mesRef}
+                                </span>
+                                {isMesAtual && (
+                                  <span style={{ background:'rgba(240,180,41,0.2)', color:'#f0b429', borderRadius:5, padding:'1px 7px', fontSize:'0.65rem', fontWeight:700 }}>
+                                    MÊS ATUAL
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ color:'#4b5563', fontSize:'0.72rem', marginTop:3 }}>
+                                {grupo.contratos} contrato{grupo.contratos!==1?'s':''}
+                              </div>
+                            </div>
+
+                            {/* Potencial */}
+                            <div style={{ flex:1, minWidth:140 }}>
+                              <div style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Potencial Mensal</div>
+                              <div style={{ fontWeight:700, color:'#34d399' }}>{fmt(grupo.potencial)}</div>
+                            </div>
+
+                            {/* Resultado esperado */}
+                            <div style={{ flex:1, minWidth:140 }}>
+                              <div style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Resultado Esperado</div>
+                              <div style={{ fontWeight:700, color:'#a78bfa' }}>{fmt(grupo.resultado)}</div>
+                            </div>
+
+                            {/* Termômetro vs meta (só se não for Carteira XXXX) */}
+                            {!isCarteira && metaMensal > 0 && (
+                              <div style={{ flex:1, minWidth:160 }}>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                                  <span style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1 }}>vs Meta Mensal</span>
+                                  <span style={{ color:corAlerta, fontWeight:700, fontSize:'0.8rem' }}>{fmtPct(pctMeta)}</span>
+                                </div>
+                                {/* Barra termômetro */}
+                                <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:6, height:10, overflow:'hidden', position:'relative' }}>
+                                  <div style={{
+                                    height:'100%', borderRadius:6, transition:'width 0.8s',
+                                    width:`${Math.min(pctMeta, 100)}%`,
+                                    background: pctMeta >= 100
+                                      ? 'linear-gradient(90deg, #34d399, #059669)'
+                                      : pctMeta >= 50
+                                      ? 'linear-gradient(90deg, #f0b429, #d97706)'
+                                      : 'linear-gradient(90deg, #f87171, #dc2626)',
+                                  }}></div>
+                                  {/* Marcador 50% */}
+                                  <div style={{ position:'absolute', left:'50%', top:0, width:1, height:'100%', background:'rgba(255,255,255,0.2)' }}></div>
+                                </div>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginTop:3, fontSize:'0.6rem', color:'#4b5563' }}>
+                                  <span>0</span><span>50%</span><span>{fmt(metaMensal)}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Chevron */}
+                            <div style={{ color:'#4b5563', fontSize:'0.8rem', marginLeft:'auto' }}>
+                              {aberto2 ? '▲' : '▼'}
+                            </div>
+                          </div>
+
+                          {/* Tabela expandida */}
+                          {aberto2 && (
+                            <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', overflowX:'auto' }}>
+                              <table style={{ ...s.table, fontSize:'0.77rem' }}>
+                                <thead>
+                                  <tr>
+                                    {['ID','Empresa','Produto','Categoria','Cidade/UF','Potencial','Resultado','Dt. Cadastro','Parceiro'].map(h =>
+                                      <th key={h} style={{ ...s.th, background:'#111520' }}>{h}</th>)}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {grupo.empresas.sort((a,b) => (b.potencial_movimentacao||0)-(a.potencial_movimentacao||0)).map((e,i) => (
+                                    <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                                      <td style={{ ...s.td, color:'#6b7280', fontSize:'0.7rem' }}>{e.produto_id||'—'}</td>
+                                      <td style={{ ...s.td, fontWeight:600 }}>{e.nome}</td>
+                                      <td style={s.td}>{e.produto_contratado||'—'}</td>
+                                      <td style={{ ...s.td, color:'#9ca3af' }}>{e.categoria||'—'}</td>
+                                      <td style={s.td}>{e.cidade||'—'}/{e.estado||'—'}</td>
+                                      <td style={{ ...s.td, color:'#34d399' }}>{fmt(e.potencial_movimentacao)}</td>
+                                      <td style={{ ...s.td, color:'#a78bfa', fontWeight:600 }}>{fmt((e.potencial_movimentacao||0)*(e.peso_categoria||1))}</td>
+                                      <td style={{ ...s.td, color:'#6b7280' }}>{e.data_cadastro?.substring(0,10)||'—'}</td>
+                                      <td style={{ ...s.td, color:'#9ca3af' }}>{e.parceiro?.nome||'—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {contratosArray.length === 0 && (
+                      <div style={s.semDados}>Nenhum contrato encontrado</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── CARTEIRA ────────────────────────────────────────────── */}
             {aba === 'movimentacao' && (() => {
