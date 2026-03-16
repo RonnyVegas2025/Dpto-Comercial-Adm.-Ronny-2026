@@ -132,18 +132,22 @@ export default function Agregados() {
     try {
       // Busca produtos e consultores do banco
       const [{ data: prods }, { data: consults }] = await Promise.all([
-        supabase.from('produtos').select('id, nome').eq('ativo', true),
+        supabase.from('produtos').select('id, nome, custo').eq('ativo', true),
         supabase.from('consultores').select('id, nome').eq('ativo', true),
       ]);
       const prodMap    = Object.fromEntries((prods||[]).map(p => [normText(p.nome), p.id]));
       const consultMap = Object.fromEntries((consults||[]).map(c => [normText(c.nome), c.id]));
 
+      // Debug: mostra produtos encontrados no banco
+      console.log('Produtos no banco:', Object.keys(prodMap));
+      console.log('Consultores no banco:', Object.keys(consultMap));
+
       for (const r of preview) {
         try {
-          // 1. Upsert empresa_agregada (chave = cnpj)
           const consultId  = consultMap[normText(r.vend)]  || null;
           const consultId2 = consultMap[normText(r.vend2)] || null;
 
+          // 1. Upsert empresa_agregada
           const { data: empData, error: empErr } = await supabase
             .from('empresas_agregadas')
             .upsert({ cnpj: r.cnpj, nome: r.nome, data_cadastro: r.dt,
@@ -157,52 +161,111 @@ export default function Agregados() {
           const p2Id  = r.p2 ? prodMap[normText(r.p2)] || null : null;
           const p3Id  = r.p3 ? prodMap[normText(r.p3)] || null : null;
 
-          if (!p1Id) throw new Error(`Produto não encontrado: "${r.p1}"`);
+          if (!p1Id) throw new Error(`Produto não encontrado: "${r.p1}" (chave: "${normText(r.p1)}")`);
 
-          // 2. Upsert contrato (empresa + produto1 + is_combo)
-          const { data: contData, error: contErr } = await supabase
+          // 2. Contrato — busca existente ou insere novo
+          let contId = null;
+          const { data: contExist } = await supabase
             .from('contratos_agregados')
-            .upsert({
-              empresa_agregada_id: empId,
-              is_combo: r.isCombo, combo_nome: r.comboNome,
-              produto_1_id: p1Id, produto_2_id: p2Id, produto_3_id: p3Id,
-              titulares: r.tit1 + r.tit2 + r.tit3,
-              dependentes: r.dep1 + r.dep2 + r.dep3,
-              valor_cobrado_titular_p1: r.vt1, valor_cobrado_dependente_p1: r.vd1,
-              valor_cobrado_titular_p2: r.vt2, valor_cobrado_dependente_p2: r.vd2,
-              valor_cobrado_titular_p3: r.vt3, valor_cobrado_dependente_p3: r.vd3,
-              data_inicio: r.dt,
-            }, { onConflict: 'empresa_agregada_id,produto_1_id,is_combo' })
-            .select('id').single();
-          if (contErr) throw new Error('Contrato: ' + contErr.message);
+            .select('id')
+            .eq('empresa_agregada_id', empId)
+            .eq('produto_1_id', p1Id)
+            .maybeSingle();
 
-          // 3. Upsert fechamento do mês
-          if (r.mesRef) {
+          if (contExist) {
+            // Atualiza
+            const { error: updErr } = await supabase
+              .from('contratos_agregados')
+              .update({
+                is_combo: r.isCombo, combo_nome: r.comboNome,
+                produto_2_id: p2Id, produto_3_id: p3Id,
+                titulares: r.tit1 + r.tit2 + r.tit3,
+                dependentes: r.dep1 + r.dep2 + r.dep3,
+                valor_cobrado_titular_p1: r.vt1, valor_cobrado_dependente_p1: r.vd1,
+                valor_cobrado_titular_p2: r.vt2, valor_cobrado_dependente_p2: r.vd2,
+                valor_cobrado_titular_p3: r.vt3, valor_cobrado_dependente_p3: r.vd3,
+                data_inicio: r.dt,
+              })
+              .eq('id', contExist.id);
+            if (updErr) throw new Error('Contrato update: ' + updErr.message);
+            contId = contExist.id;
+          } else {
+            // Insere novo
+            const { data: contNew, error: insErr } = await supabase
+              .from('contratos_agregados')
+              .insert({
+                empresa_agregada_id: empId,
+                is_combo: r.isCombo, combo_nome: r.comboNome,
+                produto_1_id: p1Id, produto_2_id: p2Id, produto_3_id: p3Id,
+                titulares: r.tit1 + r.tit2 + r.tit3,
+                dependentes: r.dep1 + r.dep2 + r.dep3,
+                valor_cobrado_titular_p1: r.vt1, valor_cobrado_dependente_p1: r.vd1,
+                valor_cobrado_titular_p2: r.vt2, valor_cobrado_dependente_p2: r.vd2,
+                valor_cobrado_titular_p3: r.vt3, valor_cobrado_dependente_p3: r.vd3,
+                data_inicio: r.dt,
+              })
+              .select('id').single();
+            if (insErr) throw new Error('Contrato insert: ' + insErr.message);
+            contId = contNew.id;
+          }
+
+          // 3. Fechamento — calcula custo manualmente no front (evita depender da RPC)
+          if (r.mesRef && contId) {
             const totalTit = r.tit1 + r.tit2 + r.tit3;
             const totalDep = r.dep1 + r.dep2 + r.dep3;
-            // Custo calculado via função do banco
-            const { data: custoData } = await supabase
-              .rpc('calcular_custo_agregado', {
-                p_produto_id: p1Id,
-                p_titulares: totalTit,
-                p_dependentes: totalDep,
-              });
-            const custo = custoData || 0;
 
+            // Calcula custo baseado no produto principal
+            let custoMes = 0;
+            if (r.p1) {
+              const nomeProd = normText(r.p1);
+              const totalVidas = totalTit + totalDep;
+              const temDep = totalDep > 0;
+              if (nomeProd === normText('WellHub')) {
+                // Tabela PEPM WellHub
+                const tabela = temDep
+                  ? [[10,11.99],[20,11.99],[100,9.99],[250,8.99],[500,7.99],[999999,6.99]]
+                  : [[10,9.99],[20,9.99],[100,7.99],[250,6.99],[500,5.99],[999999,4.99]];
+                const pepm = tabela.find(([lim]) => totalVidas <= lim)?.[1] || 4.99;
+                custoMes = Math.max(100, totalVidas * pepm);
+              } else if (nomeProd === normText('Total Pass')) {
+                custoMes = Math.max(200, totalVidas * 5.85);
+              } else {
+                // Produto com custo fixo — busca do mapa de produtos
+                const prod = (prods||[]).find(p => normText(p.nome) === nomeProd);
+                const custoPorVida = prod?.custo || 0;
+                custoMes = totalVidas * custoPorVida;
+                // Se for combo adiciona custo dos outros produtos
+                if (r.p2) {
+                  const prod2 = (prods||[]).find(p => normText(p.nome) === normText(r.p2));
+                  const vidas2 = r.tit2 + r.dep2;
+                  custoMes += vidas2 * (prod2?.custo || 0);
+                }
+                if (r.p3) {
+                  const prod3 = (prods||[]).find(p => normText(p.nome) === normText(r.p3));
+                  const vidas3 = r.tit3 + r.dep3;
+                  custoMes += vidas3 * (prod3?.custo || 0);
+                }
+              }
+            }
+
+            // Upsert fechamento
             const { error: fechErr } = await supabase
               .from('fechamentos_agregados')
               .upsert({
-                contrato_id: contData.id,
+                contrato_id: contId,
                 competencia: r.mesRef,
                 titulares_mes: totalTit,
                 dependentes_mes: totalDep,
                 valor_boleto: r.boleto,
-                custo_mes: custo,
+                custo_mes: parseFloat(custoMes.toFixed(2)),
               }, { onConflict: 'contrato_id,competencia' });
             if (fechErr) throw new Error('Fechamento: ' + fechErr.message);
           }
           ok++;
-        } catch(err) { erros.push(`${r.nome}: ${err.message}`); }
+        } catch(err) {
+          console.error('Erro linha:', r.nome, err);
+          erros.push(`${r.nome}: ${err.message}`);
+        }
       }
       setResult({ ok, erros }); setStatus('done');
       carregarDash();
@@ -767,4 +830,3 @@ const s = {
   td:         { padding:'9px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
   inputFiltro:{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 11px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
 };
-
