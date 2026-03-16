@@ -1,9 +1,8 @@
-
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -27,9 +26,10 @@ const COR_GRUPO = { lucrativo:'#34d399', subsidio:'#f0b429', retencao:'#f87171' 
 const EMOJI_GRUPO = { lucrativo:'💚', subsidio:'⚡', retencao:'❄️' };
 const LABEL_GRUPO = { lucrativo:'Lucrativo', subsidio:'Subsídio', retencao:'Retenção' };
 
-export default function AgregadoDetalhe({ params }) {
+export default function AgregadoDetalhe() {
   const router = useRouter();
-  const { id } = use(params); // empresa_agregada_id
+  const params = useParams();
+  const id = params?.id;
 
   const [empresa,      setEmpresa]      = useState(null);
   const [contratos,    setContratos]    = useState([]);
