@@ -920,7 +920,7 @@ export default function DashboardVendedor() {
                     <table style={{ ...s.table, fontSize:'0.78rem' }}>
                       <thead>
                         <tr style={{ position:'sticky', top:0, zIndex:2, background:'#161a26' }}>
-                          {['ID','Empresa','Produto','Dt. Cadastro','Parceiro','Potencial','Acum. Real','Meses','Média/Mês','% Aderência','Últ. Mov.','Situação'].map(h =>
+                          {['ID','Empresa','Produto','Dt. Cadastro','Mês Ref.','Potencial','Acum. Real','Média/Mês','% Aderência','Situação','Parceiro'].map(h =>
                             <th key={h} style={{ ...s.th, background:'#1a1f2e', position:'sticky', top:0 }}>{h}</th>)}
                         </tr>
                       </thead>
@@ -931,14 +931,13 @@ export default function DashboardVendedor() {
                             : e.situacao === 'abaixo do esperado' ? '#f87171' : '#4b5563';
                           return (
                             <tr key={i} className="row-hover" style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
-                              <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{e.produto_id||'—'}</td>
+                              <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{e.produto_id ?? '—'}</td>
                               <td style={{ ...s.td, fontWeight:600, minWidth:160 }}>{e.nome}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>{e.produto_contratado||'—'}</td>
                               <td style={{ ...s.td, color:'#6b7280', whiteSpace:'nowrap' }}>{e.data_cadastro ? e.data_cadastro.substring(0,10) : '—'}</td>
-                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.parceiro?.nome||'—'}</td>
+                              <td style={{ ...s.td, color:'#60a5fa', fontWeight:600, whiteSpace:'nowrap' }}>{getMesReferencia(e.data_cadastro) || '—'}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>{fmt(e.potencial_movimentacao)}</td>
                               <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.movReal > 0 ? fmt(e.movReal) : '—'}</td>
-                              <td style={{ ...s.td, textAlign:'center', color:'#6b7280' }}>{e.nMeses||0}</td>
                               <td style={{ ...s.td, color:'#34d399', fontWeight:600, whiteSpace:'nowrap' }}>{e.mediaMovMensal > 0 ? fmt(e.mediaMovMensal) : '—'}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>
                                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -948,12 +947,12 @@ export default function DashboardVendedor() {
                                   <span style={{ color:corSit, fontWeight:600, fontSize:'0.75rem' }}>{fmtPct(e.aderencia)}</span>
                                 </div>
                               </td>
-                              <td style={{ ...s.td, color:'#6b7280', whiteSpace:'nowrap' }}>{e.ultimaMov ? fmtMes(e.ultimaMov) : '—'}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>
                                 <span style={{ background:`${corSit}18`, color:corSit, borderRadius:5, padding:'2px 7px', fontSize:'0.68rem', fontWeight:600 }}>
                                   {e.situacao}
                                 </span>
                               </td>
+                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.parceiro?.nome||'—'}</td>
                             </tr>
                           );
                         })}
