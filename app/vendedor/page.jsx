@@ -812,7 +812,7 @@ export default function DashboardVendedor() {
 
                           {/* Tabela expandida */}
                           {aberto2 && (
-                            <div style={{ borderTop:'1px solid #e4e7ef', overflowX:'auto' }}>
+                            <div style={{ borderTop:'1px solid #e4e7ef', overflowX:'auto', overflowY:'auto', maxHeight:320 }}>
                               <table style={{ ...s.table, fontSize:'0.77rem' }}>
                                 <thead>
                                   <tr>
