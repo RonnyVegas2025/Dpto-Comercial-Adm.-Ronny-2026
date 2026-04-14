@@ -148,7 +148,7 @@ export default function AgregadoDetalhe() {
 
   if (loading) return (
     <div style={{...s.page,display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>
-      <div style={{textAlign:'center'}}><div style={s.spin}></div><div style={{color:'#6b7280'}}>Carregando...</div></div>
+      <div style={{textAlign:'center'}}><div style={s.spin}></div><div style={{color:'#8b92b0'}}>Carregando...</div></div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -175,8 +175,8 @@ export default function AgregadoDetalhe() {
             <div style={s.tag}>♠ Vegas Card · Agregados</div>
             <h1 style={s.title}>{empresa.nome}</h1>
             <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4,flexWrap:'wrap'}}>
-              <span style={{color:'#6b7280',fontSize:'0.82rem'}}>{empresa.cnpj||'—'}</span>
-              <span style={{color:'#374151'}}>·</span>
+              <span style={{color:'#8b92b0',fontSize:'0.82rem'}}>{empresa.cnpj||'—'}</span>
+              <span style={{color:'#b0b7cc'}}>·</span>
               <span style={{background:`${corGrupo}18`,color:corGrupo,border:`1px solid ${corGrupo}30`,
                 borderRadius:6,padding:'2px 8px',fontSize:'0.7rem',fontWeight:600}}>
                 {EMOJI_GRUPO[grupoGeral]} {LABEL_GRUPO[grupoGeral]}
@@ -219,8 +219,8 @@ export default function AgregadoDetalhe() {
           {label:'Meses',         val:mesesArray.length, cor:'#60a5fa'},
           {label:'Contratos',     val:contratos.length,  cor:'#a78bfa'},
         ].map(k=>(
-          <div key={k.label} style={{background:'#161a26',border:`1px solid ${k.cor}22`,borderRadius:14,padding:'16px 20px'}}>
-            <div style={{color:'#6b7280',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{k.label}</div>
+          <div key={k.label} style={{background:'#ffffff',border:`1px solid ${k.cor}22`,borderRadius:14,padding:'16px 20px'}}>
+            <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{k.label}</div>
             <div style={{fontSize:'1.2rem',fontWeight:800,color:k.cor}}>{k.val}</div>
           </div>
         ))}
@@ -286,7 +286,7 @@ export default function AgregadoDetalhe() {
           <div style={s.card}>
             <div style={s.cardTitle}>🤝 Acordo Comercial</div>
             {contratos.length === 0
-              ? <div style={{color:'#4b5563',fontSize:'0.85rem',marginTop:12}}>Nenhum contrato cadastrado</div>
+              ? <div style={{color:'#8b92b0',fontSize:'0.85rem',marginTop:12}}>Nenhum contrato cadastrado</div>
               : contratos.map((c,ci) => {
                 const prods = [c.produto_1,c.produto_2,c.produto_3].filter(Boolean);
                 const totalVidas = c.titulares + c.dependentes;
@@ -317,7 +317,7 @@ export default function AgregadoDetalhe() {
                 const corC = COR_GRUPO[grupoContrato];
 
                 return (
-                  <div key={c.id} style={{marginTop:ci===0?16:12,background:'rgba(255,255,255,0.03)',
+                  <div key={c.id} style={{marginTop:ci===0?16:12,background:'#f9fafb',
                     border:`1px solid ${corC}25`,borderRadius:12,padding:'16px 20px'}}>
                     {/* Header contrato */}
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
@@ -325,7 +325,7 @@ export default function AgregadoDetalhe() {
                         <span style={{fontWeight:700,fontSize:'0.9rem'}}>
                           {c.is_combo?'🔗 Combo':('📦 '+prods[0]?.nome)}
                         </span>
-                        {c.combo_nome&&<span style={{color:'#6b7280',fontSize:'0.8rem'}}>{c.combo_nome}</span>}
+                        {c.combo_nome&&<span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{c.combo_nome}</span>}
                       </div>
                       <span style={{background:`${corC}18`,color:corC,border:`1px solid ${corC}30`,
                         borderRadius:6,padding:'2px 8px',fontSize:'0.7rem',fontWeight:700}}>
@@ -365,14 +365,14 @@ export default function AgregadoDetalhe() {
                         {label:'Lucro Estimado',   val:fmt(lucroContrato),     cor:lucroContrato>=0?'#34d399':'#f87171'},
                       ].map(({label,val,cor})=>(
                         <div key={label}>
-                          <div style={{color:'#4b5563',fontSize:'0.62rem',textTransform:'uppercase',
+                          <div style={{color:'#8b92b0',fontSize:'0.62rem',textTransform:'uppercase',
                             letterSpacing:0.8,marginBottom:3}}>{label}</div>
                           <div style={{fontWeight:700,fontSize:'0.85rem',color:cor}}>{val}</div>
                         </div>
                       ))}
                     </div>
 
-                    <div style={{color:'#4b5563',fontSize:'0.7rem',borderTop:'1px solid rgba(255,255,255,0.05)',
+                    <div style={{color:'#8b92b0',fontSize:'0.7rem',borderTop:'1px solid #f0f2f8',
                       paddingTop:8,marginTop:4}}>
                       Início: {fmtDate(c.data_inicio)} · Contrato ID: {c.id?.substring(0,8)}...
                     </div>
@@ -389,19 +389,19 @@ export default function AgregadoDetalhe() {
           <div style={s.card}>
             <div style={s.cardTitle}>📊 Histórico de Fechamentos</div>
             {mesesArray.length === 0
-              ? <div style={{color:'#4b5563',fontSize:'0.85rem',marginTop:12}}>Nenhum fechamento importado ainda</div>
+              ? <div style={{color:'#8b92b0',fontSize:'0.85rem',marginTop:12}}>Nenhum fechamento importado ainda</div>
               : (
                 <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:10}}>
                   {mesesArray.map(([mes, dados])=>{
                     const cor = COR_GRUPO[dados.grupo];
                     const margem = dados.boleto>0?(dados.lucro/dados.boleto)*100:0;
                     return (
-                      <div key={mes} style={{background:'rgba(255,255,255,0.03)',
+                      <div key={mes} style={{background:'#f9fafb',
                         border:`1px solid ${cor}25`,borderRadius:10,padding:'12px 16px'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                          <span style={{fontWeight:700,color:'#e8eaf0'}}>{fmtMes(mes+'-01')}</span>
+                          <span style={{fontWeight:700,color:'#1a1d2e'}}>{fmtMes(mes+'-01')}</span>
                           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                            <span style={{color:'#4b5563',fontSize:'0.72rem'}}>{dados.vidas} vidas</span>
+                            <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>{dados.vidas} vidas</span>
                             <span style={{background:`${cor}18`,color:cor,borderRadius:5,
                               padding:'1px 8px',fontSize:'0.68rem',fontWeight:700}}>
                               {EMOJI_GRUPO[dados.grupo]} {LABEL_GRUPO[dados.grupo]}
@@ -416,13 +416,13 @@ export default function AgregadoDetalhe() {
                             {l:'Margem',v:`${margem.toFixed(1)}%`,c:margem>0?'#34d399':margem<0?'#f87171':'#6b7280'},
                           ].map(({l,v,c})=>(
                             <div key={l}>
-                              <div style={{color:'#4b5563',fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:0.8,marginBottom:2}}>{l}</div>
+                              <div style={{color:'#8b92b0',fontSize:'0.6rem',textTransform:'uppercase',letterSpacing:0.8,marginBottom:2}}>{l}</div>
                               <div style={{fontWeight:700,fontSize:'0.82rem',color:c}}>{v}</div>
                             </div>
                           ))}
                         </div>
                         {/* Barra de margem */}
-                        <div style={{marginTop:10,background:'rgba(255,255,255,0.05)',borderRadius:4,height:5,overflow:'hidden'}}>
+                        <div style={{marginTop:10,background:'#f5f6fa',borderRadius:4,height:5,overflow:'hidden'}}>
                           <div style={{height:'100%',width:`${Math.min(Math.max(margem,0),100)}%`,
                             background:cor,borderRadius:4,transition:'width 0.5s'}}></div>
                         </div>
@@ -476,7 +476,7 @@ export default function AgregadoDetalhe() {
             {/* Lista de ocorrências */}
             <div style={{display:'flex',flexDirection:'column',gap:8,maxHeight:380,overflowY:'auto'}}>
               {historico.length===0
-                ? <div style={{color:'#4b5563',fontSize:'0.85rem',textAlign:'center',padding:24}}>
+                ? <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:24}}>
                     Nenhum registro ainda. Clique em "+ Registrar" para adicionar.
                   </div>
                 : historico.map(h=>{
@@ -484,7 +484,7 @@ export default function AgregadoDetalhe() {
                   const dt = new Date(h.criado_em);
                   const dtStr = `${dt.getDate().toString().padStart(2,'0')}/${(dt.getMonth()+1).toString().padStart(2,'0')}/${dt.getFullYear()} ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
                   return (
-                    <div key={h.id} style={{background:'rgba(255,255,255,0.02)',
+                    <div key={h.id} style={{background:'#f9fafb',
                       border:`1px solid ${tp.cor}20`,borderRadius:10,padding:'12px 14px',
                       display:'flex',gap:12,alignItems:'flex-start'}}>
                       <span style={{fontSize:'1.1rem',marginTop:1}}>{tp.icon}</span>
@@ -498,11 +498,11 @@ export default function AgregadoDetalhe() {
                             </span>
                           </div>
                           <button onClick={()=>deletarOcorrencia(h.id)}
-                            style={{background:'none',border:'none',color:'#374151',cursor:'pointer',
+                            style={{background:'none',border:'none',color:'#b0b7cc',cursor:'pointer',
                               fontSize:'0.8rem',padding:'0 4px',flexShrink:0}}>✕</button>
                         </div>
-                        {h.descricao&&<div style={{color:'#6b7280',fontSize:'0.8rem',marginTop:4,lineHeight:1.5}}>{h.descricao}</div>}
-                        <div style={{color:'#374151',fontSize:'0.7rem',marginTop:5}}>{dtStr}</div>
+                        {h.descricao&&<div style={{color:'#8b92b0',fontSize:'0.8rem',marginTop:4,lineHeight:1.5}}>{h.descricao}</div>}
+                        <div style={{color:'#b0b7cc',fontSize:'0.7rem',marginTop:5}}>{dtStr}</div>
                       </div>
                     </div>
                   );
@@ -516,18 +516,18 @@ export default function AgregadoDetalhe() {
 }
 
 const s = {
-  page:       {maxWidth:1300,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#e8eaf0',background:'#0a0c10',minHeight:'100vh'},
+  page:       {maxWidth:1300,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'},
   header:     {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24,flexWrap:'wrap',gap:16},
   tag:        {color:'#f0b429',fontWeight:800,fontSize:'0.85rem',letterSpacing:2,marginBottom:6,textTransform:'uppercase'},
   title:      {fontSize:'1.6rem',fontWeight:700,margin:'0 0 4px'},
-  btnBack:    {background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'8px 14px',color:'#9ca3af',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'},
+  btnBack:    {background:'#f0f2f8',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',color:'#4a5068',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'},
   btnPri:     {background:'#f0b429',color:'#000',border:'none',borderRadius:10,padding:'9px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'},
-  btnSec:     {background:'rgba(255,255,255,0.07)',color:'#e8eaf0',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,padding:'9px 20px',fontWeight:600,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'},
-  card:       {background:'#161a26',border:'1px solid rgba(255,255,255,0.07)',borderRadius:16,padding:24},
+  btnSec:     {background:'#eaecf2',color:'#1a1d2e',border:'1px solid #e4e7ef',borderRadius:10,padding:'9px 20px',fontWeight:600,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'},
+  card:       {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:16,padding:24},
   cardTitle:  {fontSize:'0.95rem',fontWeight:700},
-  fieldLabel: {color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:5},
-  fieldVal:   {fontSize:'0.9rem',fontWeight:500,color:'#e8eaf0'},
-  input:      {background:'#1e2235',border:'1px solid rgba(255,255,255,0.12)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none',boxSizing:'border-box'},
-  select:     {background:'#1e2235',border:'1px solid rgba(255,255,255,0.12)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
-  spin:       {width:36,height:36,border:'3px solid rgba(255,255,255,0.1)',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
+  fieldLabel: {color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:5},
+  fieldVal:   {fontSize:'0.9rem',fontWeight:500,color:'#1a1d2e'},
+  input:      {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none',boxSizing:'border-box'},
+  select:     {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
+  spin:       {width:36,height:36,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
 };
