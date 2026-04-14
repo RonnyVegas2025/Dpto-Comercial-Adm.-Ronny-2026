@@ -10,7 +10,7 @@ const nav = [
   { href: '/relatorios',       icon: '📋', label: 'Relatórios'    },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas' },
   { href: '/agregados',        icon: '📦', label: 'Agregados'     },
-  { href: '/Importações',    icon: '📥', label: 'Importações'   },
+  { href: '/movimentacões',    icon: '📥', label: 'Importações'   },
 ];
 
 export default function Sidebar() {
