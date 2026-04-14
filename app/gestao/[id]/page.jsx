@@ -141,7 +141,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   if (loading) return (
     <div style={{ ...s.page, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
-      <div style={{ textAlign:'center' }}><div style={s.spin}></div><div style={{ color:'#6b7280' }}>Carregando...</div></div>
+      <div style={{ textAlign:'center' }}><div style={s.spin}></div><div style={{ color:'#8b92b0' }}>Carregando...</div></div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -160,7 +160,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} input:focus,select:focus,textarea:focus{border-color:rgba(240,180,41,0.5)!important;outline:none;}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} input:focus,select:focus,textarea:focus{border-color:#f0b429!important;outline:none;}`}</style>
 
       {/* Header */}
       <div style={s.header}>
@@ -170,8 +170,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
             <div style={s.tag}>♠ Vegas Card · Gestão</div>
             <h1 style={s.title}>{empresa.nome}</h1>
             <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:4 }}>
-              <span style={{ color:'#6b7280', fontSize:'0.82rem' }}>ID {empresa.produto_id}</span>
-              <span style={{ color:'#374151' }}>·</span>
+              <span style={{ color:'#8b92b0', fontSize:'0.82rem' }}>ID {empresa.produto_id}</span>
+              <span style={{ color:'#b0b7cc' }}>·</span>
               <span style={{ background:`${corCat}18`, color:corCat, border:`1px solid ${corCat}30`, borderRadius:6, padding:'2px 8px', fontSize:'0.7rem', fontWeight:600 }}>{empresa.categoria}</span>
               <span style={{ background: empresa.ativo?'rgba(52,211,153,0.1)':'rgba(248,113,113,0.1)', color:empresa.ativo?'#34d399':'#f87171', border:`1px solid ${empresa.ativo?'rgba(52,211,153,0.3)':'rgba(248,113,113,0.3)'}`, borderRadius:6, padding:'2px 8px', fontSize:'0.7rem', fontWeight:600 }}>
                 {empresa.ativo ? '● Ativa' : '● Inativa'}
@@ -272,7 +272,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                     <option value="">— Nenhum —</option>
                     {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
-                : <span style={{ color:'#9ca3af' }}>{empresa.consultor_agregado?.nome || '—'}</span>}
+                : <span style={{ color:'#4a5068' }}>{empresa.consultor_agregado?.nome || '—'}</span>}
             </FormField>
             <FormField label="Parceiro Comercial" editando={editando}>
               {editando
@@ -280,7 +280,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                     <option value="">— Nenhum —</option>
                     {parceiros.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
-                : <span style={{ color:'#9ca3af' }}>{empresa.parceiro?.nome || '—'}</span>}
+                : <span style={{ color:'#4a5068' }}>{empresa.parceiro?.nome || '—'}</span>}
             </FormField>
           </div>
         </div>
@@ -302,7 +302,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 </span>
               </div>
             )}
-            <p style={{ color:'#4b5563', fontSize:'0.78rem', marginTop:12, lineHeight:1.6 }}>
+            <p style={{ color:'#8b92b0', fontSize:'0.78rem', marginTop:12, lineHeight:1.6 }}>
               {empresa.ativo ? 'Esta empresa aparece em todos os relatórios e dashboards.' : 'Esta empresa está oculta dos relatórios e dashboards ativos.'}
             </p>
           </div>
@@ -313,7 +313,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
             <div>
               <div style={s.cardTitle}>📝 Histórico & CRM</div>
-              <div style={{ color:'#4b5563', fontSize:'0.78rem', marginTop:2 }}>
+              <div style={{ color:'#8b92b0', fontSize:'0.78rem', marginTop:2 }}>
                 {historico.length} {historico.length === 1 ? 'ocorrência registrada' : 'ocorrências registradas'}
               </div>
             </div>
@@ -326,7 +326,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
             <div style={{ background:'rgba(240,180,41,0.04)', border:'1px solid rgba(240,180,41,0.15)', borderRadius:12, padding:20, marginBottom:20 }}>
               <div style={{ display:'grid', gridTemplateColumns:'180px 1fr', gap:12, marginBottom:12 }}>
                 <div>
-                  <div style={{ color:'#6b7280', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Tipo</div>
+                  <div style={{ color:'#8b92b0', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Tipo</div>
                   <select style={s.select} value={novaOco.tipo} onChange={e => setNovaOco(n => ({...n, tipo: e.target.value}))}>
                     <option value="contato">📞 Contato</option>
                     <option value="prazo">⏳ Prazo Extra</option>
@@ -337,13 +337,13 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </select>
                 </div>
                 <div>
-                  <div style={{ color:'#6b7280', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Título *</div>
+                  <div style={{ color:'#8b92b0', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Título *</div>
                   <input style={s.input} placeholder="Ex: Cliente solicitou 15 dias a mais para pagamento"
                     value={novaOco.titulo} onChange={e => setNovaOco(n => ({...n, titulo: e.target.value}))} />
                 </div>
               </div>
               <div style={{ marginBottom:14 }}>
-                <div style={{ color:'#6b7280', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Descrição / Detalhes</div>
+                <div style={{ color:'#8b92b0', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Descrição / Detalhes</div>
                 <textarea style={{ ...s.input, height:90, resize:'vertical', lineHeight:1.6 }}
                   placeholder="Detalhes adicionais, valores, datas, responsável..."
                   value={novaOco.descricao} onChange={e => setNovaOco(n => ({...n, descricao: e.target.value}))} />
@@ -356,7 +356,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
           )}
 
           {historico.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'40px 0', color:'#374151', fontSize:'0.85rem' }}>
+            <div style={{ textAlign:'center', padding:'40px 0', color:'#b0b7cc', fontSize:'0.85rem' }}>
               📭 Nenhuma ocorrência registrada ainda — clique em "+ Nova Ocorrência" para começar
             </div>
           ) : (
@@ -366,7 +366,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 const dt    = new Date(h.criado_em);
                 const dtFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
                 return (
-                  <div key={h.id} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderLeft:`3px solid ${cfg.cor}`, borderRadius:10, padding:'14px 18px', display:'flex', gap:14, alignItems:'flex-start' }}>
+                  <div key={h.id} style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderLeft:`3px solid ${cfg.cor}`, borderRadius:10, padding:'14px 18px', display:'flex', gap:14, alignItems:'flex-start' }}>
                     <span style={{ fontSize:'1.3rem', flexShrink:0, marginTop:1 }}>{cfg.icon}</span>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:6 }}>
@@ -375,13 +375,13 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           <span style={{ background:`${cfg.cor}18`, color:cfg.cor, border:`1px solid ${cfg.cor}30`, borderRadius:5, padding:'1px 8px', fontSize:'0.65rem', fontWeight:600, textTransform:'uppercase' }}>{cfg.label}</span>
                         </div>
                         <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-                          <span style={{ color:'#4b5563', fontSize:'0.72rem', whiteSpace:'nowrap' }}>{dtFmt}</span>
+                          <span style={{ color:'#8b92b0', fontSize:'0.72rem', whiteSpace:'nowrap' }}>{dtFmt}</span>
                           <button onClick={() => deletarOcorrencia(h.id)} title="Remover"
                             style={{ background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.15)', borderRadius:6, padding:'3px 9px', color:'#f87171', cursor:'pointer', fontSize:'0.7rem', fontFamily:'inherit' }}>✕</button>
                         </div>
                       </div>
-                      {h.descricao && <p style={{ color:'#9ca3af', fontSize:'0.83rem', margin:'0 0 4px', lineHeight:1.6 }}>{h.descricao}</p>}
-                      <span style={{ color:'#374151', fontSize:'0.7rem' }}>por {h.criado_por}</span>
+                      {h.descricao && <p style={{ color:'#4a5068', fontSize:'0.83rem', margin:'0 0 4px', lineHeight:1.6 }}>{h.descricao}</p>}
+                      <span style={{ color:'#b0b7cc', fontSize:'0.7rem' }}>por {h.criado_por}</span>
                     </div>
                   </div>
                 );
@@ -398,7 +398,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
 function InfoItem({ label, value }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-      <span style={{ color:'#4b5563', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1 }}>{label}</span>
+      <span style={{ color:'#8b92b0', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1 }}>{label}</span>
       <span style={{ fontWeight:500, fontSize:'0.88rem' }}>{value}</span>
     </div>
   );
@@ -414,23 +414,23 @@ function FormField({ label, editando, children }) {
 }
 
 const s = {
-  page:            { maxWidth:1200, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans',sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' },
+  page:            { maxWidth:1200, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans',sans-serif", color:'#1a1d2e', background:'#f5f6fa', minHeight:'100vh' },
   header:          { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28, flexWrap:'wrap', gap:16 },
-  tag:             { color:'#f0b429', fontWeight:800, fontSize:'0.8rem', letterSpacing:2, marginBottom:6, textTransform:'uppercase' },
+  tag:             { color:'#b45309', fontWeight:700, fontSize:'0.8rem', letterSpacing:2, marginBottom:6, textTransform:'uppercase' },
   title:           { fontSize:'1.6rem', fontWeight:700, margin:0 },
-  btnBack:         { background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'8px 14px', color:'#9ca3af', cursor:'pointer', fontSize:'0.82rem', fontFamily:'inherit' },
+  btnBack:         { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:8, padding:'8px 14px', color:'#4a5068', cursor:'pointer', fontSize:'0.82rem', fontFamily:'inherit' },
   btnPri:          { background:'#f0b429', color:'#000', border:'none', borderRadius:10, padding:'10px 22px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem', fontFamily:'inherit' },
-  btnSec:          { background:'rgba(255,255,255,0.07)', color:'#e8eaf0', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'10px 18px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem', fontFamily:'inherit' },
+  btnSec:          { background:'#eaecf2', color:'#1a1d2e', border:'1px solid #e4e7ef', borderRadius:10, padding:'10px 18px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem', fontFamily:'inherit' },
   erroBox:         { background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10, padding:'12px 16px', marginBottom:20, color:'#f87171', fontSize:'0.85rem' },
   grid:            { display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 },
-  card:            { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 },
-  cardTitle:       { fontSize:'0.72rem', fontWeight:700, marginBottom:16, color:'#6b7280', textTransform:'uppercase', letterSpacing:1 },
+  card:            { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:16, padding:24 },
+  cardTitle:       { fontSize:'0.72rem', fontWeight:700, marginBottom:16, color:'#8b92b0', textTransform:'uppercase', letterSpacing:1 },
   infoGrid:        { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 },
   formGrid:        { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 },
-  input:           { background:'#1e2235', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'9px 12px', color:'#e8eaf0', fontSize:'0.88rem', fontFamily:'inherit', width:'100%', boxSizing:'border-box' },
-  select:          { background:'#1e2235', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'9px 12px', color:'#e8eaf0', fontSize:'0.88rem', fontFamily:'inherit', width:'100%', cursor:'pointer', boxSizing:'border-box' },
-  statusBtn:       { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'12px 24px', color:'#6b7280', cursor:'pointer', fontWeight:600, fontSize:'0.88rem', fontFamily:'inherit', flex:1 },
+  input:           { background:'#ffffff', border:'1px solid #d1d5e8', borderRadius:8, padding:'9px 12px', color:'#1a1d2e', fontSize:'0.88rem', fontFamily:'inherit', width:'100%', boxSizing:'border-box' },
+  select:          { background:'#ffffff', border:'1px solid #d1d5e8', borderRadius:8, padding:'9px 12px', color:'#1a1d2e', fontSize:'0.88rem', fontFamily:'inherit', width:'100%', cursor:'pointer', boxSizing:'border-box' },
+  statusBtn:       { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:10, padding:'12px 24px', color:'#8b92b0', cursor:'pointer', fontWeight:600, fontSize:'0.88rem', fontFamily:'inherit', flex:1 },
   statusBtnAtivo:  { background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.3)', color:'#34d399' },
   statusBtnInativo:{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.3)', color:'#f87171' },
-  spin:            { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
+  spin:            { width:36, height:36, border:'3px solid #e4e7ef', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
 };
