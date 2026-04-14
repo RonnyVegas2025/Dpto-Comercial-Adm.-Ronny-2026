@@ -1086,70 +1086,12 @@ export default function DashboardVendedor() {
                   <span style={{ color: '#8b92b0', fontSize: '0.8rem' }}>{parceirosArray.length} parceiros</span>
                 </div>
 
-                {/* Cards resumo por parceiro */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
-                  {parceirosArray.filter(p => p.nome !== 'Sem Parceiro').map((p, i) => {
-                    const cores = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6'];
-                    const cor = cores[i % cores.length];
-                    const pctMov = p.potencial > 0 ? (p.movReal / p.potencial) * 100 : 0;
-                    const meses  = Math.round(p.mesesMedios);
-                    const resultadoMensal = meses > 0 ? p.resultado / meses : p.resultado;
-                    const corAder = pctMov >= 100 ? '#34d399' : pctMov >= 70 ? '#f0b429' : '#f87171';
-                    return (
-                      <div key={i} style={{ background: '#f9fafb', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
-
-                        {/* Cabeçalho: nome + badge contratos */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1a1d2e', flex: 1, paddingRight: 8, lineHeight: 1.3 }}>{p.nome}</div>
-                          <span style={{ background: `${cor}18`, color: cor, borderRadius: 6, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {p.contratos} empresa{p.contratos > 1 ? 's' : ''}
-                          </span>
-                        </div>
-
-                        {/* Destaque principal: Média Mensal Real */}
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>Média Mensal Real</div>
-                          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#60a5fa' }}>{fmt(p.mediaMovMensal)}</div>
-                          <div style={{ color: '#8b92b0', fontSize: '0.68rem', marginTop: 2 }}>base {meses} {meses === 1 ? 'mês' : 'meses'} · acum. {fmt(p.movReal)}</div>
-                        </div>
-
-                        {/* Divisor */}
-                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', marginBottom: 10 }}></div>
-
-                        {/* Comparativo mensal: esperado vs real */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-                          <div>
-                            <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Esperado/mês</div>
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: cor }}>{fmt(resultadoMensal)}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Potencial/mês</div>
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#4a5068' }}>{fmt(p.potencialMensal)}</div>
-                          </div>
-                        </div>
-
-                        {/* Barra de aderência */}
-                        <div style={{ background: '#f0f2f8', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 4 }}>
-                          <div style={{ background: corAder, height: '100%', width: `${Math.min(pctMov, 100)}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
-                        </div>
-                        <div style={{ color: corAder, fontSize: '0.68rem', fontWeight: 600, textAlign: 'right' }}>
-                          {fmtPct(pctMov)} da meta acumulada
-                        </div>
-
-                      </div>
-                    );
-                  })}
+                {/* Tabela detalhada */}
+                <div style={{ fontSize: '0.72rem', color: '#8b92b0', background: '#f9fafb', border:'1px solid #e4e7ef', borderRadius: 8, padding: '6px 12px', marginBottom:16, display:'inline-block' }}>
+                  📌 Potencial e Resultado acumulados (× meses importados) — mesma base da Mov. Real
                 </div>
 
-                {/* Tabela detalhada */}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#4a5068' }}>DETALHAMENTO COMPLETO</div>
-                    <div style={{ fontSize: '0.72rem', color: '#8b92b0', background: '#f9fafb', borderRadius: 6, padding: '4px 10px' }}>
-                      📌 Potencial e Resultado acumulados (× meses importados) — mesma base da Mov. Real
-                    </div>
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflowX: 'auto' }}>
                     <table style={s.table}>
                       <thead>
                         <tr>
@@ -1193,7 +1135,6 @@ export default function DashboardVendedor() {
                       </tbody>
                     </table>
                   </div>
-                </div>
 
                 {parceirosArray.length === 0 && <div style={s.semDados}>Nenhum parceiro registrado</div>}
               </div>
