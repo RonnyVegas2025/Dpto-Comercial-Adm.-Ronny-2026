@@ -450,7 +450,7 @@ export default function Agregados() {
               >
                 <div style={{ fontSize:'2.5rem', marginBottom:12 }}>📋</div>
                 <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:6 }}>Cadastro + Fechamento</div>
-                <div style={{ color:'#6b7280', fontSize:'0.82rem', lineHeight:1.6 }}>
+                <div style={{ color:'#8b92b0', fontSize:'0.82rem', lineHeight:1.6 }}>
                   Importa empresas, contratos e fechamento mensal<br/>
                   de uma só vez pelo modelo de cadastro
                 </div>
@@ -466,7 +466,7 @@ export default function Agregados() {
                 background:'rgba(52,211,153,0.02)', cursor:'not-allowed', opacity:0.5 }}>
                 <div style={{ fontSize:'2.5rem', marginBottom:12 }}>📊</div>
                 <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:6 }}>Fechamento Mensal</div>
-                <div style={{ color:'#6b7280', fontSize:'0.82rem', lineHeight:1.6 }}>
+                <div style={{ color:'#8b92b0', fontSize:'0.82rem', lineHeight:1.6 }}>
                   Atualiza titulares e boleto do mês para<br/>empresas já cadastradas
                 </div>
                 <div style={{ marginTop:14, color:'#34d399', fontSize:'0.75rem', fontWeight:600 }}>
@@ -485,7 +485,7 @@ export default function Agregados() {
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12 }}>
                 <div>
                   <div style={s.cardTitle}>✅ {preview.length} registros encontrados</div>
-                  <div style={{ color:'#6b7280', fontSize:'0.8rem', marginTop:4 }}>
+                  <div style={{ color:'#8b92b0', fontSize:'0.8rem', marginTop:4 }}>
                     {preview.filter(r=>r.isCombo).length} combos · {preview.filter(r=>r.boleto===0).length} retenções
                   </div>
                 </div>
@@ -496,12 +496,12 @@ export default function Agregados() {
                   </button>
                 </div>
               </div>
-              <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:420, border:'1px solid rgba(255,255,255,0.05)', borderRadius:8 }}>
+              <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:420, border:'1px solid #f0f2f8', borderRadius:8 }}>
                 <table style={s.table}>
                   <thead>
                     <tr>
                       {['Empresa','CNPJ','Vendedor','Produto(s)','Titulares','Boleto','Mês Ref.','Grupo'].map(h =>
-                        <th key={h} style={{ ...s.th, background:'#1a1f2e', position:'sticky', top:0 }}>{h}</th>)}
+                        <th key={h} style={{ ...s.th, background:'#f9fafb', position:'sticky', top:0 }}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -509,9 +509,9 @@ export default function Agregados() {
                       const grupo = r.boleto===0?'retencao': 'lucrativo';
                       const cor = corGrupo(grupo);
                       return (
-                        <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                        <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
                           <td style={{ ...s.td, fontWeight:600 }}>{r.nome}</td>
-                          <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{r.cnpj}</td>
+                          <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.72rem' }}>{r.cnpj}</td>
                           <td style={s.td}>{r.vend}</td>
                           <td style={s.td}>
                             <span style={{ color: r.isCombo?'#a78bfa':'#60a5fa', fontWeight:600 }}>
@@ -520,7 +520,7 @@ export default function Agregados() {
                           </td>
                           <td style={{ ...s.td, textAlign:'center' }}>{r.tit1+r.tit2+r.tit3}</td>
                           <td style={{ ...s.td, color: r.boleto>0?'#34d399':'#6b7280' }}>{fmt(r.boleto)}</td>
-                          <td style={{ ...s.td, color:'#6b7280' }}>{fmtMes(r.mesRef)}</td>
+                          <td style={{ ...s.td, color:'#8b92b0' }}>{fmtMes(r.mesRef)}</td>
                           <td style={s.td}>
                             <span style={{ background:`${cor}18`, color:cor, borderRadius:5,
                               padding:'2px 8px', fontSize:'0.68rem', fontWeight:700 }}>
@@ -539,7 +539,7 @@ export default function Agregados() {
           {status === 'importing' && (
             <div style={s.stCard}><div style={s.spin}></div>
               <div style={{ fontWeight:600, marginBottom:8 }}>Importando {preview.length} registros...</div>
-              <div style={{ color:'#6b7280', fontSize:'0.85rem' }}>Aguarde alguns segundos</div>
+              <div style={{ color:'#8b92b0', fontSize:'0.85rem' }}>Aguarde alguns segundos</div>
             </div>
           )}
 
@@ -580,7 +580,7 @@ export default function Agregados() {
         <div>
           {/* Filtro de mês */}
           <div style={{ display:'flex', gap:8, marginBottom:20, alignItems:'center', flexWrap:'wrap' }}>
-            <span style={{ color:'#6b7280', fontSize:'0.78rem', marginRight:4 }}>COMPETÊNCIA:</span>
+            <span style={{ color:'#8b92b0', fontSize:'0.78rem', marginRight:4 }}>COMPETÊNCIA:</span>
             <button onClick={()=>setMesFiltro('')}
               style={{ ...s.mesBt, ...(mesFiltro===''?s.mesBtAtivo:{}) }}>🌐 Todos</button>
             {meses.map(m => (
@@ -592,7 +592,7 @@ export default function Agregados() {
           {loadDash ? (
             <div style={{ textAlign:'center', padding:64 }}><div style={s.spin}></div></div>
           ) : !dados || dados.length === 0 ? (
-            <div style={{ ...s.stCard, color:'#6b7280' }}>
+            <div style={{ ...s.stCard, color:'#8b92b0' }}>
               Nenhum dado encontrado. <button style={{ ...s.btnPri, marginLeft:16 }}
                 onClick={()=>setAbaPrinc('importar')}>Importar dados →</button>
             </div>
@@ -607,10 +607,10 @@ export default function Agregados() {
                   { label:'Custo Total',     val: fmt(kpis.custo),      cor:'#f87171', icone:'💸' },
                   { label:'Lucro Líquido',   val: fmt(kpis.lucro),      cor: kpis.lucro>=0?'#34d399':'#f87171', icone: kpis.lucro>=0?'📈':'📉' },
                 ].map(k => (
-                  <div key={k.label} style={{ background:'#161a26', border:`1px solid ${k.cor}22`,
+                  <div key={k.label} style={{ background:'#ffffff', border:`1px solid ${k.cor}22`,
                     borderRadius:14, padding:'16px 20px' }}>
                     <div style={{ fontSize:'1.2rem', marginBottom:6 }}>{k.icone}</div>
-                    <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase',
+                    <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase',
                       letterSpacing:1, marginBottom:4 }}>{k.label}</div>
                     <div style={{ fontSize:'1.2rem', fontWeight:800, color:k.cor }}>{k.val}</div>
                   </div>
@@ -627,24 +627,24 @@ export default function Agregados() {
                   const d = kpis.grupos[g.key] || {b:0,c:0,l:0,n:0};
                   const cor = corGrupo(g.key);
                   return (
-                    <div key={g.key} style={{ background:'#161a26', border:`1px solid ${cor}30`,
+                    <div key={g.key} style={{ background:'#ffffff', border:`1px solid ${cor}30`,
                       borderRadius:14, padding:'20px 22px' }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:14 }}>
                         <div>
                           <div style={{ fontSize:'1.3rem' }}>{g.emoji}</div>
                           <div style={{ fontWeight:700, fontSize:'0.95rem', color:cor, marginTop:4 }}>{g.label}</div>
-                          <div style={{ color:'#4b5563', fontSize:'0.7rem' }}>{g.desc}</div>
+                          <div style={{ color:'#8b92b0', fontSize:'0.7rem' }}>{g.desc}</div>
                         </div>
                         <div style={{ background:`${cor}18`, color:cor, borderRadius:10,
                           padding:'4px 14px', fontWeight:800, fontSize:'1.2rem',
                           display:'flex', alignItems:'center' }}>{d.n}</div>
                       </div>
-                      <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:12,
+                      <div style={{ borderTop:'1px solid #e4e7ef', paddingTop:12,
                         display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                         {[['Boleto',fmt(d.b),'#e8eaf0'],['Custo',fmt(d.c),'#f87171'],
                           ['Lucro',fmt(d.l), d.l>=0?'#34d399':'#f87171']].map(([lbl,val,c])=>(
                           <div key={lbl}>
-                            <div style={{ color:'#4b5563', fontSize:'0.6rem', textTransform:'uppercase',
+                            <div style={{ color:'#8b92b0', fontSize:'0.6rem', textTransform:'uppercase',
                               letterSpacing:0.8, marginBottom:3 }}>{lbl}</div>
                             <div style={{ fontWeight:700, fontSize:'0.78rem', color:c }}>{val}</div>
                           </div>
@@ -676,7 +676,7 @@ export default function Agregados() {
                       const pctBoleto = kpis.boleto > 0 ? (d.b/kpis.boleto)*100 : 0;
                       const pctCusto  = kpis.custo  > 0 ? (d.c/kpis.custo)*100  : 0;
                       return (
-                        <div key={g} style={{ background:'rgba(255,255,255,0.02)',
+                        <div key={g} style={{ background:'#f9fafb',
                           border:`1px solid ${cor}20`, borderRadius:12, padding:'18px 22px' }}>
                           <div style={{ display:'flex', justifyContent:'space-between',
                             alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
@@ -693,10 +693,10 @@ export default function Agregados() {
                             <div>
                               <div style={{ display:'flex', justifyContent:'space-between',
                                 marginBottom:4, fontSize:'0.72rem' }}>
-                                <span style={{ color:'#6b7280' }}>Receita Boletos</span>
+                                <span style={{ color:'#8b92b0' }}>Receita Boletos</span>
                                 <span style={{ color:'#34d399', fontWeight:600 }}>{fmt(d.b)} ({pctBoleto.toFixed(0)}%)</span>
                               </div>
-                              <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:8, overflow:'hidden' }}>
+                              <div style={{ background:'#eaecf2', borderRadius:4, height:8, overflow:'hidden' }}>
                                 <div style={{ background:'#34d399', height:'100%',
                                   width:`${pctBoleto}%`, borderRadius:4 }}></div>
                               </div>
@@ -704,10 +704,10 @@ export default function Agregados() {
                             <div>
                               <div style={{ display:'flex', justifyContent:'space-between',
                                 marginBottom:4, fontSize:'0.72rem' }}>
-                                <span style={{ color:'#6b7280' }}>Custo Vegas</span>
+                                <span style={{ color:'#8b92b0' }}>Custo Vegas</span>
                                 <span style={{ color:'#f87171', fontWeight:600 }}>{fmt(d.c)} ({pctCusto.toFixed(0)}%)</span>
                               </div>
-                              <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:8, overflow:'hidden' }}>
+                              <div style={{ background:'#eaecf2', borderRadius:4, height:8, overflow:'hidden' }}>
                                 <div style={{ background:'#f87171', height:'100%',
                                   width:`${pctCusto}%`, borderRadius:4 }}></div>
                               </div>
@@ -735,7 +735,7 @@ export default function Agregados() {
                           const margem = p.boleto>0?(p.lucro/p.boleto)*100:0;
                           const corM = margem>0?'#34d399':margem<0?'#f87171':'#6b7280';
                           return (
-                            <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                            <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
                               <td style={{ ...s.td, fontWeight:600, color:'#a78bfa' }}>{p.nome}</td>
                               <td style={{ ...s.td, textAlign:'center' }}>{p.n}</td>
                               <td style={{ ...s.td, textAlign:'center' }}>{p.vidas.toLocaleString('pt-BR')}</td>
@@ -768,12 +768,12 @@ export default function Agregados() {
                           const corM = margem>0?'#34d399':margem<0?'#f87171':'#6b7280';
                           const maxB = Math.max(...porConsultor.map(x=>x.boleto), 1);
                           return (
-                            <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                            <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
                               <td style={{ ...s.td, fontWeight:600 }}>{c.nome}</td>
                               <td style={{ ...s.td, textAlign:'center' }}>{c.n}</td>
                               <td style={s.td}>
                                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                                  <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:3,
+                                  <div style={{ background:'#eaecf2', borderRadius:3,
                                     height:6, width:80, overflow:'hidden' }}>
                                     <div style={{ background:'#34d399', height:'100%',
                                       width:`${(c.boleto/maxB)*100}%` }}></div>
@@ -811,24 +811,24 @@ export default function Agregados() {
                       <button onClick={()=>{setBusca('');setFiltroGrupo('');}}
                         style={{ ...s.btnSec, padding:'7px 14px', fontSize:'0.8rem' }}>✕ Limpar</button>
                     )}
-                    <span style={{ color:'#4b5563', fontSize:'0.75rem', marginLeft:'auto' }}>
+                    <span style={{ color:'#8b92b0', fontSize:'0.75rem', marginLeft:'auto' }}>
                       {empresasFiltradas.length} empresas
                     </span>
                   </div>
                   <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'55vh',
-                    border:'1px solid rgba(255,255,255,0.05)', borderRadius:8 }}>
+                    border:'1px solid #f0f2f8', borderRadius:8 }}>
                     <table style={s.table}>
                       <thead><tr>
                         {['Empresa','CNPJ','Consultor','Produto(s)','Vidas','Boleto','Custo','Lucro','Grupo'].map(h=>
-                          <th key={h} style={{ ...s.th, background:'#1a1f2e', position:'sticky', top:0 }}>{h}</th>)}
+                          <th key={h} style={{ ...s.th, background:'#f9fafb', position:'sticky', top:0 }}>{h}</th>)}
                       </tr></thead>
                       <tbody>
                         {empresasFiltradas.map((e,i) => {
                           const cor = corGrupo(e.grupo);
                           return (
-                            <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
+                            <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
                               <td style={{ ...s.td, fontWeight:600, minWidth:180 }}>{e.nome}</td>
-                              <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{e.cnpj}</td>
+                              <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.72rem' }}>{e.cnpj}</td>
                               <td style={s.td}>{e.consultor||'—'}</td>
                               <td style={{ ...s.td, color:'#a78bfa', fontSize:'0.78rem' }}>
                                 {[...new Set(e.produtos)].join(' · ')}
@@ -861,26 +861,26 @@ export default function Agregados() {
 }
 
 const s = {
-  page:       { maxWidth:1300, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans',sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' },
+  page:       { maxWidth:1300, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans',sans-serif", color:'#1a1d2e', background:'#f5f6fa', minHeight:'100vh' },
   header:     { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28, flexWrap:'wrap', gap:16 },
-  tag:        { color:'#f0b429', fontWeight:800, fontSize:'0.9rem', letterSpacing:2, marginBottom:8, textTransform:'uppercase' },
+  tag:        { color:'#b45309', fontWeight:700, fontSize:'0.9rem', letterSpacing:2, marginBottom:8, textTransform:'uppercase' },
   title:      { fontSize:'1.8rem', fontWeight:700, margin:'0 0 6px' },
-  sub:        { color:'#6b7280', fontSize:'0.9rem' },
-  btnTab:     { background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'9px 20px', color:'#6b7280', cursor:'pointer', fontSize:'0.85rem', fontWeight:600, fontFamily:'inherit' },
+  sub:        { color:'#8b92b0', fontSize:'0.9rem' },
+  btnTab:     { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:10, padding:'9px 20px', color:'#8b92b0', cursor:'pointer', fontSize:'0.85rem', fontWeight:600, fontFamily:'inherit' },
   btnTabAtivo:{ background:'rgba(240,180,41,0.12)', border:'1px solid rgba(240,180,41,0.35)', color:'#f0b429' },
   importCard: { border:'2px dashed', borderRadius:16, padding:'40px 32px', textAlign:'center', cursor:'pointer', transition:'all 0.2s' },
-  card:       { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24, marginBottom:20 },
+  card:       { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:16, padding:24, marginBottom:20 },
   cardTitle:  { fontSize:'1rem', fontWeight:700 },
-  stCard:     { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:48, textAlign:'center', marginBottom:24 },
-  spin:       { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite', display:'block' },
+  stCard:     { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:16, padding:48, textAlign:'center', marginBottom:24 },
+  spin:       { width:36, height:36, border:'3px solid #e4e7ef', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite', display:'block' },
   btnPri:     { background:'#f0b429', color:'#000', border:'none', borderRadius:10, padding:'10px 22px', fontWeight:700, cursor:'pointer', fontSize:'0.9rem', fontFamily:'inherit' },
-  btnSec:     { background:'rgba(255,255,255,0.07)', color:'#e8eaf0', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'10px 22px', fontWeight:600, cursor:'pointer', fontSize:'0.9rem', fontFamily:'inherit' },
-  mesBt:      { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'6px 14px', color:'#6b7280', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' },
+  btnSec:     { background:'#eaecf2', color:'#1a1d2e', border:'1px solid #e4e7ef', borderRadius:10, padding:'10px 22px', fontWeight:600, cursor:'pointer', fontSize:'0.9rem', fontFamily:'inherit' },
+  mesBt:      { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:8, padding:'6px 14px', color:'#8b92b0', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' },
   mesBtAtivo: { background:'rgba(240,180,41,0.12)', border:'1px solid rgba(240,180,41,0.3)', color:'#f0b429', fontWeight:700 },
-  tab:        { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'8px 16px', color:'#6b7280', cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit' },
+  tab:        { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:10, padding:'8px 16px', color:'#8b92b0', cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit' },
   tabAtiva:   { background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.3)', color:'#34d399' },
   table:      { width:'100%', borderCollapse:'collapse', fontSize:'0.79rem' },
-  th:         { padding:'8px 12px', textAlign:'left', color:'#6b7280', fontWeight:500, borderBottom:'1px solid rgba(255,255,255,0.07)', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.67rem', letterSpacing:0.5 },
-  td:         { padding:'9px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
-  inputFiltro:{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 11px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
+  th:         { padding:'8px 12px', textAlign:'left', color:'#8b92b0', fontWeight:500, borderBottom:'1px solid #e4e7ef', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.67rem', letterSpacing:0.5 },
+  td:         { padding:'9px 12px', borderBottom:'1px solid #f0f2f8', whiteSpace:'nowrap' },
+  inputFiltro:{ background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 11px', color:'#1a1d2e', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
 };
