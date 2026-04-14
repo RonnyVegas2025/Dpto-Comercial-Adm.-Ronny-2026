@@ -137,7 +137,7 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
   const inputId = `fi-${titulo.replace(/\s/g,'')}`;
 
   return (
-    <div style={{ background:'#111420', border:`1px solid ${status==='done' ? cor+'44' : 'rgba(255,255,255,0.07)'}`, borderRadius:20, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+    <div style={{ background:'#ffffff', border:`1px solid ${status==='done' ? cor+'66' : '#e4e7ef'}`, borderRadius:12, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
 
       {/* Cabeçalho */}
       <div style={{ padding:'24px 24px 20px', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
@@ -145,12 +145,12 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
           <div style={{ width:44, height:44, borderRadius:12, background:`${cor}18`, border:`1px solid ${cor}33`,
             display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem' }}>{icon}</div>
           <div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:'1rem', color:'#e8eaf0' }}>{titulo}</div>
-            <div style={{ color:'#4b5563', fontSize:'0.75rem', marginTop:2 }}>{desc}</div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:'1rem', color:'#1a1d2e' }}>{titulo}</div>
+            <div style={{ color:'#8b92b0', fontSize:'0.75rem', marginTop:2 }}>{desc}</div>
           </div>
         </div>
         {/* Colunas esperadas */}
-        <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, padding:'10px 14px', fontSize:'0.7rem', color:'#4b5563', lineHeight:1.7 }}>
+        <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8, padding:'10px 14px', fontSize:'0.7rem', color:'#8b92b0', lineHeight:1.7 }}>
           <span style={{ color: cor, fontWeight:600 }}>Colunas: </span>{colunas}
         </div>
       </div>
@@ -168,10 +168,10 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
             onDrop={onDrop}
             onClick={()=>document.getElementById(inputId).click()}>
             <div style={{ fontSize:'2rem', marginBottom:10 }}>📂</div>
-            <div style={{ fontWeight:600, fontSize:'0.9rem', color:'#9ca3af', marginBottom:4 }}>
+            <div style={{ fontWeight:600, fontSize:'0.9rem', color:'#4a5068', marginBottom:4 }}>
               {status==='parsing' ? 'Lendo arquivo...' : (xlsxLib ? 'Arraste o Excel aqui ou clique' : 'Carregando...')}
             </div>
-            <div style={{ color:'#4b5563', fontSize:'0.75rem' }}>.xlsx ou .xls</div>
+            <div style={{ color:'#8b92b0', fontSize:'0.75rem' }}>.xlsx ou .xls</div>
             <input id={inputId} type="file" accept=".xlsx,.xls" style={{display:'none'}}
               onChange={e=>handleFile(e.target.files[0])} />
           </div>
@@ -184,9 +184,9 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
             {resumo && (
               <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
                 {resumo.map(r => (
-                  <div key={r.label} style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 16px', flex:1, minWidth:100 }}>
-                    <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{r.label}</div>
-                    <div style={{ fontWeight:700, color: r.cor||'#e8eaf0', fontSize:'1rem' }}>{r.val}</div>
+                  <div key={r.label} style={{ background:'#f5f6fa', borderRadius:8, padding:'10px 16px', border:'1px solid #e4e7ef', flex:1, minWidth:100 }}>
+                    <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{r.label}</div>
+                    <div style={{ fontWeight:700, color: r.cor||'#1a1d2e', fontSize:'1rem' }}>{r.val}</div>
                   </div>
                 ))}
               </div>
@@ -195,18 +195,18 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
             <div style={{ overflowX:'auto', marginBottom:16, maxHeight:220, overflowY:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.75rem' }}>
                 <thead>
-                  <tr>{previewCols.map(c=><th key={c} style={{ padding:'6px 10px', textAlign:'left', color:'#4b5563', borderBottom:'1px solid rgba(255,255,255,0.06)', whiteSpace:'nowrap', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:0.5 }}>{c}</th>)}</tr>
+                  <tr>{previewCols.map(c=><th key={c} style={{ padding:'6px 10px', textAlign:'left', color:'#8b92b0', borderBottom:'1px solid #e4e7ef', background:'#f9fafb', whiteSpace:'nowrap', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:0.5 }}>{c}</th>)}</tr>
                 </thead>
                 <tbody>
                   {preview.slice(0,8).map((r,i)=>(
-                    <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.02)'}:{}}>
-                      {previewCols.map(c=><td key={c} style={{ padding:'7px 10px', borderBottom:'1px solid rgba(255,255,255,0.03)', whiteSpace:'nowrap', color:'#9ca3af' }}>{r[c]??''}</td>)}
+                    <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
+                      {previewCols.map(c=><td key={c} style={{ padding:'7px 10px', borderBottom:'1px solid #f0f2f8', whiteSpace:'nowrap', color:'#4a5068' }}>{r[c]??''}</td>)}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div style={{ fontSize:'0.75rem', color:'#4b5563', marginBottom:14 }}>
+            <div style={{ fontSize:'0.75rem', color:'#8b92b0', marginBottom:14 }}>
               📄 {file?.name} · {preview.length} registros
             </div>
             <div style={{ display:'flex', gap:10 }}>
@@ -220,7 +220,7 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
         {status==='importing' && (
           <div style={{ textAlign:'center', padding:'32px 0' }}>
             <div style={{ width:36, height:36, border:`3px solid ${cor}33`, borderTop:`3px solid ${cor}`, borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' }}></div>
-            <div style={{ fontWeight:600, color:'#9ca3af', fontSize:'0.9rem' }}>Importando...</div>
+            <div style={{ fontWeight:600, color:'#4a5068', fontSize:'0.9rem' }}>Importando...</div>
           </div>
         )}
 
@@ -228,9 +228,9 @@ function ImportCard({ icon, titulo, desc, cor, colunas, onFile, status, preview,
         {status==='done' && (
           <div style={{ textAlign:'center', padding:'16px 0' }}>
             <div style={{ fontSize:'2.5rem', marginBottom:10 }}>✅</div>
-            <div style={{ fontWeight:700, fontSize:'1rem', color:'#e8eaf0', marginBottom:4 }}>Importação concluída!</div>
+            <div style={{ fontWeight:700, fontSize:'1rem', color:'#1a1d2e', marginBottom:4 }}>Importação concluída!</div>
             <div style={{ color: cor, fontSize:'1.4rem', fontWeight:800, marginBottom:4 }}>{result?.inserted}</div>
-            <div style={{ color:'#4b5563', fontSize:'0.75rem', marginBottom: result?.errors?.length ? 12 : 20 }}>registros salvos</div>
+            <div style={{ color:'#8b92b0', fontSize:'0.75rem', marginBottom: result?.errors?.length ? 12 : 20 }}>registros salvos</div>
             {result?.errors?.length > 0 && (
               <div style={{ background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10, padding:12, marginBottom:16, color:'#f87171', fontSize:'0.75rem', textAlign:'left' }}>
                 {result.errors.map((e,i)=><div key={i}>• {e}</div>)}
@@ -271,7 +271,18 @@ export default function Movimentacoes() {
   // ── MOVIMENTAÇÃO REAL ─────────────────────────────────────────────────────
   function onFileMov(f, raw, err) {
     if (err || !raw) { upd(setMov, { status:'error', result:{inserted:0,errors:[err||'Erro ao ler']} }); return; }
-    const parsed = raw.map(parseRowMovimentacao).filter(r => r.produto_id && r.competencia);
+
+    // Parse sem filtrar por competencia ainda
+    const allParsed = raw.map(parseRowMovimentacao).filter(r => r.produto_id);
+
+    // Detecta o mês da planilha — pega o primeiro que tiver competencia preenchida
+    const mesDetectado = allParsed.find(r => r.competencia)?.competencia || null;
+
+    // Propaga o mês para todas as linhas sem competencia
+    const parsed = allParsed
+      .map(r => ({ ...r, competencia: r.competencia || mesDetectado }))
+      .filter(r => r.competencia); // descarta só se não houver mês em nenhuma linha
+
     const mesRef = parsed[0]?.competencia;
     const totalMov = parsed.reduce((s,r)=>s+r.movimentacao_real,0);
     upd(setMov, {
@@ -315,7 +326,12 @@ export default function Movimentacoes() {
   // ── META ──────────────────────────────────────────────────────────────────
   function onFileMeta(f, raw, err) {
     if (err || !raw) { upd(setMeta, { status:'error', result:{inserted:0,errors:[err||'Erro ao ler']} }); return; }
-    const parsed = raw.map(parseRowMeta).filter(r => r.produto_id && r.competencia && r.valor_meta > 0);
+
+    const allParsed = raw.map(parseRowMeta).filter(r => r.produto_id);
+    const mesDetectado = allParsed.find(r => r.competencia)?.competencia || null;
+    const parsed = allParsed
+      .map(r => ({ ...r, competencia: r.competencia || mesDetectado }))
+      .filter(r => r.competencia && r.valor_meta > 0);
     const mesRef = parsed[0]?.competencia;
     const totalMeta = parsed.reduce((s,r)=>s+r.valor_meta,0);
     upd(setMeta, {
@@ -442,13 +458,13 @@ export default function Movimentacoes() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth:1200, margin:'0 auto', padding:'40px 24px',
-      fontFamily:"'DM Sans',sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' }}>
+      fontFamily:"'DM Sans',sans-serif", color:'#1a1d2e', background:'#f5f6fa', minHeight:'100vh' }}>
 
       <div style={{ marginBottom:40 }}>
         <div style={{ color:'#f0b429', fontFamily:"'Syne',sans-serif", fontWeight:800,
           fontSize:'0.75rem', letterSpacing:3, textTransform:'uppercase', marginBottom:14 }}>♠ Vegas Card</div>
-        <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:'2rem', fontWeight:700, margin:'0 0 10px' }}>Movimentações</h1>
-        <p style={{ color:'#4b5563', fontSize:'0.9rem', margin:0 }}>
+        <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:'1.6rem', fontWeight:700, margin:'0 0 8px', color:'#1a1d2e' }}>Importações</h1>
+        <p style={{ color:'#8b92b0', fontSize:'0.875rem', margin:0 }}>
           Importe movimentação real, metas e novas empresas — tudo em um lugar
         </p>
       </div>
@@ -492,4 +508,4 @@ export default function Movimentacoes() {
 }
 
 const sBtnPri = (cor) => ({ background:cor, color: cor==='#f0b429'?'#000':'#fff', border:'none', borderRadius:10, padding:'10px 20px', fontWeight:700, cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit', width:'100%' });
-const sBtnSec = { background:'rgba(255,255,255,0.06)', color:'#9ca3af', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'10px 20px', fontWeight:600, cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit', width:'100%' };
+const sBtnSec = { background:'#f5f6fa', color:'#4a5068', border:'1px solid #e4e7ef', borderRadius:10, padding:'10px 20px', fontWeight:600, cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit', width:'100%' };
