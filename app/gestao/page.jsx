@@ -179,16 +179,16 @@ export default function GestaoEmpresas() {
         {loading ? (
           <div style={{textAlign:'center',padding:48}}>
             <div style={s.spin}></div>
-            <div style={{color:'#6b7280'}}>Carregando...</div>
+            <div style={{color:'#8b92b0'}}>Carregando...</div>
           </div>
         ) : (
           <div style={{overflowX:'auto',overflowY:'auto',maxHeight:'62vh',
-            border:'1px solid rgba(255,255,255,0.05)',borderRadius:8}}>
+            border:'1px solid #f0f2f8',borderRadius:8}}>
             <table style={s.table}>
               <thead>
                 <tr>
                   {['Empresa','CNPJ','Cartões','Agregados','Potencial','Consultor','Cidade/UF','Status'].map(h=>
-                    <th key={h} style={{...s.th,position:'sticky',top:0,background:'#1a1f2e',zIndex:2}}>{h}</th>)}
+                    <th key={h} style={{...s.th,position:'sticky',top:0,background:'#f9fafb',zIndex:2}}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -200,7 +200,7 @@ export default function GestaoEmpresas() {
 
                   return (
                     <tr key={i}
-                      style={{...(i%2===0?{background:'rgba(255,255,255,0.02)'}:{}),
+                      style={{...(i%2===0?{background:'#f9fafb'}:{}),
                         cursor:'pointer',transition:'background 0.15s',
                         borderLeft:`3px solid ${bordaCor}`}}
                       onMouseEnter={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.04)'}
@@ -216,7 +216,7 @@ export default function GestaoEmpresas() {
                       <td style={{...s.td,fontWeight:600,minWidth:180,maxWidth:240,
                         overflow:'hidden',textOverflow:'ellipsis'}} title={e.nome}>{e.nome}</td>
 
-                      <td style={{...s.td,color:'#6b7280',fontSize:'0.72rem'}}>{e.cnpj||'—'}</td>
+                      <td style={{...s.td,color:'#8b92b0',fontSize:'0.72rem'}}>{e.cnpj||'—'}</td>
 
                       {/* Cartões — cada produto com botão clicável */}
                       <td style={{...s.td,maxWidth:220}}>
@@ -239,13 +239,13 @@ export default function GestaoEmpresas() {
                                     padding:'1px 6px',fontSize:'0.62rem',fontWeight:700,whiteSpace:'nowrap'}}>
                                     {c.categoria}
                                   </span>
-                                  <span style={{color:'#e8eaf0',fontSize:'0.78rem',fontWeight:500}}>{c.produto}</span>
-                                  <span style={{color:'#4b5563',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
+                                  <span style={{color:'#1a1d2e',fontSize:'0.78rem',fontWeight:500}}>{c.produto}</span>
+                                  <span style={{color:'#8b92b0',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
                                 </button>
                               );
                             })}
                           </div>
-                        ):<span style={{color:'#374151',fontSize:'0.75rem'}}>—</span>}
+                        ):<span style={{color:'#b0b7cc',fontSize:'0.75rem'}}>—</span>}
                       </td>
 
                       {/* Agregados — botão clicável */}
@@ -265,22 +265,22 @@ export default function GestaoEmpresas() {
                               <span style={{color:'#f0b429',fontSize:'0.78rem',fontWeight:600}}>
                                 {e.agregados.length} produto{e.agregados.length!==1?'s':''}
                               </span>
-                              <span style={{color:'#4b5563',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
+                              <span style={{color:'#8b92b0',fontSize:'0.68rem',marginLeft:'auto'}}>→</span>
                             </button>
                             {e.agregados.slice(0,2).map((a,ai)=>(
-                              <span key={ai} style={{color:'#6b7280',fontSize:'0.7rem',paddingLeft:4}}>
+                              <span key={ai} style={{color:'#8b92b0',fontSize:'0.7rem',paddingLeft:4}}>
                                 {a.label}
                               </span>
                             ))}
                           </div>
-                        ):<span style={{color:'#374151',fontSize:'0.75rem'}}>—</span>}
+                        ):<span style={{color:'#b0b7cc',fontSize:'0.75rem'}}>—</span>}
                       </td>
 
                       <td style={{...s.td,color:potencial>0?'#34d399':'#374151',fontWeight:600}}>
                         {potencial>0?fmt(potencial):'—'}
                       </td>
-                      <td style={{...s.td,color:'#9ca3af',fontSize:'0.8rem'}}>{e.consultor}</td>
-                      <td style={{...s.td,color:'#6b7280',fontSize:'0.78rem'}}>
+                      <td style={{...s.td,color:'#4a5068',fontSize:'0.8rem'}}>{e.consultor}</td>
+                      <td style={{...s.td,color:'#8b92b0',fontSize:'0.78rem'}}>
                         {e.cidade&&e.cidade!=='—'?`${e.cidade}/${e.estado}`:'—'}
                       </td>
                       <td style={s.td}>
@@ -294,7 +294,7 @@ export default function GestaoEmpresas() {
                     </tr>
                   );
                 })}
-                {filtradas.length===0&&<tr><td colSpan={9} style={{...s.td,textAlign:'center',padding:40,color:'#4b5563'}}>
+                {filtradas.length===0&&<tr><td colSpan={9} style={{...s.td,textAlign:'center',padding:40,color:'#8b92b0'}}>
                   Nenhuma empresa encontrada
                 </td></tr>}
               </tbody>
@@ -306,7 +306,7 @@ export default function GestaoEmpresas() {
       {/* Legenda */}
       <div style={{display:'flex',gap:16,marginTop:14,flexWrap:'wrap'}}>
         {[['#a78bfa','Cartão + Agregado'],['#f0b429','Só Agregado'],['transparent','Só Cartão']].map(([cor,label])=>(
-          <span key={label} style={{display:'flex',alignItems:'center',gap:6,color:'#4b5563',fontSize:'0.75rem'}}>
+          <span key={label} style={{display:'flex',alignItems:'center',gap:6,color:'#8b92b0',fontSize:'0.75rem'}}>
             <span style={{width:3,height:16,background:cor,borderRadius:2,display:'inline-block'}}></span>
             {label}
           </span>
@@ -318,26 +318,26 @@ export default function GestaoEmpresas() {
 }
 
 const s = {
-  page:       {maxWidth:1400,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#e8eaf0',background:'#0a0c10',minHeight:'100vh'},
+  page:       {maxWidth:1400,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'},
   header:     {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24,flexWrap:'wrap',gap:16},
   tag:        {color:'#f0b429',fontWeight:800,fontSize:'0.9rem',letterSpacing:2,marginBottom:8,textTransform:'uppercase'},
   title:      {fontSize:'1.8rem',fontWeight:700,margin:'0 0 6px'},
-  sub:        {color:'#6b7280',fontSize:'0.9rem'},
-  tabBtn:     {background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:8,padding:'8px 16px',color:'#6b7280',cursor:'pointer',fontSize:'0.82rem',fontWeight:500,fontFamily:'inherit'},
+  sub:        {color:'#8b92b0',fontSize:'0.9rem'},
+  tabBtn:     {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 16px',color:'#8b92b0',cursor:'pointer',fontSize:'0.82rem',fontWeight:500,fontFamily:'inherit'},
   tabBtnAtivo:{background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.3)',color:'#f0b429',fontWeight:700},
   kpis:       {display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:20},
-  kpi:        {background:'#161a26',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'14px 18px',display:'flex',flexDirection:'column'},
-  kpiL:       {color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
+  kpi:        {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'14px 18px',display:'flex',flexDirection:'column'},
+  kpiL:       {color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
   kpiV:       {fontSize:'1.4rem',fontWeight:700},
-  filtrosBox: {background:'#161a26',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:'20px 24px',marginBottom:20,display:'flex',gap:16,flexWrap:'wrap',alignItems:'flex-start'},
-  filtroL:    {color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
-  input:      {background:'#1e2235',border:'1px solid rgba(255,255,255,0.12)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
-  select:     {background:'#1e2235',border:'1px solid rgba(255,255,255,0.12)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
-  btnLimpar:  {background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',borderRadius:8,padding:'8px 14px',color:'#f87171',cursor:'pointer',fontSize:'0.82rem',fontWeight:600,fontFamily:'inherit'},
+  filtrosBox: {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:14,padding:'20px 24px',marginBottom:20,display:'flex',gap:16,flexWrap:'wrap',alignItems:'flex-start'},
+  filtroL:    {color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
+  input:      {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
+  select:     {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',width:'100%',outline:'none'},
+  btnLimpar:  {background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontWeight:600,fontFamily:'inherit'},
   btnAcao:    {borderRadius:7,padding:'4px 10px',cursor:'pointer',fontSize:'0.72rem',fontWeight:600,fontFamily:'inherit',whiteSpace:'nowrap'},
-  card:       {background:'#161a26',border:'1px solid rgba(255,255,255,0.07)',borderRadius:16,padding:20},
+  card:       {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:16,padding:20},
   table:      {width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'},
-  th:         {padding:'8px 12px',textAlign:'left',color:'#6b7280',fontWeight:500,borderBottom:'1px solid rgba(255,255,255,0.07)',whiteSpace:'nowrap',textTransform:'uppercase',fontSize:'0.68rem',letterSpacing:0.5},
-  td:         {padding:'10px 12px',borderBottom:'1px solid rgba(255,255,255,0.04)',whiteSpace:'nowrap'},
-  spin:       {width:36,height:36,border:'3px solid rgba(255,255,255,0.1)',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
+  th:         {padding:'8px 12px',textAlign:'left',color:'#8b92b0',fontWeight:500,borderBottom:'1px solid #e4e7ef',whiteSpace:'nowrap',textTransform:'uppercase',fontSize:'0.68rem',letterSpacing:0.5},
+  td:         {padding:'10px 12px',borderBottom:'1px solid #f0f2f8',whiteSpace:'nowrap'},
+  spin:       {width:36,height:36,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
 };
