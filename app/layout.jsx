@@ -1,5 +1,4 @@
 import './globals.css';
-import Sidebar from './Sidebar';
 
 export const metadata = {
   title: 'Vegas Card — Gestão Comercial',
@@ -11,15 +10,12 @@ export default function RootLayout({ children }) {
     <html lang="pt-BR">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body style={{ margin: 0, background: '#0a0c10', color: '#e8eaf0', display: 'flex', minHeight: '100vh' }}>
-        <Sidebar />
-        <main style={{ flex: 1, marginLeft: 220, minHeight: '100vh', background: '#0a0c10' }}>
-          {children}
-        </main>
+      <body style={{ margin: 0, background: '#f5f6fa', color: '#1a1d2e' }}>
+        {children}
       </body>
     </html>
   );
