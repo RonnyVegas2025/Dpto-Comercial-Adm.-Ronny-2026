@@ -1224,7 +1224,7 @@ export default function DashboardVendedor() {
                       const isAtual  = c.id === consultorId;
                       const pctBarra = (c.volMetaAcum / maxVal) * 100;
                       const medal    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}º`;
-                      const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#9ca3af' : i === 2 ? '#cd7c2f' : '#4b5563';
+                      const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#111214' : i === 2 ? '#cd7c2f' : '#4b5563';
                       return (
                         <div key={c.id} style={{
                           borderRadius:10, overflow:'hidden',
