@@ -37,12 +37,12 @@ function Modal({ titulo, children, onClose }) {
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200,
       display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
       onClick={onClose}>
-      <div style={{ background:'#111420', border:'1px solid rgba(255,255,255,0.1)',
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef',
         borderRadius:20, padding:32, width:'100%', maxWidth:480, position:'relative' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.1rem' }}>{titulo}</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#6b7280',
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#8b92b0',
             fontSize:'1.3rem', cursor:'pointer', lineHeight:1 }}>✕</button>
         </div>
         {children}
@@ -85,9 +85,9 @@ function RelCard({ icon, titulo, desc, cor, onClick, loading }) {
       </div>
 
       <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.05rem',
-        color:'#e8eaf0', marginBottom:8 }}>{titulo}</div>
+        color:'#1a1d2e', marginBottom:8 }}>{titulo}</div>
 
-      <div style={{ color:'#4b5563', fontSize:'0.82rem', lineHeight:1.6 }}>{desc}</div>
+      <div style={{ color:'#8b92b0', fontSize:'0.82rem', lineHeight:1.6 }}>{desc}</div>
 
       {/* Botão de ação */}
       <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:20 }}>
@@ -480,7 +480,7 @@ export default function Relatorios() {
 
   return (
     <div style={{ maxWidth:1100, margin:'0 auto', padding:'40px 24px',
-      fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' }}>
+      fontFamily:"'DM Sans', sans-serif", color:'#1a1d2e', background:'#f5f6fa', minHeight:'100vh' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 48 }}>
@@ -489,10 +489,10 @@ export default function Relatorios() {
           ♠ Vegas Card
         </div>
         <h1 style={{ fontFamily:"'Syne', sans-serif", fontSize:'2rem', fontWeight:700,
-          margin:'0 0 10px', color:'#e8eaf0' }}>
+          margin:'0 0 10px', color:'#1a1d2e' }}>
           Relatórios
         </h1>
-        <p style={{ color:'#4b5563', fontSize:'0.9rem', margin:0 }}>
+        <p style={{ color:'#8b92b0', fontSize:'0.9rem', margin:0 }}>
           Gere e exporte relatórios padronizados para conferência e importação
         </p>
       </div>
@@ -526,7 +526,7 @@ export default function Relatorios() {
               </select>
             </div>
             <div style={{ background:'rgba(167,139,250,0.06)', border:'1px solid rgba(167,139,250,0.15)',
-              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#9ca3af' }}>
+              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#4a5068' }}>
               📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#a78bfa'}}>Consultor Principal</strong> · Cons. Agregado · Parceiro · Categoria · Produto · Peso · Potencial · Resultado · Cartões · Taxas · Cidade · UF · Data Cadastro
             </div>
             <button
@@ -556,7 +556,7 @@ export default function Relatorios() {
               </select>
             </div>
             <div style={{ background:'rgba(96,165,250,0.06)', border:'1px solid rgba(96,165,250,0.15)',
-              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#9ca3af' }}>
+              borderRadius:10, padding:'12px 16px', fontSize:'0.8rem', color:'#4a5068' }}>
               📋 Colunas: Produto ID · Empresa · CNPJ · <strong style={{color:'#60a5fa'}}>Consultor Principal</strong> · Parceiro · Categoria · Produto · Taxa Negativa · Peso · Potencial Bruto · Resultado Esperado · Movimentação Real · Receita Bruta · Custo Tax Neg · Spread Líquido · <strong style={{color:'#60a5fa'}}>Meta Proporcional</strong> · Mês Ref.
             </div>
             <button
@@ -577,5 +577,5 @@ export default function Relatorios() {
   );
 }
 
-const sLabel  = { display:'block', color:'#6b7280', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:1, marginBottom:8, fontWeight:600 };
-const sSelect = { width:'100%', background:'#1a1f2e', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'10px 14px', color:'#e8eaf0', fontSize:'0.9rem', fontFamily:"'DM Sans', sans-serif", cursor:'pointer' };
+const sLabel  = { display:'block', color:'#8b92b0', fontSize:'0.72rem', textTransform:'uppercase', letterSpacing:1, marginBottom:8, fontWeight:600 };
+const sSelect = { width:'100%', background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:10, padding:'10px 14px', color:'#1a1d2e', fontSize:'0.9rem', fontFamily:"'DM Sans', sans-serif", cursor:'pointer' };
