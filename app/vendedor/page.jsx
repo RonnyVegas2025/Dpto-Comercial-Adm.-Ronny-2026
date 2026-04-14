@@ -592,9 +592,9 @@ export default function DashboardVendedor() {
                   {/* ── LINHA 3: Secundários ────────────────────────────── */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
                     {[
-                      { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#171b1f' },
+                      { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#1a1d2e' },
                       { label: 'Resultado Esperado', val: fmt(kpis.totalResultado),    cor: '#a78bfa', sub: 'potencial × peso' },
-                      { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#171b1f' },
+                      { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#1a1d2e' },
                       { label: 'Ticket Médio',       val: fmt(kpis.ticketMedio),       cor: '#60a5fa' },
                     ].map(({ label, val, cor: c, sub }) => (
                       <div key={label} style={{ background: '#ffffff', border: '1px solid #f0f2f8', borderRadius: 12, padding: '14px 16px' }}>
@@ -750,7 +750,7 @@ export default function DashboardVendedor() {
                             <div style={{ minWidth:120 }}>
                               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                                 <span style={{ fontSize:'1.1rem' }}>{emoji}</span>
-                                <span style={{ fontWeight:700, fontSize:'0.95rem', color: isMesAtual ? '#f0b429' : '#e8eaf0' }}>
+                                <span style={{ fontWeight:700, fontSize:'0.95rem', color: isMesAtual ? '#b45309' : '#1a1d2e' }}>
                                   {grupo.mesRef}
                                 </span>
                                 {isMesAtual && (
@@ -901,7 +901,7 @@ export default function DashboardVendedor() {
                     <select
                       value={filtroProduto}
                       onChange={e => setFiltroProduto(e.target.value)}
-                      style={{ flex:1, minWidth:140, background:'#1e2330', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 10px', color: filtroProduto ? '#e8eaf0' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
+                      style={{ flex:1, minWidth:140, background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 10px', color: filtroProduto ? '#1a1d2e' : '#8b92b0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
                     >
                       <option value=''>Todos os produtos</option>
                       {produtosUnicos.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1164,7 +1164,7 @@ export default function DashboardVendedor() {
                           const corSpread = p.spread > 0 ? '#60a5fa' : p.spread < 0 ? '#f87171' : '#4b5563';
                           return (
                             <tr key={i} style={i % 2 === 0 ? { background: '#f9fafb' } : {}}>
-                              <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#4b5563' : '#e8eaf0' }}>
+                              <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#8b92b0' : '#1a1d2e' }}>
                                 {p.nome}
                                 <div style={{ color: '#8b92b0', fontSize: '0.68rem', fontWeight: 400, marginTop: 2 }}>
                                   {Math.round(p.mesesMedios)} {Math.round(p.mesesMedios) === 1 ? 'mês' : 'meses'} importados
@@ -1224,7 +1224,7 @@ export default function DashboardVendedor() {
                       const isAtual  = c.id === consultorId;
                       const pctBarra = (c.volMetaAcum / maxVal) * 100;
                       const medal    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}º`;
-                      const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#111214' : i === 2 ? '#cd7c2f' : '#4b5563';
+                      const corMedal = i === 0 ? '#f0b429' : i === 1 ? '#9ca3af' : i === 2 ? '#cd7c2f' : '#4b5563';
                       return (
                         <div key={c.id} style={{
                           borderRadius:10, overflow:'hidden',
@@ -1234,7 +1234,7 @@ export default function DashboardVendedor() {
                           <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
                             <span style={{ fontWeight:700, fontSize:'1rem', color: corMedal, minWidth:32, textAlign:'center' }}>{medal}</span>
                             <div style={{ flex:1 }}>
-                              <div style={{ fontWeight: isAtual ? 700 : 500, fontSize:'0.88rem', color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</div>
+                              <div style={{ fontWeight: isAtual ? 700 : 600, fontSize:'0.88rem', color: isAtual ? '#b45309' : '#1a1d2e' }}>{c.nome}</div>
                               {c.movMes > 0 && (
                                 <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginTop:2 }}>
                                   Últ. mov: {fmt(c.movMes)} · {fmtMes((ultimoMes||'') + '-01')}
@@ -1251,7 +1251,7 @@ export default function DashboardVendedor() {
                           </div>
                           {c.volMetaAcum > 0 && (
                             <div style={{ height:3, background:'#f5f6fa' }}>
-                              <div style={{ height:'100%', width:`${pctBarra}%`, background: isAtual ? '#f0b429' : i < 3 ? '#34d399' : 'rgba(255,255,255,0.15)', transition:'width 0.6s' }}></div>
+                              <div style={{ height:'100%', width:`${pctBarra}%`, background: isAtual ? '#f0b429' : i < 3 ? '#34d399' : '#d1d5e8', transition:'width 0.6s' }}></div>
                             </div>
                           )}
                         </div>
