@@ -79,32 +79,32 @@ function parseRowMeta(row) {
 }
 
 function parseRowEmpresa(row) {
-  // Igual à página /importar original
-  function findKeyE(obj, target) {
-    if (obj[target] !== undefined) return obj[target];
-    const t = norm(target);
-    for (const key of Object.keys(obj)) if (norm(key) === t) return obj[key];
-    return undefined;
-  }
+  // Aceita tanto o formato antigo quanto o novo exportado do sistema
+  // Novo: ID Produto, Empresa, CNPJ, Data Cadastro, Produto Contratado, Categoria,
+  //       Cidade, Estado, Potencial Mensal, Taxa Positiva, Taxa Negativa, Consultor Principal, Parceiro Comercial
+  // Antigo: Produto Id, Empresa, CNPJ, Data de Cadastro, Produto Contratado, Categoria...
+  const prodId = findKey(row,'ID Produto')    ?? findKey(row,'Produto Id')    ?? findKey(row,'Produto ID');
+  const potenc = findKeyContains(row,'potencial');
+  const dtCad  = findKey(row,'Data Cadastro') ?? findKey(row,'Data de Cadastro');
   return {
-    produto_id:             parseInt(findKeyE(row,'Produto Id')) || null,
-    nome:                   clean(findKeyE(row,'Empresa')),
-    cnpj:                   clean(findKeyE(row,'CNPJ')),
-    data_cadastro:          cleanDate(findKeyE(row,'Data de Cadastro')),
-    categoria:              clean(findKeyE(row,'Categoria')),
-    produto_contratado:     clean(findKeyE(row,'Produto Contratado') ?? findKeyE(row,'Produto')),
-    cidade:                 clean(findKeyE(row,'Cidade')),
-    estado:                 clean(findKeyE(row,'Estado')),
-    cartoes_emitidos:       parseInt(cleanNum(findKeyE(row,'Cartoes Emitidos') ?? findKeyE(row,'Cartões Emitidos'))) || 0,
-    potencial_movimentacao: cleanNum(findKeyE(row,'Potencial de Movimentacao') ?? findKeyE(row,'Potencial de Movimentação')),
-    tipo_boleto:            clean(findKeyE(row,'Tipo do Boleto')),
-    confeccao_cartao:       cleanNum(findKeyE(row,'Confeccao de Cartao') ?? findKeyE(row,'Confecção de Cartão')),
-    taxa_negativa:          cleanNum(findKeyE(row,'Taxa Negativa')),
-    taxa_positiva:          cleanNum(findKeyE(row,'Taxa Positiva')),
-    dias_prazo:             parseInt(cleanNum(findKeyE(row,'Dias de Prazo'))) || 0,
-    _consultor_principal:   clean(findKeyE(row,'Consultor Principal')),
-    _consultor_agregado:    clean(findKeyE(row,'Consultor Agregado')),
-    _parceiro:              clean(findKeyE(row,'Parceiro Comercial')),
+    produto_id:             parseInt(prodId) || null,
+    nome:                   clean(findKey(row,'Empresa')),
+    cnpj:                   clean(findKey(row,'CNPJ')),
+    data_cadastro:          cleanDate(dtCad),
+    categoria:              clean(findKey(row,'Categoria')),
+    produto_contratado:     clean(findKey(row,'Produto Contratado') ?? findKey(row,'Produto')),
+    cidade:                 clean(findKey(row,'Cidade')),
+    estado:                 clean(findKey(row,'Estado')),
+    cartoes_emitidos:       0,
+    potencial_movimentacao: cleanNum(potenc),
+    tipo_boleto:            null,
+    confeccao_cartao:       0,
+    taxa_negativa:          cleanNum(findKey(row,'Taxa Negativa')),
+    taxa_positiva:          cleanNum(findKey(row,'Taxa Positiva')),
+    dias_prazo:             0,
+    _consultor_principal:   clean(findKey(row,'Consultor Principal')),
+    _consultor_agregado:    null,
+    _parceiro:              clean(findKey(row,'Parceiro Comercial')),
   };
 }
 
@@ -419,7 +419,10 @@ export default function Movimentacoes() {
     return rows.map(r => {
       const prod = prodMap[norm(r.produto_contratado||'')];
       const { _consultor_principal, _consultor_agregado, _parceiro, ...rest } = r;
-      return { ...rest, produto_id_ref:prod?.id||null, peso_categoria:prod?.peso??1.0,
+      return { ...rest,
+        ativo: true,
+        produto_id_ref:         prod?.id||null,
+        peso_categoria:         prod?.peso??1.0,
         consultor_principal_id: _consultor_principal ? consultMap[norm(_consultor_principal)]||null : null,
         consultor_agregado_id:  _consultor_agregado  ? consultMap[norm(_consultor_agregado)]||null  : null,
         parceiro_id:            _parceiro            ? parcMap[norm(_parceiro)]||null               : null,
