@@ -6,11 +6,11 @@ import Link from 'next/link';
 const nav = [
   { href: '/',                 icon: '◈',  label: 'Início'        },
   { href: '/vendedor',         icon: '👤', label: 'Vendedor'      },
-  { href: '/movimentacoes',    icon: '💳', label: 'Movimentações' },
   { href: '/gestao',           icon: '⚙️', label: 'Gestão'        },
   { href: '/relatorios',       icon: '📋', label: 'Relatórios'    },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas' },
   { href: '/agregados',        icon: '📦', label: 'Agregados'     },
+  { href: '/movimentacoes',    icon: '📥', label: 'Importações'   },
 ];
 
 export default function Sidebar() {
