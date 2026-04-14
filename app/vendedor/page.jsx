@@ -592,9 +592,9 @@ export default function DashboardVendedor() {
                   {/* ── LINHA 3: Secundários ────────────────────────────── */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
                     {[
-                      { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#e8eaf0' },
+                      { label: 'Potencial Bruto',    val: fmt(kpis.totalPotencial),    cor: '#171b1f' },
                       { label: 'Resultado Esperado', val: fmt(kpis.totalResultado),    cor: '#a78bfa', sub: 'potencial × peso' },
-                      { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#e8eaf0' },
+                      { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#171b1f' },
                       { label: 'Ticket Médio',       val: fmt(kpis.ticketMedio),       cor: '#60a5fa' },
                     ].map(({ label, val, cor: c, sub }) => (
                       <div key={label} style={{ background: '#ffffff', border: '1px solid #f0f2f8', borderRadius: 12, padding: '14px 16px' }}>
