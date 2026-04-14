@@ -6,11 +6,11 @@ import Link from 'next/link';
 const nav = [
   { href: '/',                 icon: '◈',  label: 'Início'        },
   { href: '/vendedor',         icon: '👤', label: 'Vendedor'      },
+  { href: '/movimentacoes',    icon: '📥', label: 'Importações'   },
   { href: '/gestao',           icon: '⚙️', label: 'Gestão'        },
   { href: '/relatorios',       icon: '📋', label: 'Relatórios'    },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas' },
   { href: '/agregados',        icon: '📦', label: 'Agregados'     },
-  { href: '/movimentacoes',    icon: '📥', label: 'Importações'   },
 ];
 
 export default function Sidebar() {
@@ -32,41 +32,22 @@ export default function Sidebar() {
     }}>
       {/* Logo */}
       <div style={{ padding: '0 20px 24px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <span style={{
-            background: '#f0b429',
-            color: '#000',
-            borderRadius: 8,
-            width: 32,
-            height: 32,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{
+            color: '#1a1d2e',
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 700,
             fontSize: '1rem',
-            fontWeight: 900,
-            flexShrink: 0,
-          }}>♠</span>
-          <div>
-            <div style={{
-              color: '#1a1d2e',
-              fontFamily: "'Syne', sans-serif",
-              fontWeight: 800,
-              fontSize: '1rem',
-              letterSpacing: 0.3,
-              lineHeight: 1.2,
-            }}>Vegas Card</div>
-            <div style={{
-              color: '#8b92b0',
-              fontSize: '0.65rem',
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
-              marginTop: 1,
-            }}>Gestão Comercial</div>
-          </div>
+            letterSpacing: 0.3,
+            lineHeight: 1.2,
+          }}>Vegas Card</div>
+          <div style={{
+            color: '#8b92b0',
+            fontSize: '0.65rem',
+            letterSpacing: 1.5,
+            textTransform: 'uppercase',
+            marginTop: 3,
+          }}>Gestão Comercial</div>
         </div>
       </div>
 
