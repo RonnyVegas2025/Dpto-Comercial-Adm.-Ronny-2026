@@ -234,7 +234,7 @@ export default function RelatorioEmpresas() {
         <button onClick={selecionarTodas} style={s.btnMini}>Todas</button>
         <button onClick={resetarPadrao}   style={s.btnMini}>Padrão</button>
         <button onClick={limparTodas}     style={s.btnMini}>Mínimo</button>
-        <span style={{ color:'#4b5563', fontSize:'0.75rem', marginLeft:8 }}>
+        <span style={{ color:'#8b92b0', fontSize:'0.75rem', marginLeft:8 }}>
           {lista.length} empresa{lista.length !== 1 ? 's' : ''} · {colunas.length} coluna{colunas.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -260,7 +260,7 @@ export default function RelatorioEmpresas() {
                     </span>
                     <span style={{ fontWeight:700, fontSize:'0.82rem', color: nAtivos > 0 ? '#e8eaf0' : '#6b7280' }}>{grupo}</span>
                   </div>
-                  <span style={{ fontSize:'0.68rem', color:'#4b5563' }}>{nAtivos}/{cols.length}</span>
+                  <span style={{ fontSize:'0.68rem', color:'#8b92b0' }}>{nAtivos}/{cols.length}</span>
                 </div>
                 {/* Itens */}
                 <div style={s.grupoItens}>
@@ -290,10 +290,10 @@ export default function RelatorioEmpresas() {
         {loading ? (
           <div style={{ textAlign:'center', padding:48 }}>
             <div style={s.spin}></div>
-            <div style={{ color:'#6b7280', marginTop:12 }}>Carregando empresas...</div>
+            <div style={{ color:'#8b92b0', marginTop:12 }}>Carregando empresas...</div>
           </div>
         ) : (
-          <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'62vh', borderRadius:8, border:'1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'62vh', borderRadius:8, border:'1px solid #f0f2f8' }}>
             <table style={s.table}>
               <thead>
                 <tr>
@@ -303,8 +303,8 @@ export default function RelatorioEmpresas() {
               </thead>
               <tbody>
                 {lista.map((e, i) => (
-                  <tr key={e.id} className="row-hover" style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
-                    <td style={{ ...s.td, color:'#4b5563', textAlign:'center', fontSize:'0.7rem' }}>{i+1}</td>
+                  <tr key={e.id} className="row-hover" style={i%2===0?{background:'#f9fafb'}:{}}>
+                    <td style={{ ...s.td, color:'#8b92b0', textAlign:'center', fontSize:'0.7rem' }}>{i+1}</td>
                     {colunas.map(c => (
                       <td key={c.key} style={{
                         ...s.td,
@@ -323,7 +323,7 @@ export default function RelatorioEmpresas() {
                 ))}
                 {lista.length === 0 && (
                   <tr>
-                    <td colSpan={colunas.length + 1} style={{ ...s.td, textAlign:'center', color:'#4b5563', padding:48 }}>
+                    <td colSpan={colunas.length + 1} style={{ ...s.td, textAlign:'center', color:'#8b92b0', padding:48 }}>
                       Nenhuma empresa encontrada com os filtros aplicados
                     </td>
                   </tr>
@@ -336,7 +336,7 @@ export default function RelatorioEmpresas() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        .row-hover:hover { background: rgba(240,180,41,0.04) !important; }
+        .row-hover:hover { background: rgba(240,180,41,0.05) !important; }
         select option { background: #1e2330; color: #e8eaf0; }
       `}</style>
     </div>
@@ -344,28 +344,27 @@ export default function RelatorioEmpresas() {
 }
 
 const s = {
-  page:        { maxWidth:1400, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh' },
+  page:        { maxWidth:1400, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#1a1d2e', background:'#f5f6fa', minHeight:'100vh' },
   header:      { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:16 },
-  tag:         { color:'#f0b429', fontWeight:800, fontSize:'0.9rem', letterSpacing:2, marginBottom:8, textTransform:'uppercase' },
+  tag:         { color:'#b45309', fontWeight:700, fontSize:'0.9rem', letterSpacing:2, marginBottom:8, textTransform:'uppercase' },
   title:       { fontSize:'1.8rem', fontWeight:700, margin:'0 0 6px' },
-  sub:         { color:'#6b7280', fontSize:'0.9rem' },
+  sub:         { color:'#8b92b0', fontSize:'0.9rem' },
   btnPri:      { background:'#f0b429', color:'#000', border:'none', borderRadius:10, padding:'11px 24px', fontWeight:700, fontSize:'0.9rem', fontFamily:'inherit', whiteSpace:'nowrap' },
-  filtrosBox:  { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 20px', marginBottom:14 },
-  input:       { background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 11px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
+  filtrosBox:  { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:14, padding:'16px 20px', marginBottom:14 },
+  input:       { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 11px', color:'#1a1d2e', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' },
   btnClear:    { background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'7px 14px', color:'#f87171', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' },
   colsBar:     { display:'flex', alignItems:'center', gap:8, marginBottom:12, flexWrap:'wrap' },
-  btnCols:     { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'8px 16px', color:'#9ca3af', fontSize:'0.82rem', cursor:'pointer', fontFamily:'inherit', fontWeight:600, display:'flex', alignItems:'center', gap:4 },
+  btnCols:     { background:'#f0f2f8', border:'1px solid #e4e7ef', borderRadius:8, padding:'8px 16px', color:'#4a5068', fontSize:'0.82rem', cursor:'pointer', fontFamily:'inherit', fontWeight:600, display:'flex', alignItems:'center', gap:4 },
   btnColsAtivo:{ background:'rgba(240,180,41,0.12)', border:'1px solid rgba(240,180,41,0.3)', color:'#f0b429' },
-  btnMini:     { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:7, padding:'6px 13px', color:'#6b7280', fontSize:'0.75rem', cursor:'pointer', fontFamily:'inherit' },
-  painelCols:  { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:20, marginBottom:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:16 },
+  btnMini:     { background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:7, padding:'6px 13px', color:'#8b92b0', fontSize:'0.75rem', cursor:'pointer', fontFamily:'inherit' },
+  painelCols:  { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:14, padding:20, marginBottom:16, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:16 },
   grupoBox:    { display:'flex', flexDirection:'column', gap:8 },
-  grupoHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer', paddingBottom:8, borderBottom:'1px solid rgba(255,255,255,0.07)' },
+  grupoHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer', paddingBottom:8, borderBottom:'1px solid #e4e7ef' },
   grupoItens:  { display:'flex', flexDirection:'column', gap:6, paddingLeft:4 },
   checkLabel:  { display:'flex', alignItems:'center', gap:7, cursor:'pointer', userSelect:'none' },
-  card:        { background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:20 },
+  card:        { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:16, padding:20 },
   table:       { width:'100%', borderCollapse:'collapse', fontSize:'0.79rem' },
-  th:          { padding:'8px 12px', textAlign:'left', color:'#6b7280', fontWeight:500, borderBottom:'1px solid rgba(255,255,255,0.07)', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.67rem', letterSpacing:0.5, position:'sticky', top:0, background:'#1a1f2e', zIndex:2 },
-  td:          { padding:'9px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
-  spin:        { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto', animation:'spin 0.8s linear infinite', display:'block' },
+  th:          { padding:'8px 12px', textAlign:'left', color:'#8b92b0', fontWeight:500, borderBottom:'1px solid #e4e7ef', whiteSpace:'nowrap', textTransform:'uppercase', fontSize:'0.67rem', letterSpacing:0.5, position:'sticky', top:0, background:'#f9fafb', zIndex:2 },
+  td:          { padding:'9px 12px', borderBottom:'1px solid #f0f2f8', whiteSpace:'nowrap' },
+  spin:        { width:36, height:36, border:'3px solid #e4e7ef', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto', animation:'spin 0.8s linear infinite', display:'block' },
 };
-
