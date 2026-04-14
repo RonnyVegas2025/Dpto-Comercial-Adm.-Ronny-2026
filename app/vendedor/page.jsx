@@ -737,9 +737,10 @@ export default function DashboardVendedor() {
 
                       return (
                         <div key={gi} style={{
-                          background: isMesAtual ? 'rgba(240,180,41,0.06)' : '#161a26',
+                          background: isMesAtual ? '#fff8e6' : '#ffffff',
                           border: `1px solid ${isMesAtual ? '#f0b429' : '#e4e7ef'}`,
-                          borderRadius:14, overflow:'hidden',
+                          borderRadius:12, overflow:'hidden',
+                          boxShadow:'0 1px 3px rgba(0,0,0,0.05)',
                         }}>
                           {/* Header do card */}
                           <div
@@ -811,12 +812,12 @@ export default function DashboardVendedor() {
 
                           {/* Tabela expandida */}
                           {aberto2 && (
-                            <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', overflowX:'auto' }}>
+                            <div style={{ borderTop:'1px solid #e4e7ef', overflowX:'auto' }}>
                               <table style={{ ...s.table, fontSize:'0.77rem' }}>
                                 <thead>
                                   <tr>
                                     {['ID','Empresa','Produto','Categoria','Cidade/UF','Potencial','Resultado','Dt. Cadastro','Parceiro'].map(h =>
-                                      <th key={h} style={{ ...s.th, background:'#111520' }}>{h}</th>)}
+                                      <th key={h} style={{ ...s.th, background:'#f9fafb' }}>{h}</th>)}
                                   </tr>
                                 </thead>
                                 <tbody>
