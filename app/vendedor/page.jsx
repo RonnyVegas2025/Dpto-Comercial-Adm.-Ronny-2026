@@ -409,7 +409,7 @@ export default function DashboardVendedor() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .aba-btn:hover { background: rgba(240,180,41,0.08) !important; color: #f0b429 !important; }
-        .row-hover:hover { background: rgba(255,255,255,0.04) !important; }
+        .row-hover:hover { background: rgba(240,180,41,0.04) !important; }
         .bar-produto { transition: width 0.6s ease; }
       `}</style>
 
@@ -450,7 +450,7 @@ export default function DashboardVendedor() {
           <label style={s.filtroLabel}>MÊS DE REFERÊNCIA</label>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {mesesDisponiveis.length === 0 && (
-              <span style={{ color:'#4b5563', fontSize:'0.8rem', padding:'6px 0' }}>Nenhum mês importado</span>
+              <span style={{ color:'#8b92b0', fontSize:'0.8rem', padding:'6px 0' }}>Nenhum mês importado</span>
             )}
             <button
               style={{ ...s.gestorBtn, ...(mesSelecionado === '' ? s.gestorBtnAtivo : {}) }}
@@ -474,8 +474,8 @@ export default function DashboardVendedor() {
       {/* Loading */}
       {loading && (
         <div style={s.vazio}>
-          <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #f0b429', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' }}></div>
-          <div style={{ color: '#6b7280' }}>Carregando dados...</div>
+          <div style={{ width: 40, height: 40, border: '3px solid #e4e7ef', borderTop: '3px solid #f0b429', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' }}></div>
+          <div style={{ color: '#8b92b0' }}>Carregando dados...</div>
         </div>
       )}
 
@@ -496,7 +496,7 @@ export default function DashboardVendedor() {
                 <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>
                   {consultorId ? consultor?.nome : gestorFiltro === 'Geral' ? 'Visão Geral — Todas as Equipes' : `Equipe ${gestorFiltro}`}
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                <div style={{ color: '#8b92b0', fontSize: '0.8rem' }}>
                   {consultorId
                     ? `${consultor?.setor || '—'} · ${consultor?.gestor || '—'}`
                     : `${consultoresDaVisao.length} consultores · ${dados?.empresas?.length || 0} empresas`}
@@ -521,27 +521,27 @@ export default function DashboardVendedor() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
 
                     {/* Movimentação Real — DESTAQUE PRINCIPAL */}
-                    <div style={{ background: 'linear-gradient(135deg, rgba(240,180,41,0.12), rgba(240,180,41,0.04))', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ background: '#fff8e6', border: '1px solid #f0b429', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>💰</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Mov. Real (Média Mensal)</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Mov. Real (Média Mensal)</div>
                       <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#f0b429', lineHeight: 1 }}>{fmt(kpis.totalMovRealMedia)}</div>
-                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>
+                      <div style={{ color: '#8b92b0', fontSize: '0.7rem', marginTop: 6 }}>
                         {kpis.totalEmpresas} empresas · acum. {fmt(kpis.totalMovReal)} / {kpis.mesesImportados} {kpis.mesesImportados===1?'mês':'meses'}
                       </div>
                     </div>
 
                     {/* Vol. Meta Realizado */}
-                    <div style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.1), rgba(52,211,153,0.03))', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ background: '#f0fdf4', border: '1px solid #16a34a', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>🏆</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Vol. Meta Realizado</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Vol. Meta Realizado</div>
                       <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#34d399', lineHeight: 1 }}>{fmt(kpis.volumeMeta)}</div>
-                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>de {fmt(kpis.metaObjetivo)} objetivo</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.7rem', marginTop: 6 }}>de {fmt(kpis.metaObjetivo)} objetivo</div>
                     </div>
 
                     {/* % da Meta — com badge */}
                     <div style={{ background: `linear-gradient(135deg, ${cor}18, ${cor}05)`, border: `1px solid ${cor}44`, borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>📈</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>% da Meta</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>% da Meta</div>
                       <div style={{ fontSize: '1.7rem', fontWeight: 800, color: cor, lineHeight: 1 }}>{fmtPct(pct)}</div>
                       <span style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8,
                         background: badge.bg, border: `1px solid ${badge.cor}44`,
@@ -551,23 +551,23 @@ export default function DashboardVendedor() {
                     </div>
 
                     {/* Empresas */}
-                    <div style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 16, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: 12, right: 16, fontSize: '1.8rem', opacity: 0.08 }}>🏢</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Empresas Ativas</div>
-                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#e8eaf0', lineHeight: 1 }}>{kpis.totalEmpresas}</div>
-                      <div style={{ color: '#4b5563', fontSize: '0.7rem', marginTop: 6 }}>{kpis.totalCartoes} cartões emitidos</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Empresas Ativas</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#1a1d2e', lineHeight: 1 }}>{kpis.totalEmpresas}</div>
+                      <div style={{ color: '#8b92b0', fontSize: '0.7rem', marginTop: 6 }}>{kpis.totalCartoes} cartões emitidos</div>
                     </div>
                   </div>
 
                   {/* ── LINHA 2: Barra de progresso ────────────────────── */}
-                  <div style={{ background: '#111420', border: `1px solid ${cor}33`, borderRadius: 14, padding: '16px 22px', marginBottom: 12 }}>
+                  <div style={{ background: '#ffffff', border: `1px solid ${cor}33`, borderRadius: 14, padding: '16px 22px', marginBottom: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#9ca3af' }}>Progresso da Meta</span>
-                      <span style={{ fontSize: '0.75rem', color: '#4b5563' }}>
-                        {fmt(kpis.volumeMeta)} <span style={{ color: '#6b7280' }}>/ {fmt(kpis.metaObjetivo)}</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#4a5068' }}>Progresso da Meta</span>
+                      <span style={{ fontSize: '0.75rem', color: '#8b92b0' }}>
+                        {fmt(kpis.volumeMeta)} <span style={{ color: '#8b92b0' }}>/ {fmt(kpis.metaObjetivo)}</span>
                       </span>
                     </div>
-                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, height: 12, overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ background: '#f0f2f8', borderRadius: 8, height: 12, overflow: 'hidden', position: 'relative' }}>
                       {/* Faixa movimentação real (mais escura, atrás) */}
                       <div style={{ position: 'absolute', left: 0, top: 0, height: '100%',
                         width: `${Math.min(kpis.pctMovVsMeta||0, 100)}%`,
@@ -577,7 +577,7 @@ export default function DashboardVendedor() {
                         width: `${Math.min(pct, 100)}%`,
                         background: cor, borderRadius: 8, transition: 'width 0.8s ease' }}></div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: '0.68rem', color: '#4b5563' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: '0.68rem', color: '#8b92b0' }}>
                       <span style={{ display:'flex', alignItems:'center', gap:5 }}>
                         <span style={{ width:8, height:8, borderRadius:2, background: cor, display:'inline-block' }}></span>
                         Vol. Meta {fmtPct(pct)}
@@ -597,10 +597,10 @@ export default function DashboardVendedor() {
                       { label: 'Meta Objetivo',      val: fmt(kpis.metaObjetivo),      cor: '#e8eaf0' },
                       { label: 'Ticket Médio',       val: fmt(kpis.ticketMedio),       cor: '#60a5fa' },
                     ].map(({ label, val, cor: c, sub }) => (
-                      <div key={label} style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: '14px 16px' }}>
-                        <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{label}</div>
+                      <div key={label} style={{ background: '#ffffff', border: '1px solid #f0f2f8', borderRadius: 12, padding: '14px 16px' }}>
+                        <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{label}</div>
                         <div style={{ fontSize: '1rem', fontWeight: 700, color: c }}>{val}</div>
-                        {sub && <div style={{ color: '#4b5563', fontSize: '0.62rem', marginTop: 4 }}>{sub}</div>}
+                        {sub && <div style={{ color: '#8b92b0', fontSize: '0.62rem', marginTop: 4 }}>{sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -612,12 +612,12 @@ export default function DashboardVendedor() {
                       { label: 'Custo / Desc. (tx-)', pct: `${Number(kpis.pctDesconto||0).toFixed(2)}%`, val: fmt(kpis.descontoTotal),  cor: '#f87171' },
                       { label: 'Spread Líquido',       pct: `${Number(kpis.pctSpread||0).toFixed(2)}%`,  val: fmt(kpis.spreadLiquido),  cor: kpis.pctSpread >= 0 ? '#60a5fa' : '#f87171' },
                     ].map(({ label, pct: p, val, cor: c }) => (
-                      <div key={label} style={{ background: '#111420', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={label} style={{ background: '#ffffff', border: '1px solid #f0f2f8', borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                          <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
                           <div style={{ fontSize: '1rem', fontWeight: 700, color: c }}>{p}</div>
                         </div>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#6b7280' }}>{val}</div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#8b92b0' }}>{val}</div>
                       </div>
                     ))}
                   </div>
@@ -653,7 +653,7 @@ export default function DashboardVendedor() {
                       ].map(({ cor, label }) => (
                         <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ width: 10, height: 10, borderRadius: 2, background: cor, display: 'inline-block' }}></span>
-                          <span style={{ color: '#9ca3af' }}>{label}</span>
+                          <span style={{ color: '#4a5068' }}>{label}</span>
                         </span>
                       ))}
                     </div>
@@ -680,7 +680,7 @@ export default function DashboardVendedor() {
                                 <div title="Movimentação Real" style={{ background: 'rgba(240,180,41,0.3)',  border: '1px solid rgba(240,180,41,0.5)',  borderRadius: '4px 4px 0 0', width: 24, height: `${hMov}px`,  transition: 'height 0.6s' }}></div>
                                 {e.meta > 0 && <div title="Meta" style={{ background: 'rgba(52,211,153,0.2)', border: '1px solid rgba(52,211,153,0.5)', borderRadius: '4px 4px 0 0', width: 24, height: `${hMeta}px`, transition: 'height 0.6s' }}></div>}
                               </div>
-                              <span style={{ color: '#6b7280', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{fmtMes(e.mes + '-01')}</span>
+                              <span style={{ color: '#8b92b0', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{fmtMes(e.mes + '-01')}</span>
                             </div>
                           );
                         })}
@@ -717,9 +717,9 @@ export default function DashboardVendedor() {
                       { label:'Meta Mensal',        val: fmt(metaMensal), cor:'#a78bfa', icone:'🎯' },
                       { label:'Mês Atual',          val: mesAtualLabel, cor:'#60a5fa', icone:'📅' },
                     ].map(k => (
-                      <div key={k.label} style={{ background:'#161a26', border:`1px solid ${k.cor}22`, borderRadius:14, padding:'16px 20px' }}>
+                      <div key={k.label} style={{ background:'#ffffff', border:`1px solid ${k.cor}44`, borderRadius:14, padding:'16px 20px' }}>
                         <div style={{ fontSize:'1.3rem', marginBottom:6 }}>{k.icone}</div>
-                        <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{k.label}</div>
+                        <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{k.label}</div>
                         <div style={{ fontSize:'1.25rem', fontWeight:800, color:k.cor }}>{k.val}</div>
                       </div>
                     ))}
@@ -738,7 +738,7 @@ export default function DashboardVendedor() {
                       return (
                         <div key={gi} style={{
                           background: isMesAtual ? 'rgba(240,180,41,0.06)' : '#161a26',
-                          border: `1px solid ${isMesAtual ? 'rgba(240,180,41,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                          border: `1px solid ${isMesAtual ? '#f0b429' : '#e4e7ef'}`,
                           borderRadius:14, overflow:'hidden',
                         }}>
                           {/* Header do card */}
@@ -759,20 +759,20 @@ export default function DashboardVendedor() {
                                   </span>
                                 )}
                               </div>
-                              <div style={{ color:'#4b5563', fontSize:'0.72rem', marginTop:3 }}>
+                              <div style={{ color:'#8b92b0', fontSize:'0.72rem', marginTop:3 }}>
                                 {grupo.contratos} contrato{grupo.contratos!==1?'s':''}
                               </div>
                             </div>
 
                             {/* Potencial */}
                             <div style={{ flex:1, minWidth:140 }}>
-                              <div style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Potencial Mensal</div>
+                              <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Potencial Mensal</div>
                               <div style={{ fontWeight:700, color:'#34d399' }}>{fmt(grupo.potencial)}</div>
                             </div>
 
                             {/* Resultado esperado */}
                             <div style={{ flex:1, minWidth:140 }}>
-                              <div style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Resultado Esperado</div>
+                              <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:2 }}>Resultado Esperado</div>
                               <div style={{ fontWeight:700, color:'#a78bfa' }}>{fmt(grupo.resultado)}</div>
                             </div>
 
@@ -780,11 +780,11 @@ export default function DashboardVendedor() {
                             {!isCarteira && metaMensal > 0 && (
                               <div style={{ flex:1, minWidth:160 }}>
                                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                                  <span style={{ color:'#4b5563', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1 }}>vs Meta Mensal</span>
+                                  <span style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1 }}>vs Meta Mensal</span>
                                   <span style={{ color:corAlerta, fontWeight:700, fontSize:'0.8rem' }}>{fmtPct(pctMeta)}</span>
                                 </div>
                                 {/* Barra termômetro */}
-                                <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:6, height:10, overflow:'hidden', position:'relative' }}>
+                                <div style={{ background:'#eaecf2', borderRadius:6, height:10, overflow:'hidden', position:'relative' }}>
                                   <div style={{
                                     height:'100%', borderRadius:6, transition:'width 0.8s',
                                     width:`${Math.min(pctMeta, 100)}%`,
@@ -797,14 +797,14 @@ export default function DashboardVendedor() {
                                   {/* Marcador 50% */}
                                   <div style={{ position:'absolute', left:'50%', top:0, width:1, height:'100%', background:'rgba(255,255,255,0.2)' }}></div>
                                 </div>
-                                <div style={{ display:'flex', justifyContent:'space-between', marginTop:3, fontSize:'0.6rem', color:'#4b5563' }}>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginTop:3, fontSize:'0.6rem', color:'#8b92b0' }}>
                                   <span>0</span><span>50%</span><span>{fmt(metaMensal)}</span>
                                 </div>
                               </div>
                             )}
 
                             {/* Chevron */}
-                            <div style={{ color:'#4b5563', fontSize:'0.8rem', marginLeft:'auto' }}>
+                            <div style={{ color:'#8b92b0', fontSize:'0.8rem', marginLeft:'auto' }}>
                               {aberto2 ? '▲' : '▼'}
                             </div>
                           </div>
@@ -822,15 +822,15 @@ export default function DashboardVendedor() {
                                 <tbody>
                                   {grupo.empresas.sort((a,b) => (b.potencial_movimentacao||0)-(a.potencial_movimentacao||0)).map((e,i) => (
                                     <tr key={i} style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
-                                      <td style={{ ...s.td, color:'#6b7280', fontSize:'0.7rem' }}>{e.produto_id||'—'}</td>
+                                      <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.7rem' }}>{e.produto_id||'—'}</td>
                                       <td style={{ ...s.td, fontWeight:600 }}>{e.nome}</td>
                                       <td style={s.td}>{e.produto_contratado||'—'}</td>
-                                      <td style={{ ...s.td, color:'#9ca3af' }}>{e.categoria||'—'}</td>
+                                      <td style={{ ...s.td, color:'#4a5068' }}>{e.categoria||'—'}</td>
                                       <td style={s.td}>{e.cidade||'—'}/{e.estado||'—'}</td>
                                       <td style={{ ...s.td, color:'#34d399' }}>{fmt(e.potencial_movimentacao)}</td>
                                       <td style={{ ...s.td, color:'#a78bfa', fontWeight:600 }}>{fmt((e.potencial_movimentacao||0)*(e.peso_categoria||1))}</td>
-                                      <td style={{ ...s.td, color:'#6b7280' }}>{e.data_cadastro?.substring(0,10)||'—'}</td>
-                                      <td style={{ ...s.td, color:'#9ca3af' }}>{e.parceiro?.nome||'—'}</td>
+                                      <td style={{ ...s.td, color:'#8b92b0' }}>{e.data_cadastro?.substring(0,10)||'—'}</td>
+                                      <td style={{ ...s.td, color:'#4a5068' }}>{e.parceiro?.nome||'—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -884,7 +884,7 @@ export default function DashboardVendedor() {
                         <span key={val} onClick={() => setFiltroSituacao(filtroSituacao===val?'':val)}
                           style={{ display:'flex', alignItems:'center', gap:4, cursor:'pointer', opacity: filtroSituacao && filtroSituacao!==val ? 0.35 : 1 }}>
                           <span style={{ width:8, height:8, borderRadius:'50%', background:cor, display:'inline-block' }}></span>
-                          <span style={{ color:'#6b7280', fontSize:'0.73rem' }}>{label}</span>
+                          <span style={{ color:'#8b92b0', fontSize:'0.73rem' }}>{label}</span>
                         </span>
                       ))}
                     </div>
@@ -896,12 +896,12 @@ export default function DashboardVendedor() {
                       placeholder="🔍 Buscar por nome ou ID..."
                       value={filtroBusca}
                       onChange={e => setFiltroBusca(e.target.value)}
-                      style={{ flex:2, minWidth:180, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 12px', color:'#e8eaf0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
+                      style={{ flex:2, minWidth:180, background:'#f5f6fa', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 12px', color:'#1a1d2e', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
                     />
                     <select
                       value={filtroProduto}
                       onChange={e => setFiltroProduto(e.target.value)}
-                      style={{ flex:1, minWidth:140, background:'#1e2330', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'7px 10px', color: filtroProduto ? '#e8eaf0' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
+                      style={{ flex:1, minWidth:140, background:'#1e2330', border:'1px solid #e4e7ef', borderRadius:8, padding:'7px 10px', color: filtroProduto ? '#e8eaf0' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none' }}
                     >
                       <option value=''>Todos os produtos</option>
                       {produtosUnicos.map(p => <option key={p} value={p}>{p}</option>)}
@@ -909,7 +909,7 @@ export default function DashboardVendedor() {
                     <select
                       value={filtroMesRef}
                       onChange={e => setFiltroMesRef(e.target.value)}
-                      style={{ flex:1, minWidth:150, background:'#1e2330', border:`1px solid ${filtroMesRef ? 'rgba(96,165,250,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius:8, padding:'7px 10px', color: filtroMesRef ? '#60a5fa' : '#6b7280', fontSize:'0.82rem', fontFamily:'inherit', outline:'none', fontWeight: filtroMesRef ? 600 : 400 }}
+                      style={{ flex:1, minWidth:150, background:'#1e2330', border:`1px solid ${filtroMesRef ? 'rgba(96,165,250,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius:8, padding:'7px 10px', color: filtroMesRef ? '#2563eb' : '#8b92b0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none', fontWeight: filtroMesRef ? 600 : 400 }}
                     >
                       <option value=''>Mês Ref. — Todos</option>
                       {[...new Set(movRealPorEmpresa.map(e => getMesReferencia(e.data_cadastro)).filter(Boolean))]
@@ -927,18 +927,18 @@ export default function DashboardVendedor() {
                         ✕ Limpar
                       </button>
                     )}
-                    <span style={{ color:'#4b5563', fontSize:'0.75rem', alignSelf:'center', marginLeft:'auto' }}>
+                    <span style={{ color:'#8b92b0', fontSize:'0.75rem', alignSelf:'center', marginLeft:'auto' }}>
                       {lista.length} de {movRealPorEmpresa.length} empresas
                     </span>
                   </div>
 
                   {/* Tabela com scroll interno fixo */}
-                  <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:480, borderRadius:8, border:'1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:480, borderRadius:8, border:'1px solid #f0f2f8' }}>
                     <table style={{ ...s.table, fontSize:'0.78rem' }}>
                       <thead>
-                        <tr style={{ position:'sticky', top:0, zIndex:2, background:'#161a26' }}>
+                        <tr style={{ position:'sticky', top:0, zIndex:2, background:'#f9fafb' }}>
                           {['ID','Empresa','Produto','Dt. Cadastro','Mês Ref.','Potencial','Acum. Real','Média/Mês','% Aderência','Situação','Parceiro'].map(h =>
-                            <th key={h} style={{ ...s.th, background:'#1a1f2e', position:'sticky', top:0 }}>{h}</th>)}
+                            <th key={h} style={{ ...s.th, background:'#f9fafb', position:'sticky', top:0 }}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -948,17 +948,17 @@ export default function DashboardVendedor() {
                             : e.situacao === 'abaixo do esperado' ? '#f87171' : '#4b5563';
                           return (
                             <tr key={i} className="row-hover" style={i%2===0?{background:'rgba(255,255,255,0.015)'}:{}}>
-                              <td style={{ ...s.td, color:'#6b7280', fontSize:'0.72rem' }}>{e.produto_id ?? '—'}</td>
+                              <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.72rem' }}>{e.produto_id ?? '—'}</td>
                               <td style={{ ...s.td, fontWeight:600, minWidth:160 }}>{e.nome}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>{e.produto_contratado||'—'}</td>
-                              <td style={{ ...s.td, color:'#6b7280', whiteSpace:'nowrap' }}>{e.data_cadastro ? e.data_cadastro.substring(0,10) : '—'}</td>
+                              <td style={{ ...s.td, color:'#8b92b0', whiteSpace:'nowrap' }}>{e.data_cadastro ? e.data_cadastro.substring(0,10) : '—'}</td>
                               <td style={{ ...s.td, color:'#60a5fa', fontWeight:600, whiteSpace:'nowrap' }}>{getMesReferencia(e.data_cadastro) || '—'}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>{fmt(e.potencial_movimentacao)}</td>
-                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.movReal > 0 ? fmt(e.movReal) : '—'}</td>
+                              <td style={{ ...s.td, color:'#4a5068', whiteSpace:'nowrap' }}>{e.movReal > 0 ? fmt(e.movReal) : '—'}</td>
                               <td style={{ ...s.td, color:'#34d399', fontWeight:600, whiteSpace:'nowrap' }}>{e.mediaMovMensal > 0 ? fmt(e.mediaMovMensal) : '—'}</td>
                               <td style={{ ...s.td, whiteSpace:'nowrap' }}>
                                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                  <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:3, height:5, width:50, overflow:'hidden' }}>
+                                  <div style={{ background:'#f0f2f8', borderRadius:3, height:5, width:50, overflow:'hidden' }}>
                                     <div style={{ background:corSit, height:'100%', width:`${Math.min(e.aderencia,100)}%`, borderRadius:3 }}></div>
                                   </div>
                                   <span style={{ color:corSit, fontWeight:600, fontSize:'0.75rem' }}>{fmtPct(e.aderencia)}</span>
@@ -969,12 +969,12 @@ export default function DashboardVendedor() {
                                   {e.situacao}
                                 </span>
                               </td>
-                              <td style={{ ...s.td, color:'#9ca3af', whiteSpace:'nowrap' }}>{e.parceiro?.nome||'—'}</td>
+                              <td style={{ ...s.td, color:'#4a5068', whiteSpace:'nowrap' }}>{e.parceiro?.nome||'—'}</td>
                             </tr>
                           );
                         })}
                         {lista.length === 0 && (
-                          <tr><td colSpan={12} style={{ ...s.td, textAlign:'center', color:'#4b5563', padding:32 }}>Nenhuma empresa encontrada</td></tr>
+                          <tr><td colSpan={12} style={{ ...s.td, textAlign:'center', color:'#8b92b0', padding:32 }}>Nenhuma empresa encontrada</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -997,7 +997,7 @@ export default function DashboardVendedor() {
                     ].map(({ cor, label }) => (
                       <span key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
                         <span style={{ width:10, height:10, borderRadius:2, background:cor, display:'inline-block' }}></span>
-                        <span style={{ color:'#9ca3af' }}>{label}</span>
+                        <span style={{ color:'#4a5068' }}>{label}</span>
                       </span>
                     ))}
                   </div>
@@ -1011,7 +1011,7 @@ export default function DashboardVendedor() {
                     const pctMov   = p.resultado > 0 ? (movCap / p.resultado) * 100 : 0; // % dentro da barra amarela
                     const pctTotal = (p.resultado / (kpis.totalResultado || 1)) * 100;
                     return (
-                      <div key={i} style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:'16px 20px' }}>
+                      <div key={i} style={{ background:'#f9fafb', borderRadius:12, padding:'16px 20px' }}>
                         {/* Linha topo */}
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                           <span style={{ fontWeight:700, fontSize:'0.95rem' }}>{p.nome}</span>
@@ -1020,27 +1020,27 @@ export default function DashboardVendedor() {
                         {/* 4 KPIs */}
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:12 }}>
                           <div>
-                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Potencial Bruto</div>
+                            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Potencial Bruto</div>
                             <div style={{ fontWeight:600, fontSize:'0.85rem' }}>{fmt(p.potencial)}</div>
                           </div>
                           <div>
-                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Resultado Esperado</div>
+                            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Resultado Esperado</div>
                             <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#a78bfa' }}>{fmt(p.resultado)}</div>
                           </div>
                           <div>
-                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Movimentado Real</div>
+                            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>Movimentado Real</div>
                             <div style={{ fontWeight:700, fontSize:'0.85rem', color: p.movReal > 0 ? '#f0b429' : '#4b5563' }}>
                               {p.movReal > 0 ? fmt(p.movReal) : '—'}
                             </div>
                           </div>
                           <div>
-                            <div style={{ color:'#6b7280', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>% do Total</div>
+                            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', marginBottom:3 }}>% do Total</div>
                             <div style={{ fontWeight:600, fontSize:'0.85rem', color:'#60a5fa' }}>{fmtPct(pctTotal)}</div>
                           </div>
                         </div>
                         {/* Barra segmentada: fundo = resultado esperado (roxo), sobreposição = movimentado (amarelo) */}
                         <div style={{ position:'relative', height:10, borderRadius:6, overflow:'hidden',
-                          background:'rgba(255,255,255,0.06)' }}>
+                          background:'#f0f2f8' }}>
                           {/* Segmento roxo — resultado esperado */}
                           <div style={{
                             position:'absolute', left:0, top:0, height:'100%',
@@ -1062,7 +1062,7 @@ export default function DashboardVendedor() {
                         </div>
                         {/* Rodapé da barra */}
                         {p.movReal > 0 && (
-                          <div style={{ display:'flex', justifyContent:'space-between', marginTop:5, fontSize:'0.65rem', color:'#6b7280' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginTop:5, fontSize:'0.65rem', color:'#8b92b0' }}>
                             <span style={{ color:'#f0b429' }}>
                               Movimentado: {fmtPct(p.resultado > 0 ? (p.movReal/p.resultado)*100 : 0)} do esperado
                             </span>
@@ -1082,7 +1082,7 @@ export default function DashboardVendedor() {
               <div style={s.card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <div style={s.cardTitle}>🤝 Fechamentos por Parceiro Comercial</div>
-                  <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{parceirosArray.length} parceiros</span>
+                  <span style={{ color: '#8b92b0', fontSize: '0.8rem' }}>{parceirosArray.length} parceiros</span>
                 </div>
 
                 {/* Cards resumo por parceiro */}
@@ -1095,11 +1095,11 @@ export default function DashboardVendedor() {
                     const resultadoMensal = meses > 0 ? p.resultado / meses : p.resultado;
                     const corAder = pctMov >= 100 ? '#34d399' : pctMov >= 70 ? '#f0b429' : '#f87171';
                     return (
-                      <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      <div key={i} style={{ background: '#f9fafb', border: `1px solid ${cor}28`, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
 
                         {/* Cabeçalho: nome + badge contratos */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#e8eaf0', flex: 1, paddingRight: 8, lineHeight: 1.3 }}>{p.nome}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1a1d2e', flex: 1, paddingRight: 8, lineHeight: 1.3 }}>{p.nome}</div>
                           <span style={{ background: `${cor}18`, color: cor, borderRadius: 6, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                             {p.contratos} empresa{p.contratos > 1 ? 's' : ''}
                           </span>
@@ -1107,9 +1107,9 @@ export default function DashboardVendedor() {
 
                         {/* Destaque principal: Média Mensal Real */}
                         <div style={{ marginBottom: 12 }}>
-                          <div style={{ color: '#4b5563', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>Média Mensal Real</div>
+                          <div style={{ color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>Média Mensal Real</div>
                           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#60a5fa' }}>{fmt(p.mediaMovMensal)}</div>
-                          <div style={{ color: '#4b5563', fontSize: '0.68rem', marginTop: 2 }}>base {meses} {meses === 1 ? 'mês' : 'meses'} · acum. {fmt(p.movReal)}</div>
+                          <div style={{ color: '#8b92b0', fontSize: '0.68rem', marginTop: 2 }}>base {meses} {meses === 1 ? 'mês' : 'meses'} · acum. {fmt(p.movReal)}</div>
                         </div>
 
                         {/* Divisor */}
@@ -1118,17 +1118,17 @@ export default function DashboardVendedor() {
                         {/* Comparativo mensal: esperado vs real */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                           <div>
-                            <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Esperado/mês</div>
+                            <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Esperado/mês</div>
                             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: cor }}>{fmt(resultadoMensal)}</div>
                           </div>
                           <div>
-                            <div style={{ color: '#4b5563', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Potencial/mês</div>
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#9ca3af' }}>{fmt(p.potencialMensal)}</div>
+                            <div style={{ color: '#8b92b0', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Potencial/mês</div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#4a5068' }}>{fmt(p.potencialMensal)}</div>
                           </div>
                         </div>
 
                         {/* Barra de aderência */}
-                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 4 }}>
+                        <div style={{ background: '#f0f2f8', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 4 }}>
                           <div style={{ background: corAder, height: '100%', width: `${Math.min(pctMov, 100)}%`, borderRadius: 4, transition: 'width 0.6s' }}></div>
                         </div>
                         <div style={{ color: corAder, fontSize: '0.68rem', fontWeight: 600, textAlign: 'right' }}>
@@ -1143,8 +1143,8 @@ export default function DashboardVendedor() {
                 {/* Tabela detalhada */}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#9ca3af' }}>DETALHAMENTO COMPLETO</div>
-                    <div style={{ fontSize: '0.72rem', color: '#4b5563', background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '4px 10px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#4a5068' }}>DETALHAMENTO COMPLETO</div>
+                    <div style={{ fontSize: '0.72rem', color: '#8b92b0', background: '#f9fafb', borderRadius: 6, padding: '4px 10px' }}>
                       📌 Potencial e Resultado acumulados (× meses importados) — mesma base da Mov. Real
                     </div>
                   </div>
@@ -1163,28 +1163,28 @@ export default function DashboardVendedor() {
                           const corAder   = ader >= 90 ? '#34d399' : ader >= 50 ? '#f0b429' : ader > 0 ? '#f87171' : '#4b5563';
                           const corSpread = p.spread > 0 ? '#60a5fa' : p.spread < 0 ? '#f87171' : '#4b5563';
                           return (
-                            <tr key={i} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
+                            <tr key={i} style={i % 2 === 0 ? { background: '#f9fafb' } : {}}>
                               <td style={{ ...s.td, fontWeight: 600, color: p.nome === 'Sem Parceiro' ? '#4b5563' : '#e8eaf0' }}>
                                 {p.nome}
-                                <div style={{ color: '#4b5563', fontSize: '0.68rem', fontWeight: 400, marginTop: 2 }}>
+                                <div style={{ color: '#8b92b0', fontSize: '0.68rem', fontWeight: 400, marginTop: 2 }}>
                                   {Math.round(p.mesesMedios)} {Math.round(p.mesesMedios) === 1 ? 'mês' : 'meses'} importados
                                 </div>
                               </td>
                               <td style={{ ...s.td, textAlign: 'center' }}>{p.contratos}</td>
                               <td style={{ ...s.td, color: '#f0b429' }}>{fmt(p.potencialMensal)}</td>
-                              <td style={{ ...s.td, color: '#9ca3af' }}>{fmt(p.resultado)}</td>
+                              <td style={{ ...s.td, color: '#4a5068' }}>{fmt(p.resultado)}</td>
                               <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(p.movReal)}</td>
                               <td style={{ ...s.td, color: '#60a5fa', fontWeight: 700 }}>{fmt(p.mediaMovMensal)}</td>
                               <td style={s.td}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
+                                  <div style={{ background: '#eaecf2', borderRadius: 4, height: 6, width: 60, overflow: 'hidden' }}>
                                     <div style={{ background: corAder, height: '100%', width: `${Math.min(ader, 100)}%`, borderRadius: 4 }}></div>
                                   </div>
                                   <span style={{ color: corAder, fontWeight: 600, fontSize: '0.8rem' }}>{fmtPct(ader)}</span>
                                 </div>
                               </td>
                               <td style={{ ...s.td, color: corSpread, fontWeight: 600 }}>
-                                {p.spread !== 0 ? fmt(p.spread) : <span style={{ color: '#4b5563' }}>—</span>}
+                                {p.spread !== 0 ? fmt(p.spread) : <span style={{ color: '#8b92b0' }}>—</span>}
                               </td>
                             </tr>
                           );
@@ -1228,20 +1228,20 @@ export default function DashboardVendedor() {
                       return (
                         <div key={c.id} style={{
                           borderRadius:10, overflow:'hidden',
-                          background: isAtual ? 'rgba(240,180,41,0.06)' : 'rgba(255,255,255,0.02)',
-                          border: isAtual ? '1px solid rgba(240,180,41,0.25)' : '1px solid rgba(255,255,255,0.04)',
+                          background: isAtual ? '#fff8e6' : '#f9fafb',
+                          border: isAtual ? '1px solid #f0b429' : '1px solid #e4e7ef',
                         }}>
                           <div style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px' }}>
                             <span style={{ fontWeight:700, fontSize:'1rem', color: corMedal, minWidth:32, textAlign:'center' }}>{medal}</span>
                             <div style={{ flex:1 }}>
                               <div style={{ fontWeight: isAtual ? 700 : 500, fontSize:'0.88rem', color: isAtual ? '#f0b429' : '#e8eaf0' }}>{c.nome}</div>
                               {c.movMes > 0 && (
-                                <div style={{ fontSize:'0.72rem', color:'#4b5563', marginTop:2 }}>
+                                <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginTop:2 }}>
                                   Últ. mov: {fmt(c.movMes)} · {fmtMes((ultimoMes||'') + '-01')}
                                 </div>
                               )}
                             </div>
-                            <span style={{ color:'#4b5563', fontSize:'0.75rem' }}>{c.gestor || '—'}</span>
+                            <span style={{ color:'#8b92b0', fontSize:'0.75rem' }}>{c.gestor || '—'}</span>
                             <span style={{ color: c.volMetaAcum > 0 ? '#34d399' : '#4b5563', fontWeight:700, fontSize:'0.9rem', minWidth:120, textAlign:'right' }}>
                               {c.volMetaAcum > 0 ? fmt(c.volMetaAcum) : '—'}
                             </span>
@@ -1250,7 +1250,7 @@ export default function DashboardVendedor() {
                             )}
                           </div>
                           {c.volMetaAcum > 0 && (
-                            <div style={{ height:3, background:'rgba(255,255,255,0.04)' }}>
+                            <div style={{ height:3, background:'#f5f6fa' }}>
                               <div style={{ height:'100%', width:`${pctBarra}%`, background: isAtual ? '#f0b429' : i < 3 ? '#34d399' : 'rgba(255,255,255,0.15)', transition:'width 0.6s' }}></div>
                             </div>
                           )}
@@ -1272,29 +1272,29 @@ export default function DashboardVendedor() {
 }
 
 const s = {
-  page:        { maxWidth: 1200, margin: '0 auto', padding: '32px 24px', fontFamily: "'DM Sans', sans-serif", color: '#e8eaf0', background: '#0a0c10', minHeight: '100vh' },
+  page:        { maxWidth: 1200, margin: '0 auto', padding: '32px 24px', fontFamily: "'DM Sans', sans-serif", color: '#1a1d2e', background: '#f5f6fa', minHeight: '100vh' },
   header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  tag:         { color: '#f0b429', fontWeight: 800, fontSize: '0.9rem', letterSpacing: 2, marginBottom: 12, textTransform: 'uppercase' },
-  title:       { fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px', fontFamily: "'Syne', sans-serif" },
-  sub:         { color: '#6b7280', fontSize: '0.9rem' },
-  filtrosCard: { background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '20px 24px', marginBottom: 24, display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'flex-end' },
-  filtroGrupo: { display: 'flex', flexDirection: 'column', gap: 8 },
-  filtroLabel: { color: '#4b5563', fontSize: '0.68rem', letterSpacing: 2, textTransform: 'uppercase', fontWeight: 600 },
-  gestorBtn:   { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '7px 16px', color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
-  gestorBtnAtivo: { background: 'rgba(240,180,41,0.12)', border: '1px solid rgba(240,180,41,0.35)', color: '#f0b429', fontWeight: 700 },
-  select:      { background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '9px 16px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', cursor: 'pointer', minWidth: 260 },
-  vazio:       { background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '64px 32px', textAlign: 'center' },
+  tag:         { color: '#b45309', fontWeight: 700, fontSize: '0.75rem', letterSpacing: 2, marginBottom: 8, textTransform: 'uppercase' },
+  title:       { fontSize: '1.6rem', fontWeight: 700, margin: '0 0 6px', fontFamily: "'Syne', sans-serif", color: '#1a1d2e' },
+  sub:         { color: '#8b92b0', fontSize: '0.875rem' },
+  filtrosCard: { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-end', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+  filtroGrupo: { display: 'flex', flexDirection: 'column', gap: 6 },
+  filtroLabel: { color: '#8b92b0', fontSize: '0.65rem', letterSpacing: 2, textTransform: 'uppercase', fontWeight: 600 },
+  gestorBtn:   { background: '#f5f6fa', border: '1px solid #e4e7ef', borderRadius: 8, padding: '7px 14px', color: '#4a5068', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500, fontFamily: 'inherit' },
+  gestorBtnAtivo: { background: '#fff8e6', border: '1px solid #f0b429', color: '#b45309', fontWeight: 700 },
+  select:      { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 8, padding: '8px 14px', color: '#1a1d2e', fontSize: '0.875rem', fontFamily: 'inherit', cursor: 'pointer', minWidth: 240 },
+  vazio:       { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 12, padding: '64px 32px', textAlign: 'center' },
   kpis:        { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
-  kpi:         { background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column' },
-  kpiLabel:    { color: '#4b5563', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
-  kpiVal:      { fontSize: '1.2rem', fontWeight: 700 },
+  kpi:         { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+  kpiLabel:    { color: '#8b92b0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  kpiVal:      { fontSize: '1.2rem', fontWeight: 700, color: '#1a1d2e' },
   tabs:        { display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
-  tab:         { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 16px', color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
-  tabAtiva:    { background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', color: '#f0b429' },
-  card:        { background: '#111420', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '24px', marginBottom: 0 },
-  cardTitle:   { fontSize: '1rem', fontWeight: 700 },
+  tab:         { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 8, padding: '7px 16px', color: '#4a5068', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
+  tabAtiva:    { background: '#fff8e6', border: '1px solid #f0b429', color: '#b45309', fontWeight: 600 },
+  card:        { background: '#ffffff', border: '1px solid #e4e7ef', borderRadius: 12, padding: '24px', marginBottom: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+  cardTitle:   { fontSize: '0.95rem', fontWeight: 700, color: '#1a1d2e' },
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
-  th:          { padding: '8px 12px', textAlign: 'left', color: '#4b5563', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: 0.5 },
-  td:          { padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' },
-  semDados:    { color: '#4b5563', fontSize: '0.85rem', textAlign: 'center', padding: '32px 0' },
+  th:          { padding: '8px 12px', textAlign: 'left', color: '#8b92b0', fontWeight: 600, borderBottom: '1px solid #e4e7ef', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.67rem', letterSpacing: 0.5, background: '#f9fafb' },
+  td:          { padding: '10px 12px', borderBottom: '1px solid #f0f2f8', whiteSpace: 'nowrap', color: '#1a1d2e' },
+  semDados:    { color: '#8b92b0', fontSize: '0.85rem', textAlign: 'center', padding: '32px 0' },
 };
