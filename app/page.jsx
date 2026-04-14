@@ -16,19 +16,12 @@ export default function Home() {
     <div style={{ padding:'40px 40px', background:'#f5f6fa', minHeight:'100vh' }}>
       {/* Header */}
       <div style={{ marginBottom:40 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
-          <span style={{ background:'#f0b429', borderRadius:8, width:36, height:36,
-            display:'inline-flex', alignItems:'center', justifyContent:'center',
-            fontSize:'1.1rem', fontWeight:900 }}>♠</span>
-          <div>
-            <h1 style={{ fontSize:'1.5rem', fontWeight:700, color:'#1a1d2e', margin:0 }}>
-              Bem-vindo ao Sistema
-            </h1>
-            <p style={{ color:'#8b92b0', fontSize:'0.85rem', margin:0, marginTop:2 }}>
-              Vegas Card — Gestão Comercial · {new Date().toLocaleDateString('pt-BR', { month:'long', year:'numeric' })}
-            </p>
-          </div>
-        </div>
+        <h1 style={{ fontSize:'1.4rem', fontWeight:600, color:'#1a1d2e', margin:0, fontFamily:"'DM Sans', sans-serif", letterSpacing:-0.3 }}>
+          Bem-vindo ao Sistema
+        </h1>
+        <p style={{ color:'#8b92b0', fontSize:'0.85rem', margin:0, marginTop:4 }}>
+          Vegas Card — Gestão Comercial · {new Date().toLocaleDateString('pt-BR', { month:'long', year:'numeric' })}
+        </p>
       </div>
 
       {/* Cards */}
