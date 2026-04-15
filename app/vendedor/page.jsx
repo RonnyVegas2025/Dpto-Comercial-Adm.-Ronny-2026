@@ -55,6 +55,19 @@ export default function DashboardVendedor() {
   useEffect(() => { carregarConsultores(); }, []);
   useEffect(() => { if (consultores.length > 0) carregarDados(); }, [consultorId, gestorFiltro, consultores, mesSelecionado]);
 
+  // Sincroniza filtroMesRef da carteira com o mês selecionado no topo
+  useEffect(() => {
+    if (!mesSelecionado) {
+      setFiltroMesRef('');
+      return;
+    }
+    // Converte '2026-03' → 'Mar/26' para bater com getMesReferencia
+    const [ano, mes] = mesSelecionado.split('-');
+    const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const label = `${meses[parseInt(mes)-1]}/${String(ano).slice(2)}`;
+    setFiltroMesRef(label);
+  }, [mesSelecionado]);
+
   async function carregarConsultores() {
     const [{ data }, { data: movMeses }] = await Promise.all([
       supabase.from('consultores').select('id, nome, meta_mensal, setor, gestor').eq('ativo', true).order('nome'),
@@ -910,7 +923,13 @@ export default function DashboardVendedor() {
                     <select
                       value={filtroMesRef}
                       onChange={e => setFiltroMesRef(e.target.value)}
-                      style={{ flex:1, minWidth:150, background:'#1e2330', border:`1px solid ${filtroMesRef ? 'rgba(96,165,250,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius:8, padding:'7px 10px', color: filtroMesRef ? '#2563eb' : '#8b92b0', fontSize:'0.82rem', fontFamily:'inherit', outline:'none', fontWeight: filtroMesRef ? 600 : 400 }}
+                      style={{ flex:1, minWidth:150,
+                        background: mesSelecionado ? '#fff8e6' : '#ffffff',
+                        border: `1px solid ${filtroMesRef ? '#f0b429' : '#e4e7ef'}`,
+                        borderRadius:8, padding:'7px 10px',
+                        color: filtroMesRef ? '#b45309' : '#8b92b0',
+                        fontSize:'0.82rem', fontFamily:'inherit', outline:'none',
+                        fontWeight: filtroMesRef ? 600 : 400 }}
                     >
                       <option value=''>Mês Ref. — Todos</option>
                       {[...new Set(movRealPorEmpresa.map(e => getMesReferencia(e.data_cadastro)).filter(Boolean))]
@@ -922,9 +941,16 @@ export default function DashboardVendedor() {
                         })
                         .map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
+                    {mesSelecionado && filtroMesRef && (
+                      <span style={{ background:'#fff8e6', border:'1px solid #f0b429', borderRadius:6,
+                        padding:'4px 10px', fontSize:'0.72rem', color:'#b45309', fontWeight:600,
+                        alignSelf:'center', whiteSpace:'nowrap' }}>
+                        🔗 Sincronizado com o mês
+                      </span>
+                    )}
                     {(filtroBusca || filtroProduto || filtroSituacao || filtroMesRef) && (
                       <button onClick={() => { setFiltroBusca(''); setFiltroProduto(''); setFiltroSituacao(''); setFiltroMesRef(''); }}
-                        style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:8, padding:'7px 14px', color:'#f87171', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit' }}>
+                        style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'7px 14px', color:'#dc2626', fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit' }}>
                         ✕ Limpar
                       </button>
                     )}
