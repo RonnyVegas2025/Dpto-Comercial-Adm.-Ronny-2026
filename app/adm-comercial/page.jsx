@@ -17,6 +17,9 @@ const EQUIPES = [
   'Prospecção',
   'Key Account',
   'Suporte Comercial',
+  'Inside',
+  'Venda Nova',
+  'Parcerias',
   'Outros',
 ];
 
@@ -28,6 +31,9 @@ const COR_EQUIPE = {
   'Prospecção':        '#7c3aed',
   'Key Account':       '#ea580c',
   'Suporte Comercial': '#0891b2',
+  'Inside':            '#db2777',
+  'Venda Nova':        '#059669',
+  'Parcerias':         '#d97706',
   'Outros':            '#6b7280',
 };
 
@@ -455,4 +461,3 @@ const sL      = { display:'block', color:'#8b92b0', fontSize:'0.65rem', textTran
 const sI      = { background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:8, padding:'8px 12px', color:'#1a1d2e', fontSize:'0.85rem', fontFamily:'inherit', width:'100%', boxSizing:'border-box' };
 const sBtnPri = { background:'#f0b429', color:'#000', border:'none', borderRadius:8, padding:'9px 20px', fontWeight:700, cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit' };
 const sBtnSec = { background:'#f5f6fa', color:'#4a5068', border:'1px solid #e4e7ef', borderRadius:8, padding:'9px 16px', fontWeight:600, cursor:'pointer', fontSize:'0.85rem', fontFamily:'inherit' };
-
