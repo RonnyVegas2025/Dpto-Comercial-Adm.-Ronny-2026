@@ -117,6 +117,21 @@ function PaginaVendedores() {
   const setF  = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setE  = (k, v) => setEditando(e => ({ ...e, [k]: v }));
 
+  // Equipes disponíveis para o gestor selecionado
+  const equipesDoGestor = filtroGestor
+    ? [...new Set(
+        consultores
+          .filter(c => c.gestor === filtroGestor)
+          .map(c => c.equipe || 'Outros')
+      )].sort()
+    : EQUIPES;
+
+  // Reseta equipe se não existe no gestor selecionado
+  const handleGestorChange = (g) => {
+    setFiltroGestor(g);
+    setFiltroEquipe(''); // limpa equipe ao trocar gestor
+  };
+
   // Agrupa por equipe para exibição
   const filtrados = consultores.filter(c => {
     if (busca && !c.nome?.toLowerCase().includes(busca.toLowerCase())) return false;
@@ -236,16 +251,61 @@ function PaginaVendedores() {
         <input placeholder="🔍 Buscar vendedor..." value={busca}
           onChange={e=>setBusca(e.target.value)}
           style={{ ...sI, flex:2, minWidth:200 }}/>
-        <select value={filtroEquipe} onChange={e=>setFiltroEquipe(e.target.value)} style={{ ...sI, minWidth:160 }}>
-          <option value=''>Todas as equipes</option>
-          {EQUIPES.map(e => <option key={e} value={e}>{e}</option>)}
-        </select>
-        <select value={filtroGestor} onChange={e=>setFiltroGestor(e.target.value)} style={{ ...sI, minWidth:160 }}>
-          <option value=''>Todos os gestores</option>
-          {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
-        </select>
+
+        {/* Gestor — primeiro filtro */}
+        <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:170 }}>
+          <span style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>
+            Gestor
+          </span>
+          <select value={filtroGestor} onChange={e=>handleGestorChange(e.target.value)}
+            style={{ ...sI,
+              borderColor: filtroGestor ? '#f0b429' : '#e4e7ef',
+              background:  filtroGestor ? '#fff8e6' : '#ffffff',
+              color:       filtroGestor ? '#b45309' : '#8b92b0',
+              fontWeight:  filtroGestor ? 600 : 400,
+            }}>
+            <option value=''>Todos os gestores</option>
+            {GESTORES.map(g => <option key={g} value={g}>{g.split(' ')[0]}</option>)}
+          </select>
+        </div>
+
+        {/* Equipe — dependente do gestor */}
+        <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:170 }}>
+          <span style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>
+            Equipe {filtroGestor && <span style={{ color:'#f0b429' }}>· {filtroGestor.split(' ')[0]}</span>}
+          </span>
+          <select value={filtroEquipe} onChange={e=>setFiltroEquipe(e.target.value)}
+            style={{ ...sI,
+              borderColor: filtroEquipe ? '#f0b429' : '#e4e7ef',
+              background:  filtroEquipe ? '#fff8e6' : '#ffffff',
+              color:       filtroEquipe ? '#b45309' : '#8b92b0',
+              fontWeight:  filtroEquipe ? 600 : 400,
+            }}>
+            <option value=''>
+              {filtroGestor ? `Todas (${equipesDoGestor.length})` : 'Todas as equipes'}
+            </option>
+            {equipesDoGestor.map(e => {
+              const total = consultores.filter(c =>
+                (c.equipe||'Outros') === e && (!filtroGestor || c.gestor === filtroGestor)
+              ).length;
+              return <option key={e} value={e}>{e} ({total})</option>;
+            })}
+          </select>
+        </div>
+
+        {/* Limpar filtros */}
+        {(busca || filtroGestor || filtroEquipe) && (
+          <button onClick={() => { setBusca(''); setFiltroGestor(''); setFiltroEquipe(''); }}
+            style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
+              padding:'8px 14px', color:'#dc2626', fontSize:'0.78rem',
+              cursor:'pointer', fontFamily:'inherit', fontWeight:600, alignSelf:'flex-end' }}>
+            ✕ Limpar
+          </button>
+        )}
+
         {sucesso && <span style={{ color:'#16a34a', fontWeight:600, fontSize:'0.85rem' }}>✅ {sucesso}</span>}
-        <button style={{ ...sBtnPri, marginLeft:'auto' }} onClick={() => { setAdicionando(true); setEditando(null); setErro(''); }}>
+        <button style={{ ...sBtnPri, marginLeft:'auto', alignSelf:'flex-end' }}
+          onClick={() => { setAdicionando(true); setEditando(null); setErro(''); }}>
           + Novo Vendedor
         </button>
       </div>
