@@ -30,12 +30,27 @@ function getMesReferencia(data_cadastro) {
 
 const ABAS = [
   { key: 'resumo',       label: '📊 Resumo'      },
+  { key: 'equipes',      label: '🏷️ Equipes'      },
   { key: 'contratos',    label: '🌡️ Contratos'   },
   { key: 'movimentacao', label: '📋 Carteira'     },
   { key: 'produtos',     label: '🎯 Produtos'     },
   { key: 'parceiros',    label: '🤝 Parceiros'    },
   { key: 'ranking',      label: '🏆 Ranking'      },
 ];
+
+const COR_EQUIPE_DASH = {
+  'Credenciamento':    '#2563eb',
+  'Pós Vendas':        '#16a34a',
+  'Prospecção':        '#7c3aed',
+  'Key Account':       '#ea580c',
+  'Suporte Comercial': '#0891b2',
+  'Inside':            '#db2777',
+  'Venda Nova':        '#059669',
+  'Parcerias':         '#d97706',
+  'Outros':            '#6b7280',
+  'Sem Equipe':        '#9ca3af',
+};
+const CORES_FALLBACK = ['#2563eb','#16a34a','#7c3aed','#ea580c','#0891b2','#db2777','#d97706'];
 
 export default function DashboardVendedor() {
   const [consultores, setConsultores] = useState([]);
@@ -72,7 +87,7 @@ export default function DashboardVendedor() {
 
   async function carregarConsultores() {
     const [{ data }, { data: movMeses }] = await Promise.all([
-      supabase.from('consultores').select('id, nome, meta_mensal, setor, gestor').eq('ativo', true).order('nome'),
+      supabase.from('consultores').select('id, nome, meta_mensal, setor, gestor, equipe').eq('ativo', true).order('nome'),
       supabase.from('movimentacoes').select('competencia').order('competencia', { ascending: false }),
     ]);
     setConsultores(data || []);
@@ -718,6 +733,198 @@ export default function DashboardVendedor() {
 
               </div>
             )}
+
+            {/* ── EQUIPES ─────────────────────────────────────────────── */}
+            {aba === 'equipes' && (() => {
+              // Agrupa consultores e empresas por equipe
+              const equipesMap = {};
+              consultoresDaVisao.forEach(c => {
+                const eq = c.equipe || 'Sem Equipe';
+                if (!equipesMap[eq]) equipesMap[eq] = {
+                  nome: eq, consultores: [], potencial: 0, movReal: 0,
+                  meta: 0, resultado: 0, empresas: 0, cartoes: 0,
+                };
+                equipesMap[eq].consultores.push(c);
+                equipesMap[eq].meta += c.meta_mensal || 0;
+              });
+
+              // Adiciona dados das empresas por equipe
+              movRealPorEmpresa.forEach(e => {
+                const consultor = consultoresDaVisao.find(c => c.id === e.consultor_principal_id);
+                const eq = consultor?.equipe || 'Sem Equipe';
+                if (equipesMap[eq]) {
+                  equipesMap[eq].potencial  += e.potencial_movimentacao || 0;
+                  equipesMap[eq].movReal    += e.mediaMovMensal || 0;
+                  equipesMap[eq].resultado  += (e.potencial_movimentacao||0) * (e.peso_categoria||1);
+                  equipesMap[eq].empresas   += 1;
+                  equipesMap[eq].cartoes    += e.cartoes_emitidos || 0;
+                }
+              });
+
+              const equipesArr = Object.values(equipesMap)
+                .filter(e => e.consultores.length > 0)
+                .sort((a, b) => b.movReal - a.movReal);
+
+              const maxMov = Math.max(...equipesArr.map(e => e.movReal), 1);
+
+              return (
+                <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+                  {/* Cards comparativos */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:14 }}>
+                    {equipesArr.map((eq, i) => {
+                      const cor = COR_EQUIPE_DASH[eq.nome] || CORES_FALLBACK[i % CORES_FALLBACK.length];
+                      const pctMeta = eq.meta > 0 ? (eq.movReal / eq.meta) * 100 : 0;
+                      const pctBarra = (eq.movReal / maxMov) * 100;
+                      const corMeta = pctMeta >= 100 ? '#16a34a' : pctMeta >= 70 ? '#f0b429' : '#dc2626';
+                      return (
+                        <div key={eq.nome} style={{ background:'#ffffff', border:`1px solid ${cor}30`,
+                          borderRadius:12, padding:'18px 20px', boxShadow:'0 1px 3px rgba(0,0,0,0.05)',
+                          borderLeft:`4px solid ${cor}` }}>
+
+                          {/* Header */}
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{eq.nome}</div>
+                              <div style={{ color:'#8b92b0', fontSize:'0.72rem', marginTop:2 }}>
+                                {eq.consultores.length} vendedor{eq.consultores.length!==1?'es':''} · {eq.empresas} empresa{eq.empresas!==1?'s':''}
+                              </div>
+                            </div>
+                            <span style={{ background:`${cor}15`, color:cor, border:`1px solid ${cor}30`,
+                              borderRadius:6, padding:'2px 8px', fontSize:'0.68rem', fontWeight:700 }}>
+                              #{i+1}
+                            </span>
+                          </div>
+
+                          {/* KPIs */}
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+                            {[
+                              { label:'Mov. Real/mês', val:fmt(eq.movReal), cor:'#f0b429' },
+                              { label:'Potencial',     val:fmt(eq.potencial), cor:'#4a5068' },
+                              { label:'Meta Mensal',   val:eq.meta > 0 ? fmt(eq.meta) : '—', cor:'#4a5068' },
+                              { label:'% da Meta',     val:eq.meta > 0 ? `${pctMeta.toFixed(1)}%` : '—', cor:corMeta },
+                            ].map(k => (
+                              <div key={k.label}>
+                                <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>{k.label}</div>
+                                <div style={{ fontWeight:700, fontSize:'0.85rem', color:k.cor }}>{k.val}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Barra de progresso vs maior */}
+                          <div>
+                            <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.65rem', color:'#8b92b0', marginBottom:4 }}>
+                              <span>Mov. vs maior equipe</span>
+                              <span>{pctBarra.toFixed(0)}%</span>
+                            </div>
+                            <div style={{ background:'#f0f2f8', borderRadius:4, height:6, overflow:'hidden' }}>
+                              <div style={{ height:'100%', width:`${pctBarra}%`, background:cor, borderRadius:4, transition:'width 0.6s' }}></div>
+                            </div>
+                          </div>
+
+                          {/* Vendedores da equipe */}
+                          <div style={{ marginTop:14, paddingTop:12, borderTop:'1px solid #f0f2f8' }}>
+                            <div style={{ fontSize:'0.68rem', color:'#8b92b0', fontWeight:600, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>
+                              Vendedores
+                            </div>
+                            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                              {eq.consultores.map(c => {
+                                const empC = movRealPorEmpresa.filter(e => e.consultor_principal_id === c.id);
+                                const movC = empC.reduce((s,e) => s + (e.mediaMovMensal||0), 0);
+                                const pctC = eq.movReal > 0 ? (movC / eq.movReal) * 100 : 0;
+                                return (
+                                  <div key={c.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:'0.75rem', fontWeight:500, color:'#1a1d2e',
+                                        whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                                        {c.nome.split(' ')[0]}
+                                      </div>
+                                      <div style={{ background:'#f0f2f8', borderRadius:3, height:4, marginTop:2, overflow:'hidden' }}>
+                                        <div style={{ height:'100%', width:`${pctC}%`, background:`${cor}80`, borderRadius:3 }}></div>
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize:'0.7rem', color:'#4a5068', fontWeight:600, whiteSpace:'nowrap' }}>
+                                      {fmt(movC).replace('R$','').trim()}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tabela comparativa */}
+                  <div style={s.card}>
+                    <div style={{ ...s.cardTitle, marginBottom:16 }}>📊 Comparativo de Equipes</div>
+                    <div style={{ overflowX:'auto' }}>
+                      <table style={s.table}>
+                        <thead>
+                          <tr>
+                            {['#','Equipe','Vendedores','Empresas','Potencial','Mov. Real/mês','Meta','% Meta','Resultado Esp.'].map(h =>
+                              <th key={h} style={s.th}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {equipesArr.map((eq, i) => {
+                            const cor = COR_EQUIPE_DASH[eq.nome] || CORES_FALLBACK[i % CORES_FALLBACK.length];
+                            const pctMeta = eq.meta > 0 ? (eq.movReal / eq.meta) * 100 : 0;
+                            const corMeta = pctMeta >= 100 ? '#16a34a' : pctMeta >= 70 ? '#f0b429' : '#dc2626';
+                            return (
+                              <tr key={eq.nome} style={i%2===0?{background:'#f9fafb'}:{}}>
+                                <td style={{ ...s.td, textAlign:'center' }}>
+                                  <span style={{ background:`${cor}15`, color:cor, borderRadius:5,
+                                    padding:'1px 8px', fontSize:'0.7rem', fontWeight:700 }}>#{i+1}</span>
+                                </td>
+                                <td style={{ ...s.td, fontWeight:700, color:'#1a1d2e' }}>
+                                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                    <div style={{ width:10, height:10, borderRadius:'50%', background:cor, flexShrink:0 }}></div>
+                                    {eq.nome}
+                                  </div>
+                                </td>
+                                <td style={{ ...s.td, textAlign:'center' }}>{eq.consultores.length}</td>
+                                <td style={{ ...s.td, textAlign:'center' }}>{eq.empresas}</td>
+                                <td style={s.td}>{fmt(eq.potencial)}</td>
+                                <td style={{ ...s.td, color:'#f0b429', fontWeight:700 }}>{fmt(eq.movReal)}</td>
+                                <td style={s.td}>{eq.meta > 0 ? fmt(eq.meta) : '—'}</td>
+                                <td style={{ ...s.td, fontWeight:700 }}>
+                                  {eq.meta > 0 ? (
+                                    <span style={{ color:corMeta }}>{pctMeta.toFixed(1)}%</span>
+                                  ) : '—'}
+                                </td>
+                                <td style={{ ...s.td, color:'#a78bfa', fontWeight:600 }}>{fmt(eq.resultado)}</td>
+                              </tr>
+                            );
+                          })}
+                          {/* Linha de total */}
+                          <tr style={{ background:'#fff8e6', fontWeight:700 }}>
+                            <td style={{ ...s.td, textAlign:'center', color:'#b45309' }}>∑</td>
+                            <td style={{ ...s.td, fontWeight:700, color:'#b45309' }}>TOTAL</td>
+                            <td style={{ ...s.td, textAlign:'center' }}>{consultoresDaVisao.length}</td>
+                            <td style={{ ...s.td, textAlign:'center' }}>{equipesArr.reduce((s,e)=>s+e.empresas,0)}</td>
+                            <td style={s.td}>{fmt(equipesArr.reduce((s,e)=>s+e.potencial,0))}</td>
+                            <td style={{ ...s.td, color:'#f0b429', fontWeight:800 }}>{fmt(equipesArr.reduce((s,e)=>s+e.movReal,0))}</td>
+                            <td style={s.td}>{fmt(equipesArr.reduce((s,e)=>s+e.meta,0))}</td>
+                            <td style={s.td}>
+                              {(() => {
+                                const totMov = equipesArr.reduce((s,e)=>s+e.movReal,0);
+                                const totMeta = equipesArr.reduce((s,e)=>s+e.meta,0);
+                                const pct = totMeta > 0 ? (totMov/totMeta)*100 : 0;
+                                const cor = pct>=100?'#16a34a':pct>=70?'#f0b429':'#dc2626';
+                                return totMeta > 0 ? <span style={{color:cor,fontWeight:800}}>{pct.toFixed(1)}%</span> : '—';
+                              })()}
+                            </td>
+                            <td style={{ ...s.td, color:'#a78bfa', fontWeight:800 }}>{fmt(equipesArr.reduce((s,e)=>s+e.resultado,0))}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── CONTRATOS ───────────────────────────────────────────── */}
             {aba === 'contratos' && (() => {
