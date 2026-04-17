@@ -121,8 +121,11 @@ export function AuthProvider({ children }) {
     return permissoes[pagina]?.pode_editar === true;
   };
 
+  // Gestor fixo do usuário — null = pode ver todos
+  const gestorFixo = profile?.perfil === 'gestor_master' ? null : (profile?.gestor_vinculado || null);
+
   return (
-    <AuthContext.Provider value={{ user, profile, permissoes, loading, login, logout, podeVer, podeEditar }}>
+    <AuthContext.Provider value={{ user, profile, permissoes, loading, login, logout, podeVer, podeEditar, gestorFixo }}>
       {children}
     </AuthContext.Provider>
   );
