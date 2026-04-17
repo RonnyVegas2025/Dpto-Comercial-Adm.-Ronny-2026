@@ -40,14 +40,16 @@ const COR_EQUIPE = {
 // ── Subpáginas do menu ─────────────────────────────────────────────────────
 const SUBS = [
   { key: 'vendedores', icon: '👤', label: 'Cadastro de Vendedores', desc: 'Gerencie a equipe comercial por time' },
+  { key: 'equipes',    icon: '🏷️', label: 'Gerenciar Equipes',      desc: 'Crie e edite as equipes comerciais' },
   { key: 'parceiros',  icon: '🤝', label: 'Parceiros Comerciais',   desc: 'Cadastro e comissões de parceiros' },
 ];
 
 // ══════════════════════════════════════════════════════════════════════════
 // SUBPÁGINA: Cadastro de Vendedores
 // ══════════════════════════════════════════════════════════════════════════
-function PaginaVendedores() {
+function PaginaVendedores({ equipesDB = [] }) {
   const [consultores, setConsultores]   = useState([]);
+  const [equipesList, setEquipesList]   = useState([]);
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
   const [editando, setEditando]         = useState(null);
@@ -65,11 +67,12 @@ function PaginaVendedores() {
 
   async function carregar() {
     setLoading(true);
-    const { data } = await supabase
-      .from('consultores')
-      .select('id, nome, gestor, equipe, setor, meta_mensal, telefone, email, ativo')
-      .order('nome');
-    setConsultores(data || []);
+    const [{ data: cons }, { data: eqs }] = await Promise.all([
+      supabase.from('consultores').select('id, nome, gestor, equipe, setor, meta_mensal, telefone, email, ativo').order('nome'),
+      supabase.from('equipes').select('id, nome, cor').order('nome'),
+    ]);
+    setConsultores(cons || []);
+    setEquipesList(eqs || []);
     setLoading(false);
   }
 
@@ -124,7 +127,7 @@ function PaginaVendedores() {
           .filter(c => c.gestor === filtroGestor)
           .map(c => c.equipe || 'Outros')
       )].sort()
-    : EQUIPES;
+    : equipesList.map(e => e.nome);
 
   // Reseta equipe se não existe no gestor selecionado
   const handleGestorChange = (g) => {
@@ -180,7 +183,7 @@ function PaginaVendedores() {
           <label style={sL}>Equipe</label>
           <select style={sI} value={val.equipe||''} onChange={e=>onChange('equipe',e.target.value)}>
             <option value=''>— Selecionar —</option>
-            {EQUIPES.map(e => <option key={e} value={e}>{e}</option>)}
+            {equipesList.map(e => <option key={e.id} value={e.nome}>{e.nome}</option>)}
           </select>
         </div>
 
@@ -339,7 +342,8 @@ function PaginaVendedores() {
         Object.entries(porEquipe)
           .sort(([a],[b]) => a.localeCompare(b))
           .map(([equipe, membros]) => {
-            const cor = COR_EQUIPE[equipe] || '#6b7280';
+            const eqObj = equipesList.find(e => e.nome === equipe);
+            const cor = eqObj?.cor || COR_EQUIPE[equipe] || '#6b7280';
             const ativos = membros.filter(m => m.ativo).length;
             return (
               <div key={equipe} style={{ marginBottom:20 }}>
@@ -437,6 +441,205 @@ function PaginaVendedores() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// SUBPÁGINA: Gerenciar Equipes
+// ══════════════════════════════════════════════════════════════════════════
+const CORES_DISPONIVEIS = [
+  { label:'Azul',      val:'#2563eb' },
+  { label:'Verde',     val:'#16a34a' },
+  { label:'Roxo',      val:'#7c3aed' },
+  { label:'Laranja',   val:'#ea580c' },
+  { label:'Ciano',     val:'#0891b2' },
+  { label:'Rosa',      val:'#db2777' },
+  { label:'Esmeralda', val:'#059669' },
+  { label:'Âmbar',     val:'#d97706' },
+  { label:'Vermelho',  val:'#dc2626' },
+  { label:'Cinza',     val:'#6b7280' },
+];
+
+function PaginaEquipes({ onEquipesChange }) {
+  const [equipes,   setEquipes]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [salvando,  setSalvando]  = useState(false);
+  const [editando,  setEditando]  = useState(null);
+  const [novoNome,  setNovoNome]  = useState('');
+  const [novaCor,   setNovaCor]   = useState('#2563eb');
+  const [erro,      setErro]      = useState('');
+  const [sucesso,   setSucesso]   = useState('');
+
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    const { data } = await supabase
+      .from('equipes')
+      .select('*')
+      .order('nome');
+    setEquipes(data || []);
+    if (onEquipesChange) onEquipesChange(data || []);
+    setLoading(false);
+  }
+
+  async function adicionar() {
+    if (!novoNome.trim()) { setErro('Informe o nome da equipe'); return; }
+    if (equipes.find(e => e.nome.toLowerCase() === novoNome.trim().toLowerCase())) {
+      setErro('Já existe uma equipe com esse nome'); return;
+    }
+    setSalvando(true); setErro('');
+    const { error } = await supabase.from('equipes').insert({ nome: novoNome.trim(), cor: novaCor });
+    if (error) setErro('Erro: ' + error.message);
+    else { setSucesso('Equipe criada!'); setNovoNome(''); setNovaCor('#2563eb'); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    setSalvando(false);
+  }
+
+  async function salvarEdicao() {
+    if (!editando?.nome?.trim()) { setErro('Informe o nome'); return; }
+    setSalvando(true); setErro('');
+    const { error } = await supabase.from('equipes')
+      .update({ nome: editando.nome.trim(), cor: editando.cor })
+      .eq('id', editando.id);
+    if (error) setErro('Erro: ' + error.message);
+    else { setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    setSalvando(false);
+  }
+
+  async function remover(id, nome) {
+    // Verifica se tem vendedores nessa equipe
+    const { data: vinculados } = await supabase
+      .from('consultores').select('id').eq('equipe', nome);
+    if (vinculados?.length > 0) {
+      setErro(`Não é possível remover — ${vinculados.length} vendedor(es) estão nessa equipe`);
+      return;
+    }
+    if (!confirm(`Remover a equipe "${nome}"?`)) return;
+    await supabase.from('equipes').delete().eq('id', id);
+    await carregar();
+  }
+
+  return (
+    <div>
+      {/* Form novo */}
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12,
+        padding:24, marginBottom:20, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>
+          ➕ Nova Equipe
+        </div>
+        {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
+          padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem', marginBottom:12 }}>{erro}</div>}
+        {sucesso && <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8,
+          padding:'8px 14px', color:'#16a34a', fontSize:'0.82rem', marginBottom:12 }}>✅ {sucesso}</div>}
+
+        <div style={{ display:'flex', gap:12, alignItems:'flex-end', flexWrap:'wrap' }}>
+          <div style={{ flex:2, minWidth:200 }}>
+            <label style={sL}>Nome da Equipe *</label>
+            <input style={sI} value={novoNome} onChange={e => setNovoNome(e.target.value)}
+              placeholder="Ex: Inside Sales" onKeyDown={e => e.key==='Enter' && adicionar()}/>
+          </div>
+          <div style={{ minWidth:160 }}>
+            <label style={sL}>Cor de Identificação</label>
+            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+              <select style={{ ...sI, flex:1 }} value={novaCor} onChange={e => setNovaCor(e.target.value)}>
+                {CORES_DISPONIVEIS.map(c => <option key={c.val} value={c.val}>{c.label}</option>)}
+              </select>
+              <div style={{ width:32, height:32, borderRadius:8, background:novaCor,
+                border:'2px solid rgba(0,0,0,0.1)', flexShrink:0 }}></div>
+            </div>
+          </div>
+          <button style={{ ...sBtnPri, alignSelf:'flex-end', whiteSpace:'nowrap' }}
+            onClick={adicionar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '+ Criar Equipe'}
+          </button>
+        </div>
+      </div>
+
+      {/* Lista de equipes */}
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12,
+        padding:24, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>
+          Equipes Cadastradas {!loading && `(${equipes.length})`}
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:32, color:'#8b92b0' }}>Carregando...</div>
+        ) : equipes.length === 0 ? (
+          <div style={{ textAlign:'center', padding:32, color:'#8b92b0' }}>
+            Nenhuma equipe cadastrada ainda
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {equipes.map(eq => (
+              <div key={eq.id} style={{ background:'#f9fafb', border:'1px solid #e4e7ef',
+                borderRadius:10, padding:'14px 16px',
+                display:'flex', alignItems:'center', gap:14 }}>
+
+                {/* Preview da cor */}
+                <div style={{ width:10, height:40, borderRadius:4, background:eq.cor||'#6b7280', flexShrink:0 }}></div>
+
+                {editando?.id === eq.id ? (
+                  /* Modo edição inline */
+                  <div style={{ flex:1, display:'flex', gap:10, alignItems:'flex-end', flexWrap:'wrap' }}>
+                    <div style={{ flex:2, minWidth:160 }}>
+                      <label style={sL}>Nome</label>
+                      <input style={sI} value={editando.nome}
+                        onChange={e => setEditando(v => ({...v, nome:e.target.value}))}
+                        onKeyDown={e => e.key==='Enter' && salvarEdicao()}/>
+                    </div>
+                    <div style={{ minWidth:140 }}>
+                      <label style={sL}>Cor</label>
+                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                        <select style={{ ...sI, flex:1 }} value={editando.cor||'#6b7280'}
+                          onChange={e => setEditando(v => ({...v, cor:e.target.value}))}>
+                          {CORES_DISPONIVEIS.map(c => <option key={c.val} value={c.val}>{c.label}</option>)}
+                        </select>
+                        <div style={{ width:28, height:28, borderRadius:6,
+                          background:editando.cor||'#6b7280', border:'2px solid rgba(0,0,0,0.1)', flexShrink:0 }}></div>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:8, alignSelf:'flex-end' }}>
+                      <button style={sBtnPri} onClick={salvarEdicao} disabled={salvando}>
+                        {salvando ? '...' : '💾 Salvar'}
+                      </button>
+                      <button style={sBtnSec} onClick={() => { setEditando(null); setErro(''); }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Modo visualização */
+                  <>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{eq.nome}</span>
+                        <span style={{ background:`${eq.cor||'#6b7280'}15`, color:eq.cor||'#6b7280',
+                          border:`1px solid ${eq.cor||'#6b7280'}30`, borderRadius:6,
+                          padding:'1px 8px', fontSize:'0.68rem', fontWeight:600 }}>
+                          Equipe
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <button onClick={() => { setEditando({...eq}); setErro(''); }}
+                        style={{ ...sBtnSec, fontSize:'0.78rem', padding:'6px 14px' }}>
+                        ✏️ Editar
+                      </button>
+                      <button onClick={() => remover(eq.id, eq.nome)}
+                        style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
+                          padding:'6px 14px', color:'#dc2626', fontSize:'0.78rem',
+                          fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                        🗑 Remover
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // SUBPÁGINA: Parceiros (placeholder por enquanto)
 // ══════════════════════════════════════════════════════════════════════════
 function PaginaParceiros() {
@@ -455,6 +658,7 @@ function PaginaParceiros() {
 // ══════════════════════════════════════════════════════════════════════════
 export default function AdmComercial() {
   const [subPagina, setSubPagina] = useState(null);
+  const [equipesDB, setEquipesDB] = useState([]);
 
   return (
     <div style={sPage}>
@@ -509,7 +713,8 @@ export default function AdmComercial() {
       )}
 
       {/* Conteúdo da subpágina */}
-      {subPagina === 'vendedores' && <PaginaVendedores />}
+      {subPagina === 'vendedores' && <PaginaVendedores equipesDB={equipesDB} />}
+      {subPagina === 'equipes'    && <PaginaEquipes onEquipesChange={setEquipesDB} />}
       {subPagina === 'parceiros'  && <PaginaParceiros />}
     </div>
   );
