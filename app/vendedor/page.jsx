@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useAuth } from '../context/AuthContext';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -39,7 +40,8 @@ const ABAS = [
 export default function DashboardVendedor() {
   const [consultores, setConsultores] = useState([]);
   const [gestores, setGestores]       = useState([]);
-  const [gestorFiltro, setGestorFiltro] = useState('Geral');
+  const { gestorFixo } = useAuth();
+  const [gestorFiltro, setGestorFiltro] = useState(() => gestorFixo || 'Geral');
   const [consultorId, setConsultorId] = useState('');
   const [dados, setDados]             = useState(null);
   const [loading, setLoading]         = useState(false);
@@ -437,18 +439,30 @@ export default function DashboardVendedor() {
 
       {/* Filtros */}
       <div style={s.filtrosCard}>
-        <div style={s.filtroGrupo}>
-          <label style={s.filtroLabel}>GESTOR</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {gestores.map(g => (
-              <button key={g}
-                style={{ ...s.gestorBtn, ...(gestorFiltro === g ? s.gestorBtnAtivo : {}) }}
-                onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
-                {g === 'Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
-              </button>
-            ))}
+        {/* Botões de gestor — só visíveis para quem pode trocar */}
+        {!gestorFixo && (
+          <div style={s.filtroGrupo}>
+            <label style={s.filtroLabel}>GESTOR</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {gestores.map(g => (
+                <button key={g}
+                  style={{ ...s.gestorBtn, ...(gestorFiltro === g ? s.gestorBtnAtivo : {}) }}
+                  onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
+                  {g === 'Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+        {gestorFixo && (
+          <div style={s.filtroGrupo}>
+            <label style={s.filtroLabel}>GESTOR</label>
+            <div style={{ background:'#fff8e6', border:'1px solid #f0b429', borderRadius:8,
+              padding:'7px 14px', color:'#b45309', fontSize:'0.82rem', fontWeight:600 }}>
+              👔 {gestorFixo.split(' ')[0]}
+            </div>
+          </div>
+        )}
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>VENDEDOR</label>
           <select style={s.select} value={consultorId}
