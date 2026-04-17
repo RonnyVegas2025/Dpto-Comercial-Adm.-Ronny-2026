@@ -693,6 +693,128 @@ function BadgePerfil({ perfil }) {
   );
 }
 
+function PainelVisibilidade({ visibilidade, onChange, consultores, isGestorMaster }) {
+  const vis = visibilidade || { tipo:'todos', equipes:[], consultor_ids:[] };
+  const equipes = [...new Set((consultores||[]).map(c => c.equipe).filter(Boolean))].sort();
+
+  const setTipo = (tipo) => onChange({ ...vis, tipo, equipes:[], consultor_ids:[] });
+  const toggleEquipe = (eq) => {
+    const lista = vis.equipes || [];
+    onChange({ ...vis, equipes: lista.includes(eq) ? lista.filter(e=>e!==eq) : [...lista,eq] });
+  };
+  const toggleConsultor = (id) => {
+    const lista = vis.consultor_ids || [];
+    onChange({ ...vis, consultor_ids: lista.includes(id) ? lista.filter(e=>e!==id) : [...lista,id] });
+  };
+
+  return (
+    <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:10, padding:16 }}>
+      <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#1a1d2e', marginBottom:4 }}>
+        👥 Visibilidade de Vendedores
+      </div>
+      <div style={{ color:'#8b92b0', fontSize:'0.72rem', marginBottom:12 }}>
+        Define quais vendedores este usuário pode ver no dashboard
+      </div>
+
+      {/* Tipo de visibilidade */}
+      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+        {[
+          { key:'todos',      label:'🌐 Todos os vendedores', desc:'Vê toda a equipe' },
+          { key:'equipes',    label:'🏷️ Por equipe',          desc:'Filtra por equipe(s)' },
+          { key:'especificos',label:'👤 Específicos',         desc:'Escolhe vendedor a vendedor' },
+        ].map(op => (
+          <button key={op.key} onClick={() => !isGestorMaster && setTipo(op.key)}
+            style={{
+              background: vis.tipo===op.key ? '#fff8e6' : '#ffffff',
+              border: `1px solid ${vis.tipo===op.key ? '#f0b429' : '#e4e7ef'}`,
+              borderRadius:8, padding:'8px 14px', cursor: isGestorMaster?'not-allowed':'pointer',
+              fontFamily:'inherit', textAlign:'left', opacity: isGestorMaster?0.6:1,
+            }}>
+            <div style={{ fontWeight:600, fontSize:'0.78rem', color: vis.tipo===op.key?'#b45309':'#1a1d2e' }}>{op.label}</div>
+            <div style={{ fontSize:'0.68rem', color:'#8b92b0', marginTop:2 }}>{op.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Seleção de equipes */}
+      {vis.tipo === 'equipes' && (
+        <div>
+          <div style={{ fontSize:'0.72rem', color:'#4a5068', fontWeight:600, marginBottom:8 }}>
+            Selecione as equipes visíveis:
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {equipes.map(eq => {
+              const sel = (vis.equipes||[]).includes(eq);
+              const cor = COR_EQUIPE[eq] || '#6b7280';
+              return (
+                <button key={eq} onClick={() => toggleEquipe(eq)}
+                  style={{ background: sel?`${cor}15`:'#ffffff',
+                    border:`1px solid ${sel?cor:'#e4e7ef'}`,
+                    borderRadius:8, padding:'6px 14px', cursor:'pointer',
+                    fontFamily:'inherit', fontWeight: sel?700:400,
+                    fontSize:'0.8rem', color: sel?cor:'#4a5068', transition:'all 0.12s' }}>
+                  {eq} {sel && '✓'}
+                </button>
+              );
+            })}
+            {equipes.length === 0 && (
+              <span style={{ color:'#8b92b0', fontSize:'0.8rem' }}>
+                Nenhuma equipe cadastrada ainda
+              </span>
+            )}
+          </div>
+          {(vis.equipes||[]).length > 0 && (
+            <div style={{ marginTop:10, color:'#8b92b0', fontSize:'0.72rem' }}>
+              Vendedores visíveis: {(consultores||[]).filter(c=>(vis.equipes||[]).includes(c.equipe)).length} de {(consultores||[]).length}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Seleção individual */}
+      {vis.tipo === 'especificos' && (
+        <div>
+          <div style={{ fontSize:'0.72rem', color:'#4a5068', fontWeight:600, marginBottom:8 }}>
+            Selecione os vendedores visíveis: ({(vis.consultor_ids||[]).length} selecionados)
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:220, overflowY:'auto' }}>
+            {(consultores||[]).map(c => {
+              const sel = (vis.consultor_ids||[]).includes(c.id);
+              const cor = COR_EQUIPE[c.equipe] || '#6b7280';
+              return (
+                <label key={c.id}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                    background: sel?'#f9fafb':'#ffffff', border:`1px solid ${sel?'#e4e7ef':'#f0f2f8'}`,
+                    borderRadius:8, cursor:'pointer', transition:'background 0.1s' }}>
+                  <input type='checkbox' checked={sel} onChange={() => toggleConsultor(c.id)}
+                    style={{ width:14, height:14 }}/>
+                  <span style={{ fontWeight: sel?600:400, fontSize:'0.82rem', color:'#1a1d2e', flex:1 }}>
+                    {c.nome}
+                  </span>
+                  {c.equipe && (
+                    <span style={{ background:`${cor}15`, color:cor, border:`1px solid ${cor}30`,
+                      borderRadius:5, padding:'1px 7px', fontSize:'0.65rem', fontWeight:600 }}>
+                      {c.equipe}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Resumo quando tipo = todos */}
+      {vis.tipo === 'todos' && (
+        <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8,
+          padding:'8px 14px', fontSize:'0.78rem', color:'#16a34a', fontWeight:600 }}>
+          ✓ Este usuário verá todos os {(consultores||[]).length} vendedores ativos
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, salvando, consultores }) {
   const [perms, setPerms] = useState(() => val.permissoes || getPermsIniciais(val.perfil || 'vendedor'));
 
@@ -854,6 +976,14 @@ function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, 
         </div>
       </div>
 
+      {/* Painel de visibilidade de vendedores */}
+      <PainelVisibilidade
+        visibilidade={val.visibilidade || { tipo:'todos', equipes:[], consultor_ids:[] }}
+        onChange={v => onChange('visibilidade', v)}
+        consultores={consultores}
+        isGestorMaster={isGestorMaster}
+      />
+
       <div style={{ display:'flex', gap:10, paddingTop:4 }}>
         <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
           {salvando ? 'Salvando...' : '💾 Salvar'}
@@ -891,22 +1021,27 @@ function PaginaUsuarios() {
         .eq('ativo', true)
         .order('nome'),
     ]);
-    // Para cada usuário, busca permissões customizadas
+    // Para cada usuário, busca permissões e visibilidade customizadas
     const allUsers = users || [];
     if (allUsers.length > 0) {
-      const { data: permsData } = await supabase
-        .from('user_permissoes')
-        .select('*')
-        .in('user_id', allUsers.map(u => u.id));
+      const ids = allUsers.map(u => u.id);
+      const [{ data: permsData }, { data: visData }] = await Promise.all([
+        supabase.from('user_permissoes').select('*').in('user_id', ids),
+        supabase.from('user_visibilidade').select('*').in('user_id', ids),
+      ]);
       const permsMap = {};
       (permsData || []).forEach(p => {
         if (!permsMap[p.user_id]) permsMap[p.user_id] = {};
         permsMap[p.user_id][p.pagina] = p.pode_editar ? 'editar' : p.pode_ver ? 'ver' : '';
       });
+      const visMap = {};
+      (visData || []).forEach(v => { visMap[v.user_id] = v; });
       allUsers.forEach(u => {
         u.permissoes = Object.keys(permsMap[u.id]||{}).length > 0
-          ? permsMap[u.id]
-          : getPermsIniciais(u.perfil);
+          ? permsMap[u.id] : getPermsIniciais(u.perfil);
+        u.visibilidade = visMap[u.id]
+          ? { tipo: visMap[u.id].tipo, equipes: visMap[u.id].equipes||[], consultor_ids: visMap[u.id].consultor_ids||[] }
+          : { tipo:'todos', equipes:[], consultor_ids:[] };
       });
     }
     setUsuarios(allUsers);
@@ -985,6 +1120,14 @@ function PaginaUsuarios() {
     if (error) { setErro('Erro: ' + error.message); setSalvando(false); return; }
     // Salva permissões customizadas
     await salvarPermissoes(editando.id, editando.permissoes || getPermsIniciais(editando.perfil));
+    // Salva visibilidade
+    const vis = editando.visibilidade || { tipo:'todos', equipes:[], consultor_ids:[] };
+    await supabase.from('user_visibilidade').upsert({
+      user_id:       editando.id,
+      tipo:          vis.tipo,
+      equipes:       vis.equipes || [],
+      consultor_ids: vis.consultor_ids || [],
+    }, { onConflict:'user_id' });
     setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000);
     setSalvando(false);
   }
@@ -1067,7 +1210,7 @@ function PaginaUsuarios() {
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.82rem' }}>
             <thead>
               <tr style={{ background:'#f9fafb' }}>
-                {['Nome','E-mail','Perfil','Vendedor Vinculado','Status','Ações'].map(h => (
+                {['Nome','E-mail','Perfil','Vinculado','Visibilidade','Status','Ações'].map(h => (
                   <th key={h} style={{ padding:'10px 16px', textAlign:'left', color:'#8b92b0',
                     fontWeight:600, fontSize:'0.68rem', textTransform:'uppercase',
                     letterSpacing:0.5, borderBottom:'1px solid #e4e7ef' }}>{h}</th>
@@ -1093,6 +1236,27 @@ function PaginaUsuarios() {
                     {u.consultor?.nome || <span style={{ color:'#b0b7cc' }}>—</span>}
                   </td>
                   <td style={{ padding:'12px 16px' }}>
+                    {u.perfil === 'gestor_master' ? (
+                      <span style={{ color:'#f0b429', fontSize:'0.75rem', fontWeight:600 }}>✦ Todos</span>
+                    ) : u.visibilidade?.tipo === 'equipes' ? (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                        {(u.visibilidade.equipes||[]).map(eq => {
+                          const cor = COR_EQUIPE[eq]||'#6b7280';
+                          return <span key={eq} style={{ background:`${cor}15`, color:cor,
+                            border:`1px solid ${cor}30`, borderRadius:5,
+                            padding:'1px 7px', fontSize:'0.65rem', fontWeight:600 }}>{eq}</span>;
+                        })}
+                        {(u.visibilidade.equipes||[]).length===0 && <span style={{ color:'#b0b7cc', fontSize:'0.75rem' }}>—</span>}
+                      </div>
+                    ) : u.visibilidade?.tipo === 'especificos' ? (
+                      <span style={{ color:'#4a5068', fontSize:'0.75rem' }}>
+                        👤 {(u.visibilidade.consultor_ids||[]).length} vendedor(es)
+                      </span>
+                    ) : (
+                      <span style={{ color:'#16a34a', fontSize:'0.75rem', fontWeight:600 }}>🌐 Todos</span>
+                    )}
+                  </td>
+                  <td style={{ padding:'12px 16px' }}>
                     <span style={{
                       background: u.ativo ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
                       color: u.ativo ? '#16a34a' : '#dc2626',
@@ -1103,7 +1267,7 @@ function PaginaUsuarios() {
                   </td>
                   <td style={{ padding:'12px 16px' }}>
                     <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => { setEditando({...u, consultor_id: u.consultor_id||''}); setErro(''); }}
+                      <button onClick={() => { setEditando({...u, consultor_id: u.consultor_id||'', visibilidade: u.visibilidade||{tipo:'todos',equipes:[],consultor_ids:[]}}); setErro(''); }}
                         style={{ ...sBtnSec, fontSize:'0.75rem', padding:'5px 12px' }}>
                         ✏️ Editar
                       </button>
