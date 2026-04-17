@@ -651,6 +651,83 @@ const COR_PERFIL = {
   vendedor:             { bg:'#f9fafb', text:'#4a5068',  border:'#e4e7ef'   },
 };
 
+function BadgePerfil({ perfil }) {
+  const cor = COR_PERFIL[perfil] || COR_PERFIL.vendedor;
+  return (
+    <span style={{ background:cor.bg, color:cor.text, border:`1px solid ${cor.border}`,
+      borderRadius:6, padding:'2px 10px', fontSize:'0.7rem', fontWeight:700, whiteSpace:'nowrap' }}>
+      {PERFIS[perfil] || perfil}
+    </span>
+  );
+}
+
+function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, salvando, consultores }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:4 }}>{titulo}</div>
+      {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
+        padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem' }}>{erro}</div>}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div style={{ gridColumn:'span 2' }}>
+          <label style={sL}>Nome completo *</label>
+          <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome do usuário"/>
+        </div>
+        <div>
+          <label style={sL}>E-mail *</label>
+          <input style={{ ...sI, opacity: novo?1:0.6, cursor: novo?'text':'not-allowed' }}
+            type='email' value={val.email||''} onChange={e=>onChange('email',e.target.value)}
+            placeholder="email@vegascard.com.br" disabled={!novo}/>
+          {!novo && <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>E-mail não pode ser alterado</span>}
+        </div>
+        {novo && (
+          <div>
+            <label style={sL}>Senha *</label>
+            <input style={sI} type='password' value={val.senha||''} onChange={e=>onChange('senha',e.target.value)}
+              placeholder="Mínimo 6 caracteres"/>
+          </div>
+        )}
+        <div>
+          <label style={sL}>Perfil de Acesso *</label>
+          <select style={sI} value={val.perfil||'vendedor'} onChange={e=>onChange('perfil',e.target.value)}>
+            {Object.entries(PERFIS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={sL}>Vincular ao Vendedor</label>
+          <select style={sI} value={val.consultor_id||''} onChange={e=>onChange('consultor_id',e.target.value)}>
+            <option value=''>— Nenhum —</option>
+            {(consultores||[]).map(c => (
+              <option key={c.id} value={c.id}>{c.nome}{c.equipe ? ` (${c.equipe})` : ''}</option>
+            ))}
+          </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>Necessário para perfil Vendedor</span>
+        </div>
+        {!novo && (
+          <div>
+            <label style={sL}>Status</label>
+            <select style={sI} value={String(val.ativo)} onChange={e=>onChange('ativo',e.target.value==='true')}>
+              <option value='true'>✅ Ativo</option>
+              <option value='false'>❌ Inativo</option>
+            </select>
+          </div>
+        )}
+      </div>
+      <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8, padding:'12px 14px' }}>
+        <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginBottom:8, fontWeight:600, textTransform:'uppercase', letterSpacing:1 }}>
+          Permissões do perfil selecionado
+        </div>
+        <PermissoesPreview perfil={val.perfil||'vendedor'} />
+      </div>
+      <div style={{ display:'flex', gap:10, paddingTop:4 }}>
+        <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
+          {salvando ? 'Salvando...' : '💾 Salvar'}
+        </button>
+        <button style={sBtnSec} onClick={onCancelar}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 function PaginaUsuarios() {
   const { profile: myProfile } = useAuth();
   const [usuarios,    setUsuarios]    = useState([]);
@@ -745,87 +822,6 @@ function PaginaUsuarios() {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setE = (k, v) => setEditando(e => ({ ...e, [k]: v }));
 
-  const BadgePerfil = ({ perfil }) => {
-    const cor = COR_PERFIL[perfil] || COR_PERFIL.vendedor;
-    return (
-      <span style={{ background:cor.bg, color:cor.text, border:`1px solid ${cor.border}`,
-        borderRadius:6, padding:'2px 10px', fontSize:'0.7rem', fontWeight:700, whiteSpace:'nowrap' }}>
-        {PERFIS[perfil] || perfil}
-      </span>
-    );
-  };
-
-  const FormUsuario = ({ val, onChange, onSalvar, onCancelar, titulo, novo }) => (
-    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:4 }}>{titulo}</div>
-      {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
-        padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem' }}>{erro}</div>}
-
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-        <div style={{ gridColumn:'span 2' }}>
-          <label style={sL}>Nome completo *</label>
-          <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome do usuário"/>
-        </div>
-        <div>
-          <label style={sL}>E-mail *</label>
-          <input style={sI} type='email' value={val.email||''} onChange={e=>onChange('email',e.target.value)}
-            placeholder="email@vegascard.com.br" disabled={!novo}
-            style={{ ...sI, opacity: novo ? 1 : 0.6, cursor: novo ? 'text' : 'not-allowed' }}/>
-          {!novo && <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>E-mail não pode ser alterado</span>}
-        </div>
-        {novo && (
-          <div>
-            <label style={sL}>Senha *</label>
-            <input style={sI} type='password' value={val.senha||''} onChange={e=>onChange('senha',e.target.value)}
-              placeholder="Mínimo 6 caracteres"/>
-          </div>
-        )}
-        <div>
-          <label style={sL}>Perfil de Acesso *</label>
-          <select style={sI} value={val.perfil||'vendedor'} onChange={e=>onChange('perfil',e.target.value)}>
-            {Object.entries(PERFIS).map(([k,v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={sL}>Vincular ao Vendedor</label>
-          <select style={sI} value={val.consultor_id||''} onChange={e=>onChange('consultor_id',e.target.value)}>
-            <option value=''>— Nenhum —</option>
-            {consultores.map(c => (
-              <option key={c.id} value={c.id}>{c.nome}{c.equipe ? ` (${c.equipe})` : ''}</option>
-            ))}
-          </select>
-          <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>Necessário para perfil Vendedor</span>
-        </div>
-        {!novo && (
-          <div>
-            <label style={sL}>Status</label>
-            <select style={sI} value={String(val.ativo)} onChange={e=>onChange('ativo',e.target.value==='true')}>
-              <option value='true'>✅ Ativo</option>
-              <option value='false'>❌ Inativo</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Preview do perfil */}
-      <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8, padding:'12px 14px' }}>
-        <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginBottom:8, fontWeight:600, textTransform:'uppercase', letterSpacing:1 }}>
-          Permissões do perfil selecionado
-        </div>
-        <PermissoesPreview perfil={val.perfil||'vendedor'} />
-      </div>
-
-      <div style={{ display:'flex', gap:10, paddingTop:4 }}>
-        <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
-          {salvando ? 'Salvando...' : '💾 Salvar'}
-        </button>
-        <button style={sBtnSec} onClick={onCancelar}>Cancelar</button>
-      </div>
-    </div>
-  );
-
   return (
     <div>
       {/* Header + ações */}
@@ -864,7 +860,9 @@ function PaginaUsuarios() {
             maxWidth:600, maxHeight:'90vh', overflowY:'auto' }}
             onClick={e=>e.stopPropagation()}>
             <FormUsuario val={form} onChange={setF} onSalvar={criarUsuario}
-              onCancelar={() => { setModalNovo(false); setErro(''); }} titulo="➕ Novo Usuário" novo />
+              onCancelar={() => { setModalNovo(false); setErro(''); }}
+              titulo="➕ Novo Usuário" novo
+              erro={erro} salvando={salvando} consultores={consultores} />
           </div>
         </div>
       )}
@@ -879,7 +877,8 @@ function PaginaUsuarios() {
             onClick={e=>e.stopPropagation()}>
             <FormUsuario val={editando} onChange={setE} onSalvar={salvarEdicao}
               onCancelar={() => { setEditando(null); setErro(''); }}
-              titulo={`✏️ Editar — ${editando.nome}`} />
+              titulo={`✏️ Editar — ${editando.nome}`}
+              erro={erro} salvando={salvando} consultores={consultores} />
           </div>
         </div>
       )}
