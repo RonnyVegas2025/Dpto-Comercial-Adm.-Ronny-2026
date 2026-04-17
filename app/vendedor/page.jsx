@@ -746,7 +746,9 @@ export default function DashboardVendedor() {
                   meta: 0, resultado: 0, empresas: 0, cartoes: 0,
                 };
                 equipesMap[eq].consultores.push(c);
-                equipesMap[eq].meta += c.meta_mensal || 0;
+                // Usa meta importada se disponível, senão usa meta_mensal cadastrada
+                const metaConsultor = metaAcumPorConsultor[c.id] || (c.meta_mensal || 0);
+                equipesMap[eq].meta += metaConsultor;
               });
 
               // Adiciona dados das empresas por equipe
