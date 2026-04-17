@@ -935,7 +935,41 @@ function PaginaUsuarios() {
     if (!form.email.trim()) { setErro('Informe o e-mail'); return; }
     if (!form.senha || form.senha.length < 6) { setErro('Senha deve ter no mínimo 6 caracteres'); return; }
     setSalvando(true); setErro('');
-    setErro('Para criar usuários: Supabase Dashboard → Authentication → Users → Add User. Depois edite o usuário aqui para definir perfil e permissões.');
+
+    try {
+      // Chama API Route que usa service_role para criar o usuário
+      const res = await fetch('/api/criar-usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome:         form.nome.trim(),
+          email:        form.email.trim(),
+          senha:        form.senha,
+          perfil:       form.perfil,
+          consultor_id: form.consultor_id || null,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setErro(data.error || 'Erro ao criar usuário');
+        setSalvando(false);
+        return;
+      }
+
+      // Salva permissões customizadas
+      if (data.id && form.permissoes) {
+        await salvarPermissoes(data.id, form.permissoes);
+      }
+
+      setSucesso('Usuário criado com sucesso!');
+      setModalNovo(false);
+      setForm(formVazio);
+      await carregar();
+      setTimeout(() => setSucesso(''), 3000);
+    } catch(err) {
+      setErro('Erro: ' + err.message);
+    }
     setSalvando(false);
   }
 
