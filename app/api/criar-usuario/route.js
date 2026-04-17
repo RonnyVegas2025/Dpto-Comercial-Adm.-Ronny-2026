@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Cliente com service_role — só usado no servidor
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 export async function POST(request) {
   try {
+    // Cria cliente admin dentro da função para garantir que as env vars estão disponíveis
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
     const { nome, email, senha, perfil, consultor_id } = await request.json();
 
     // Validações básicas
@@ -47,4 +47,3 @@ export async function POST(request) {
     return Response.json({ error: 'Erro interno: ' + err.message }, { status: 500 });
   }
 }
-
