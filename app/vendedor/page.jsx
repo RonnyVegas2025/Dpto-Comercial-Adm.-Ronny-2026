@@ -746,9 +746,13 @@ export default function DashboardVendedor() {
                   meta: 0, resultado: 0, empresas: 0, cartoes: 0,
                 };
                 equipesMap[eq].consultores.push(c);
-                // Usa meta importada se disponível, senão usa meta_mensal cadastrada
-                const metaConsultor = metaAcumPorConsultor[c.id] || (c.meta_mensal || 0);
-                equipesMap[eq].meta += metaConsultor;
+                // Meta mensal: se tem meta importada divide pelos meses para ter valor mensal
+                // senão usa meta_mensal cadastrada
+                const metaAcum = metaAcumPorConsultor[c.id] || 0;
+                const metaMensal = metaAcum > 0
+                  ? metaAcum / (mesesImportados || 1)
+                  : (c.meta_mensal || 0);
+                equipesMap[eq].meta += metaMensal;
               });
 
               // Adiciona dados das empresas por equipe
@@ -802,10 +806,10 @@ export default function DashboardVendedor() {
                           {/* KPIs */}
                           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
                             {[
-                              { label:'Mov. Real/mês', val:fmt(eq.movReal), cor:'#f0b429' },
-                              { label:'Potencial',     val:fmt(eq.potencial), cor:'#4a5068' },
-                              { label:'Meta Mensal',   val:eq.meta > 0 ? fmt(eq.meta) : '—', cor:'#4a5068' },
-                              { label:'% da Meta',     val:eq.meta > 0 ? `${pctMeta.toFixed(1)}%` : '—', cor:corMeta },
+                              { label:'Mov. Real/mês',   val:fmt(eq.movReal),  cor:'#f0b429' },
+                              { label:'Potencial',        val:fmt(eq.potencial), cor:'#4a5068' },
+                              { label:'Meta/mês',         val:eq.meta > 0 ? fmt(eq.meta) : '—', cor:'#4a5068' },
+                              { label:'% da Meta',        val:eq.meta > 0 ? `${pctMeta.toFixed(1)}%` : '—', cor:corMeta },
                             ].map(k => (
                               <div key={k.label}>
                                 <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>{k.label}</div>
@@ -813,6 +817,18 @@ export default function DashboardVendedor() {
                               </div>
                             ))}
                           </div>
+                          {/* Meta acumulada do período */}
+                          {eq.meta > 0 && mesesImportados > 1 && (
+                            <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8,
+                              padding:'7px 12px', marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                              <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>
+                                Meta acumulada ({mesesImportados} meses)
+                              </span>
+                              <span style={{ fontWeight:700, fontSize:'0.78rem', color:'#4a5068' }}>
+                                {fmt(eq.meta * mesesImportados)}
+                              </span>
+                            </div>
+                          )}
 
                           {/* Barra de progresso vs maior */}
                           <div>
@@ -866,7 +882,7 @@ export default function DashboardVendedor() {
                       <table style={s.table}>
                         <thead>
                           <tr>
-                            {['#','Equipe','Vendedores','Empresas','Potencial','Mov. Real/mês','Meta','% Meta','Resultado Esp.'].map(h =>
+                            {['#','Equipe','Vendedores','Empresas','Potencial','Mov. Real/mês','Meta/mês','Meta Acum.','% Meta','Resultado Esp.'].map(h =>
                               <th key={h} style={s.th}>{h}</th>)}
                           </tr>
                         </thead>
@@ -892,6 +908,9 @@ export default function DashboardVendedor() {
                                 <td style={s.td}>{fmt(eq.potencial)}</td>
                                 <td style={{ ...s.td, color:'#f0b429', fontWeight:700 }}>{fmt(eq.movReal)}</td>
                                 <td style={s.td}>{eq.meta > 0 ? fmt(eq.meta) : '—'}</td>
+                                <td style={{ ...s.td, color:'#4a5068', fontWeight:600 }}>
+                                  {eq.meta > 0 ? fmt(eq.meta * mesesImportados) : '—'}
+                                </td>
                                 <td style={{ ...s.td, fontWeight:700 }}>
                                   {eq.meta > 0 ? (
                                     <span style={{ color:corMeta }}>{pctMeta.toFixed(1)}%</span>
@@ -910,6 +929,7 @@ export default function DashboardVendedor() {
                             <td style={s.td}>{fmt(equipesArr.reduce((s,e)=>s+e.potencial,0))}</td>
                             <td style={{ ...s.td, color:'#f0b429', fontWeight:800 }}>{fmt(equipesArr.reduce((s,e)=>s+e.movReal,0))}</td>
                             <td style={s.td}>{fmt(equipesArr.reduce((s,e)=>s+e.meta,0))}</td>
+                            <td style={{ ...s.td, fontWeight:700 }}>{fmt(equipesArr.reduce((s,e)=>s+e.meta,0) * mesesImportados)}</td>
                             <td style={s.td}>
                               {(() => {
                                 const totMov = equipesArr.reduce((s,e)=>s+e.movReal,0);
