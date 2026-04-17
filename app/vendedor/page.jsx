@@ -109,6 +109,7 @@ export default function DashboardVendedor() {
           id, produto_id, nome, cnpj, produto_contratado, categoria, cidade, estado,
           potencial_movimentacao, peso_categoria, cartoes_emitidos,
           data_cadastro, taxa_positiva, taxa_negativa,
+          consultor_principal_id,
           consultor_principal:consultor_principal_id (id, nome, gestor),
           consultor_agregado:consultor_agregado_id (id, nome),
           parceiro:parceiro_id (nome)
