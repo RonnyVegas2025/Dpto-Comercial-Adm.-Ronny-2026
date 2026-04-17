@@ -881,6 +881,14 @@ function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, 
             ))}
           </select>
         </div>
+        <div>
+          <label style={sL}>Gestor Vinculado</label>
+          <select style={sI} value={val.gestor_vinculado||''} onChange={e=>onChange('gestor_vinculado',e.target.value)}>
+            <option value=''>— Todos os gestores —</option>
+            {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Filtra dashboard automaticamente ao logar</span>
+        </div>
         {!novo && (
           <div>
             <label style={sL}>Status</label>
@@ -1077,11 +1085,12 @@ function PaginaUsuarios() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nome:         form.nome.trim(),
-          email:        form.email.trim(),
-          senha:        form.senha,
-          perfil:       form.perfil,
-          consultor_id: form.consultor_id || null,
+          nome:             form.nome.trim(),
+          email:            form.email.trim(),
+          senha:            form.senha,
+          perfil:           form.perfil,
+          consultor_id:     form.consultor_id || null,
+          gestor_vinculado: form.gestor_vinculado || null,
         }),
       });
       const data = await res.json();
@@ -1112,10 +1121,11 @@ function PaginaUsuarios() {
     if (!editando?.nome?.trim()) { setErro('Informe o nome'); return; }
     setSalvando(true); setErro('');
     const { error } = await supabase.from('user_profiles').update({
-      nome:         editando.nome.trim(),
-      perfil:       editando.perfil,
-      consultor_id: editando.consultor_id || null,
-      ativo:        editando.ativo,
+      nome:              editando.nome.trim(),
+      perfil:            editando.perfil,
+      consultor_id:      editando.consultor_id || null,
+      gestor_vinculado:  editando.gestor_vinculado || null,
+      ativo:             editando.ativo,
     }).eq('id', editando.id);
     if (error) { setErro('Erro: ' + error.message); setSalvando(false); return; }
     // Salva permissões customizadas
