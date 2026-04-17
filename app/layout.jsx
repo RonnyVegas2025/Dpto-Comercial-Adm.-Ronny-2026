@@ -1,5 +1,6 @@
 import './globals.css';
-import Sidebar from './Sidebar';
+import { AuthProvider } from './context/AuthContext';
+import AppShell from './AppShell';
 
 export const metadata = {
   title: 'Vegas Card — Gestão Comercial',
@@ -15,11 +16,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body style={{ margin: 0, background: '#f5f6fa', color: '#1a1d2e', display: 'flex' }}>
-        <Sidebar />
-        <main style={{ marginLeft: 220, flex: 1, minHeight: '100vh' }}>
-          {children}
-        </main>
+      <body style={{ margin: 0, background: '#f5f6fa', color: '#1a1d2e' }}>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );
