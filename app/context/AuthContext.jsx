@@ -18,6 +18,12 @@ export const PERFIS = {
   vendedor:             'Vendedor',
 };
 
+const AuthContext = createContext({
+  user: null, profile: null, permissoes: {}, loading: true,
+  login: async () => null, logout: async () => {},
+  podeVer: () => false, podeEditar: () => false,
+});
+
 export function AuthProvider({ children }) {
   const [user,        setUser]        = useState(null);
   const [profile,     setProfile]     = useState(null);
