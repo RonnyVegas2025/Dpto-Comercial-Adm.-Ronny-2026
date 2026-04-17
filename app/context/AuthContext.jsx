@@ -49,21 +49,42 @@ export function AuthProvider({ children }) {
   async function carregarPerfil(authUser) {
     setUser(authUser);
     try {
-      const [{ data: prof }, { data: perms }] = await Promise.all([
-        supabase.from('user_profiles').select('*, consultor:consultor_id(id,nome)').eq('id', authUser.id).single(),
-        supabase.from('perfil_permissoes').select('*'),
-      ]);
+      const { data: prof, error: profErr } = await supabase
+        .from('user_profiles')
+        .select('*, consultor:consultor_id(id,nome)')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profErr) {
+        console.error('Erro ao carregar perfil:', profErr.message);
+        // Fallback: cria perfil básico com os dados do auth
+        const fallback = {
+          id: authUser.id,
+          email: authUser.email,
+          nome: authUser.email?.split('@')[0] || 'Usuário',
+          perfil: 'vendedor',
+          ativo: true,
+        };
+        setProfile(fallback);
+        setLoading(false);
+        return;
+      }
 
       setProfile(prof);
 
-      // Monta mapa de permissões: { 'vendedor': { pode_ver: true, pode_editar: false }, ... }
-      const perfil = prof?.perfil || 'vendedor';
+      const { data: perms } = await supabase
+        .from('perfil_permissoes')
+        .select('*')
+        .eq('perfil', prof?.perfil || 'vendedor');
+
       const mapa = {};
-      (perms || []).filter(p => p.perfil === perfil).forEach(p => {
+      (perms || []).forEach(p => {
         mapa[p.pagina] = { pode_ver: p.pode_ver, pode_editar: p.pode_editar };
       });
       setPermissoes(mapa);
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error('Erro inesperado carregarPerfil:', e);
+    }
     setLoading(false);
   }
 
@@ -76,8 +97,16 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }
 
-  const podeVer    = (pagina) => profile?.perfil === 'gestor_master' || permissoes[pagina]?.pode_ver    === true;
-  const podeEditar = (pagina) => profile?.perfil === 'gestor_master' || permissoes[pagina]?.pode_editar === true;
+  const podeVer    = (pagina) => {
+    if (!profile) return false;
+    if (profile.perfil === 'gestor_master') return true;
+    return permissoes[pagina]?.pode_ver === true;
+  };
+  const podeEditar = (pagina) => {
+    if (!profile) return false;
+    if (profile.perfil === 'gestor_master') return true;
+    return permissoes[pagina]?.pode_editar === true;
+  };
 
   return (
     <AuthContext.Provider value={{ user, profile, permissoes, loading, login, logout, podeVer, podeEditar }}>
