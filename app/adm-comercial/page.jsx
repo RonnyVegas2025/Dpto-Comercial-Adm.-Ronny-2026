@@ -651,6 +651,38 @@ const COR_PERFIL = {
   vendedor:             { bg:'#f9fafb', text:'#4a5068',  border:'#e4e7ef'   },
 };
 
+// Páginas disponíveis para configurar permissões
+const PAGINAS_CONFIG = [
+  { key:'inicio',             label:'🏠 Início',           desc:'Página inicial do sistema' },
+  { key:'vendedor',           label:'👤 Vendedor',          desc:'Dashboard de performance e metas' },
+  { key:'movimentacoes',      label:'📥 Importações',       desc:'Importar movimentação, meta e empresas' },
+  { key:'gestao',             label:'⚙️ Gestão',            desc:'Painel de empresas e contratos' },
+  { key:'relatorios',         label:'📋 Relatórios',        desc:'Exportar relatórios e conferências' },
+  { key:'relatorio-empresas', label:'📑 Rel. Empresas',     desc:'Relatório customizável de empresas' },
+  { key:'agregados',          label:'📦 Agregados',         desc:'WellHub, Total Pass, Telemedicina' },
+  { key:'adm-comercial',      label:'🏢 Adm Comercial',     desc:'Usuários, equipes e vendedores' },
+];
+
+// Permissões padrão por perfil (base ao selecionar perfil)
+const PERMS_PADRAO = {
+  gestor_master:        { all: true },
+  diretoria:            { inicio:'ver', vendedor:'ver', gestao:'ver', relatorios:'editar', 'relatorio-empresas':'ver', agregados:'ver' },
+  gestor_comercial:     { inicio:'ver', vendedor:'editar', movimentacoes:'editar', gestao:'editar', relatorios:'editar', 'relatorio-empresas':'editar', agregados:'editar' },
+  supervisor_comercial: { inicio:'ver', vendedor:'ver', gestao:'ver', relatorios:'ver', 'relatorio-empresas':'ver' },
+  supervisor_adm:       { inicio:'ver', movimentacoes:'editar', gestao:'editar', relatorios:'editar', 'relatorio-empresas':'editar', agregados:'editar' },
+  administrativo:       { inicio:'ver', movimentacoes:'editar', gestao:'ver', relatorios:'ver', 'relatorio-empresas':'ver' },
+  vendedor:             { inicio:'ver', vendedor:'ver' },
+};
+
+function getPermsIniciais(perfil) {
+  if (perfil === 'gestor_master') {
+    const p = {};
+    PAGINAS_CONFIG.forEach(pg => { p[pg.key] = 'editar'; });
+    return p;
+  }
+  return PERMS_PADRAO[perfil] || {};
+}
+
 function BadgePerfil({ perfil }) {
   const cor = COR_PERFIL[perfil] || COR_PERFIL.vendedor;
   return (
@@ -662,11 +694,36 @@ function BadgePerfil({ perfil }) {
 }
 
 function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, salvando, consultores }) {
+  const [perms, setPerms] = useState(() => val.permissoes || getPermsIniciais(val.perfil || 'vendedor'));
+
+  // Quando perfil muda → recarrega permissões padrão
+  const handlePerfilChange = (novoPerfil) => {
+    onChange('perfil', novoPerfil);
+    const novasPerms = getPermsIniciais(novoPerfil);
+    setPerms(novasPerms);
+    onChange('permissoes', novasPerms);
+  };
+
+  const togglePerm = (pagina, nivel) => {
+    // nivel: '' = nenhum, 'ver' = só visualizar, 'editar' = visualizar + editar
+    const atual = perms[pagina] || '';
+    let novo;
+    if (nivel === 'ver')    novo = atual === 'ver' ? '' : 'ver';
+    if (nivel === 'editar') novo = atual === 'editar' ? 'ver' : 'editar';
+    const novasPerms = { ...perms, [pagina]: novo };
+    setPerms(novasPerms);
+    onChange('permissoes', novasPerms);
+  };
+
+  const isGestorMaster = val.perfil === 'gestor_master';
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:4 }}>{titulo}</div>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e' }}>{titulo}</div>
       {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
         padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem' }}>{erro}</div>}
+
+      {/* Dados básicos */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
         <div style={{ gridColumn:'span 2' }}>
           <label style={sL}>Nome completo *</label>
@@ -674,7 +731,7 @@ function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, 
         </div>
         <div>
           <label style={sL}>E-mail *</label>
-          <input style={{ ...sI, opacity: novo?1:0.6, cursor: novo?'text':'not-allowed' }}
+          <input style={{ ...sI, opacity:novo?1:0.6, cursor:novo?'text':'not-allowed' }}
             type='email' value={val.email||''} onChange={e=>onChange('email',e.target.value)}
             placeholder="email@vegascard.com.br" disabled={!novo}/>
           {!novo && <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>E-mail não pode ser alterado</span>}
@@ -687,20 +744,20 @@ function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, 
           </div>
         )}
         <div>
-          <label style={sL}>Perfil de Acesso *</label>
-          <select style={sI} value={val.perfil||'vendedor'} onChange={e=>onChange('perfil',e.target.value)}>
+          <label style={sL}>Perfil Base *</label>
+          <select style={sI} value={val.perfil||'vendedor'} onChange={e=>handlePerfilChange(e.target.value)}>
             {Object.entries(PERFIS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Define permissões padrão abaixo</span>
         </div>
         <div>
           <label style={sL}>Vincular ao Vendedor</label>
           <select style={sI} value={val.consultor_id||''} onChange={e=>onChange('consultor_id',e.target.value)}>
             <option value=''>— Nenhum —</option>
             {(consultores||[]).map(c => (
-              <option key={c.id} value={c.id}>{c.nome}{c.equipe ? ` (${c.equipe})` : ''}</option>
+              <option key={c.id} value={c.id}>{c.nome}{c.equipe?` (${c.equipe})`:''}</option>
             ))}
           </select>
-          <span style={{ color:'#8b92b0', fontSize:'0.7rem' }}>Necessário para perfil Vendedor</span>
         </div>
         {!novo && (
           <div>
@@ -712,12 +769,91 @@ function FormUsuario({ val, onChange, onSalvar, onCancelar, titulo, novo, erro, 
           </div>
         )}
       </div>
-      <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8, padding:'12px 14px' }}>
-        <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginBottom:8, fontWeight:600, textTransform:'uppercase', letterSpacing:1 }}>
-          Permissões do perfil selecionado
+
+      {/* Painel de permissões por página */}
+      <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:10, padding:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#1a1d2e' }}>🔐 Permissões por Página</div>
+            <div style={{ color:'#8b92b0', fontSize:'0.72rem', marginTop:2 }}>
+              Customize o acesso independente do perfil base
+            </div>
+          </div>
+          {isGestorMaster && (
+            <span style={{ background:'#fff8e6', color:'#b45309', border:'1px solid #f0b429',
+              borderRadius:6, padding:'2px 10px', fontSize:'0.7rem', fontWeight:700 }}>
+              ✦ Acesso Total
+            </span>
+          )}
         </div>
-        <PermissoesPreview perfil={val.perfil||'vendedor'} />
+
+        {/* Legenda */}
+        <div style={{ display:'flex', gap:12, marginBottom:12, fontSize:'0.72rem', color:'#4a5068' }}>
+          <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{ width:14, height:14, background:'#e4e7ef', borderRadius:3, display:'inline-block' }}></span>
+            Sem acesso
+          </span>
+          <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{ width:14, height:14, background:'#bfdbfe', borderRadius:3, display:'inline-block' }}></span>
+            👁 Visualizar
+          </span>
+          <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{ width:14, height:14, background:'#86efac', borderRadius:3, display:'inline-block' }}></span>
+            ✏️ Visualizar + Editar
+          </span>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {PAGINAS_CONFIG.map(pg => {
+            const nivel = isGestorMaster ? 'editar' : (perms[pg.key] || '');
+            const temVer    = nivel === 'ver' || nivel === 'editar';
+            const temEditar = nivel === 'editar';
+            return (
+              <div key={pg.key} style={{
+                display:'flex', alignItems:'center', gap:12,
+                background:'#ffffff', border:'1px solid #e4e7ef',
+                borderRadius:8, padding:'10px 14px',
+                opacity: isGestorMaster ? 0.7 : 1,
+              }}>
+                {/* Nome da página */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:'0.82rem', color:'#1a1d2e' }}>{pg.label}</div>
+                  <div style={{ color:'#8b92b0', fontSize:'0.7rem', marginTop:1 }}>{pg.desc}</div>
+                </div>
+
+                {/* Toggle Visualizar */}
+                <label style={{ display:'flex', alignItems:'center', gap:6, cursor: isGestorMaster?'not-allowed':'pointer',
+                  background: temVer?'#eff6ff':'#f5f6fa',
+                  border:`1px solid ${temVer?'#bfdbfe':'#e4e7ef'}`,
+                  borderRadius:6, padding:'4px 10px', transition:'all 0.15s' }}>
+                  <input type='checkbox' checked={temVer}
+                    disabled={isGestorMaster}
+                    onChange={() => togglePerm(pg.key, 'ver')}
+                    style={{ cursor: isGestorMaster?'not-allowed':'pointer' }}/>
+                  <span style={{ fontSize:'0.75rem', fontWeight:600, color: temVer?'#2563eb':'#8b92b0' }}>
+                    👁 Ver
+                  </span>
+                </label>
+
+                {/* Toggle Editar */}
+                <label style={{ display:'flex', alignItems:'center', gap:6, cursor: isGestorMaster?'not-allowed':'pointer',
+                  background: temEditar?'#f0fdf4':'#f5f6fa',
+                  border:`1px solid ${temEditar?'#86efac':'#e4e7ef'}`,
+                  borderRadius:6, padding:'4px 10px', transition:'all 0.15s' }}>
+                  <input type='checkbox' checked={temEditar}
+                    disabled={isGestorMaster}
+                    onChange={() => togglePerm(pg.key, 'editar')}
+                    style={{ cursor: isGestorMaster?'not-allowed':'pointer' }}/>
+                  <span style={{ fontSize:'0.75rem', fontWeight:600, color: temEditar?'#16a34a':'#8b92b0' }}>
+                    ✏️ Editar
+                  </span>
+                </label>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
       <div style={{ display:'flex', gap:10, paddingTop:4 }}>
         <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
           {salvando ? 'Salvando...' : '💾 Salvar'}
@@ -739,7 +875,7 @@ function PaginaUsuarios() {
   const [modalNovo,   setModalNovo]   = useState(false);
   const [editando,    setEditando]    = useState(null);
 
-  const formVazio = { nome:'', email:'', senha:'', perfil:'vendedor', consultor_id:'' };
+  const formVazio = { nome:'', email:'', senha:'', perfil:'vendedor', consultor_id:'', permissoes: getPermsIniciais('vendedor') };
   const [form, setForm] = useState(formVazio);
 
   useEffect(() => { carregar(); }, []);
@@ -755,48 +891,51 @@ function PaginaUsuarios() {
         .eq('ativo', true)
         .order('nome'),
     ]);
-    setUsuarios(users || []);
+    // Para cada usuário, busca permissões customizadas
+    const allUsers = users || [];
+    if (allUsers.length > 0) {
+      const { data: permsData } = await supabase
+        .from('user_permissoes')
+        .select('*')
+        .in('user_id', allUsers.map(u => u.id));
+      const permsMap = {};
+      (permsData || []).forEach(p => {
+        if (!permsMap[p.user_id]) permsMap[p.user_id] = {};
+        permsMap[p.user_id][p.pagina] = p.pode_editar ? 'editar' : p.pode_ver ? 'ver' : '';
+      });
+      allUsers.forEach(u => {
+        u.permissoes = Object.keys(permsMap[u.id]||{}).length > 0
+          ? permsMap[u.id]
+          : getPermsIniciais(u.perfil);
+      });
+    }
+    setUsuarios(allUsers);
     setConsultores(cons || []);
     setLoading(false);
+  }
+
+  async function salvarPermissoes(userId, permissoes) {
+    // Deleta permissões antigas e insere as novas
+    await supabase.from('user_permissoes').delete().eq('user_id', userId);
+    const rows = Object.entries(permissoes)
+      .filter(([, nivel]) => nivel === 'ver' || nivel === 'editar')
+      .map(([pagina, nivel]) => ({
+        user_id:     userId,
+        pagina,
+        pode_ver:    true,
+        pode_editar: nivel === 'editar',
+      }));
+    if (rows.length > 0) {
+      await supabase.from('user_permissoes').insert(rows);
+    }
   }
 
   async function criarUsuario() {
     if (!form.nome.trim())  { setErro('Informe o nome');  return; }
     if (!form.email.trim()) { setErro('Informe o e-mail'); return; }
     if (!form.senha || form.senha.length < 6) { setErro('Senha deve ter no mínimo 6 caracteres'); return; }
-
     setSalvando(true); setErro('');
-    // Cria usuário no Supabase Auth via Admin API não disponível no client
-    // Usamos signUp — o trigger cria o perfil automaticamente
-    const { data, error } = await supabase.auth.admin
-      ? supabase.auth.admin.createUser({
-          email: form.email.trim(),
-          password: form.senha,
-          email_confirm: true,
-          user_metadata: { nome: form.nome.trim(), perfil: form.perfil },
-        })
-      : { data: null, error: { message: 'Use o Supabase Dashboard para criar usuários ou configure o service_role key' } };
-
-    if (error) {
-      // Fallback: instrui usar o dashboard
-      setErro('Para criar usuários, acesse: Supabase Dashboard → Authentication → Users → Add User. Depois defina o perfil aqui.');
-    } else {
-      // Atualiza o perfil com os dados extras
-      if (data?.user?.id) {
-        await supabase.from('user_profiles').upsert({
-          id:           data.user.id,
-          nome:         form.nome.trim(),
-          email:        form.email.trim(),
-          perfil:       form.perfil,
-          consultor_id: form.consultor_id || null,
-        });
-      }
-      setSucesso('Usuário criado!');
-      setModalNovo(false);
-      setForm(formVazio);
-      await carregar();
-      setTimeout(() => setSucesso(''), 3000);
-    }
+    setErro('Para criar usuários: Supabase Dashboard → Authentication → Users → Add User. Depois edite o usuário aqui para definir perfil e permissões.');
     setSalvando(false);
   }
 
@@ -809,8 +948,10 @@ function PaginaUsuarios() {
       consultor_id: editando.consultor_id || null,
       ativo:        editando.ativo,
     }).eq('id', editando.id);
-    if (error) { setErro('Erro: ' + error.message); }
-    else { setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    if (error) { setErro('Erro: ' + error.message); setSalvando(false); return; }
+    // Salva permissões customizadas
+    await salvarPermissoes(editando.id, editando.permissoes || getPermsIniciais(editando.perfil));
+    setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000);
     setSalvando(false);
   }
 
