@@ -12,7 +12,7 @@ export async function POST(request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    const { nome, email, senha, perfil, consultor_id } = await request.json();
+    const { nome, email, senha, perfil, consultor_id, gestor_vinculado } = await request.json();
 
     // Validações básicas
     if (!nome?.trim())  return Response.json({ error: 'Informe o nome' }, { status: 400 });
@@ -33,12 +33,13 @@ export async function POST(request) {
 
     // Cria/atualiza perfil na tabela user_profiles
     const { error: profErr } = await supabaseAdmin.from('user_profiles').upsert({
-      id:           data.user.id,
-      nome:         nome.trim(),
-      email:        email.trim(),
-      perfil:       perfil || 'vendedor',
-      consultor_id: consultor_id || null,
-      ativo:        true,
+      id:               data.user.id,
+      nome:             nome.trim(),
+      email:            email.trim(),
+      perfil:           perfil || 'vendedor',
+      consultor_id:     consultor_id || null,
+      gestor_vinculado: gestor_vinculado || null,
+      ativo:            true,
     });
 
     if (profErr) {
