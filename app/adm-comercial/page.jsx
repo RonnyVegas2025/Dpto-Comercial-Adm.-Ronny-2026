@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useAuth } from './context/AuthContext';
+import PaginaUsuarios from './PaginaUsuarios';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -41,6 +43,7 @@ const COR_EQUIPE = {
 const SUBS = [
   { key: 'vendedores', icon: '👤', label: 'Cadastro de Vendedores', desc: 'Gerencie a equipe comercial por time' },
   { key: 'equipes',    icon: '🏷️', label: 'Gerenciar Equipes',      desc: 'Crie e edite as equipes comerciais' },
+  { key: 'usuarios',   icon: '🔐', label: 'Usuários & Acessos',     desc: 'Gerencie logins e permissões do sistema' },
   { key: 'parceiros',  icon: '🤝', label: 'Parceiros Comerciais',   desc: 'Cadastro e comissões de parceiros' },
 ];
 
@@ -715,6 +718,7 @@ export default function AdmComercial() {
       {/* Conteúdo da subpágina */}
       {subPagina === 'vendedores' && <PaginaVendedores equipesDB={equipesDB} />}
       {subPagina === 'equipes'    && <PaginaEquipes onEquipesChange={setEquipesDB} />}
+      {subPagina === 'usuarios'   && <PaginaUsuarios />}
       {subPagina === 'parceiros'  && <PaginaParceiros />}
     </div>
   );
