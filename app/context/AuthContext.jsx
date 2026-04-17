@@ -72,15 +72,28 @@ export function AuthProvider({ children }) {
 
       setProfile(prof);
 
-      const { data: perms } = await supabase
-        .from('perfil_permissoes')
+      // Busca permissões customizadas do usuário primeiro
+      const { data: userPerms } = await supabase
+        .from('user_permissoes')
         .select('*')
-        .eq('perfil', prof?.perfil || 'vendedor');
+        .eq('user_id', authUser.id);
 
       const mapa = {};
-      (perms || []).forEach(p => {
-        mapa[p.pagina] = { pode_ver: p.pode_ver, pode_editar: p.pode_editar };
-      });
+      if (userPerms && userPerms.length > 0) {
+        // Usa permissões customizadas
+        userPerms.forEach(p => {
+          mapa[p.pagina] = { pode_ver: p.pode_ver, pode_editar: p.pode_editar };
+        });
+      } else {
+        // Fallback: usa permissões padrão do perfil
+        const { data: perms } = await supabase
+          .from('perfil_permissoes')
+          .select('*')
+          .eq('perfil', prof?.perfil || 'vendedor');
+        (perms || []).forEach(p => {
+          mapa[p.pagina] = { pode_ver: p.pode_ver, pode_editar: p.pode_editar };
+        });
+      }
       setPermissoes(mapa);
     } catch(e) {
       console.error('Erro inesperado carregarPerfil:', e);
