@@ -2,6 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request) {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return Response.json({ error: 'Configure a variável SUPABASE_SERVICE_ROLE_KEY no Vercel → Settings → Environment Variables e faça um novo deploy.' }, { status: 500 });
+    }
+
     // Cria cliente admin dentro da função para garantir que as env vars estão disponíveis
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
