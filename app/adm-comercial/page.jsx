@@ -62,7 +62,7 @@ function PaginaVendedores({ equipesDB = [] }) {
   const [erro, setErro]                 = useState('');
   const [sucesso, setSucesso]           = useState('');
 
-  const formVazio = { nome:'', gestor:'', equipe:'', setor:'', meta_mensal:0, telefone:'', email:'', ativo:true };
+  const formVazio = { nome:'', diretor:'', gestor_intermediario:'', equipe:'', setor:'', meta_mensal:0, meta_inicio:'', telefone:'', email:'', ativo:true };
   const [form, setForm] = useState(formVazio);
 
   useEffect(() => { carregar(); }, []);
@@ -171,13 +171,21 @@ function PaginaVendedores({ equipesDB = [] }) {
           <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome completo"/>
         </div>
 
-        {/* Gestor */}
+        {/* Diretor */}
         <div>
-          <label style={sL}>Gestor</label>
-          <select style={sI} value={val.gestor||''} onChange={e=>onChange('gestor',e.target.value)}>
+          <label style={sL}>Diretor</label>
+          <select style={sI} value={val.diretor||''} onChange={e=>onChange('diretor',e.target.value)}>
             <option value=''>— Selecionar —</option>
             {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
+        </div>
+
+        {/* Gestor intermediário */}
+        <div>
+          <label style={sL}>Gestor</label>
+          <input style={sI} value={val.gestor_intermediario||''} onChange={e=>onChange('gestor_intermediario',e.target.value)}
+            placeholder="Nome do gestor (opcional)"/>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Deixe vazio se o Diretor é o gestor direto</span>
         </div>
 
         {/* Equipe */}
@@ -201,6 +209,26 @@ function PaginaVendedores({ equipesDB = [] }) {
           <input style={sI} type='number' value={val.meta_mensal||0} onChange={e=>onChange('meta_mensal',e.target.value)} placeholder="0,00"/>
         </div>
 
+        {/* Meta início */}
+        <div>
+          <label style={sL}>Meta válida a partir de</label>
+          <select style={sI} value={val.meta_inicio||''} onChange={e=>onChange('meta_inicio',e.target.value)}>
+            <option value=''>— Desde o início —</option>
+            {(() => {
+              const meses = [];
+              const hoje = new Date();
+              for (let i = -6; i <= 6; i++) {
+                const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+                const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+                const label = d.toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).replace(' de ',' ');
+                meses.push({ val, label });
+              }
+              return meses.map(m => <option key={m.val} value={m.val}>{m.label}</option>);
+            })()}
+          </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>A meta só é contabilizada a partir deste mês</span>
+        </div>
+
         {/* Telefone */}
         <div>
           <label style={sL}>Telefone</label>
@@ -222,6 +250,19 @@ function PaginaVendedores({ equipesDB = [] }) {
           </select>
         </div>
       </div>
+
+      {/* Preview hierarquia */}
+      {(val.diretor || val.gestor_intermediario) && (
+        <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8,
+          padding:'10px 14px', marginBottom:14, fontSize:'0.78rem', color:'#4a5068' }}>
+          <span style={{ fontWeight:600 }}>Hierarquia:</span>{' '}
+          {val.nome || 'Vendedor'} →{' '}
+          {val.gestor_intermediario ? (
+            <>{val.gestor_intermediario} <span style={{ color:'#8b92b0' }}>(Gestor)</span> → </>
+          ) : null}
+          {val.diretor ? <span style={{ fontWeight:700, color:'#1a1d2e' }}>{val.diretor} <span style={{ color:'#8b92b0' }}>(Diretor)</span></span> : '—'}
+        </div>
+      )}
 
       <div style={{ display:'flex', gap:10 }}>
         <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
