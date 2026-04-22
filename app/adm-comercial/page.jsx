@@ -49,6 +49,104 @@ const SUBS = [
 // ══════════════════════════════════════════════════════════════════════════
 // SUBPÁGINA: Cadastro de Vendedores
 // ══════════════════════════════════════════════════════════════════════════
+// Gera lista de meses para o seletor de meta_inicio
+function getMesesOpcoes() {
+  const meses = [];
+  const hoje = new Date();
+  for (let i = -6; i <= 18; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+    const label = d.toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).replace(' de ',' ');
+    meses.push({ val, label });
+  }
+  return meses;
+}
+
+function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salvando, equipesList }) {
+  const mesesOpcoes = getMesesOpcoes();
+  return (
+    <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12,
+      padding:24, marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>{titulo}</div>
+      {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
+        padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem', marginBottom:12 }}>{erro}</div>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12, marginBottom:16 }}>
+        <div style={{ gridColumn:'span 2' }}>
+          <label style={sL}>Nome *</label>
+          <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome completo"/>
+        </div>
+        <div>
+          <label style={sL}>Diretor</label>
+          <select style={sI} value={val.diretor||''} onChange={e=>onChange('diretor',e.target.value)}>
+            <option value=''>— Selecionar —</option>
+            {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={sL}>Gestor</label>
+          <input style={sI} value={val.gestor_intermediario||''} onChange={e=>onChange('gestor_intermediario',e.target.value)}
+            placeholder="Nome do gestor (opcional)"/>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Deixe vazio se o Diretor é o gestor direto</span>
+        </div>
+        <div>
+          <label style={sL}>Equipe</label>
+          <select style={sI} value={val.equipe||''} onChange={e=>onChange('equipe',e.target.value)}>
+            <option value=''>— Selecionar —</option>
+            {(equipesList||[]).map(e => <option key={e.id} value={e.nome}>{e.nome}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={sL}>Setor / Cargo</label>
+          <input style={sI} value={val.setor||''} onChange={e=>onChange('setor',e.target.value)} placeholder="Ex: Consultor Senior"/>
+        </div>
+        <div>
+          <label style={sL}>Meta Mensal (R$)</label>
+          <input style={sI} type='number' value={val.meta_mensal||0} onChange={e=>onChange('meta_mensal',e.target.value)} placeholder="0,00"/>
+        </div>
+        <div>
+          <label style={sL}>Meta válida a partir de</label>
+          <select style={sI} value={val.meta_inicio||''} onChange={e=>onChange('meta_inicio',e.target.value)}>
+            <option value=''>— Desde o início —</option>
+            {mesesOpcoes.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+          </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>A meta só é contabilizada a partir deste mês</span>
+        </div>
+        <div>
+          <label style={sL}>Telefone</label>
+          <input style={sI} value={val.telefone||''} onChange={e=>onChange('telefone',e.target.value)} placeholder="(11) 99999-9999"/>
+        </div>
+        <div>
+          <label style={sL}>E-mail</label>
+          <input style={sI} value={val.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@exemplo.com"/>
+        </div>
+        <div>
+          <label style={sL}>Status</label>
+          <select style={sI} value={String(val.ativo)} onChange={e=>onChange('ativo',e.target.value==='true')}>
+            <option value='true'>✅ Ativo</option>
+            <option value='false'>❌ Inativo</option>
+          </select>
+        </div>
+      </div>
+
+      {(val.diretor || val.gestor_intermediario) && (
+        <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8,
+          padding:'10px 14px', marginBottom:14, fontSize:'0.78rem', color:'#4a5068' }}>
+          <span style={{ fontWeight:600 }}>Hierarquia:</span>{' '}
+          {val.nome || 'Vendedor'} →{' '}
+          {val.gestor_intermediario ? <>{val.gestor_intermediario} <span style={{ color:'#8b92b0' }}>(Gestor)</span> → </> : null}
+          {val.diretor ? <span style={{ fontWeight:700, color:'#1a1d2e' }}>{val.diretor} <span style={{ color:'#8b92b0' }}>(Diretor)</span></span> : '—'}
+        </div>
+      )}
+
+      <div style={{ display:'flex', gap:10 }}>
+        <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>{salvando ? 'Salvando...' : '💾 Salvar'}</button>
+        <button style={sBtnSec} onClick={onCancelar}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 function PaginaVendedores({ equipesDB = [] }) {
   const [consultores, setConsultores]   = useState([]);
   const [equipesList, setEquipesList]   = useState([]);
@@ -70,7 +168,7 @@ function PaginaVendedores({ equipesDB = [] }) {
   async function carregar() {
     setLoading(true);
     const [{ data: cons }, { data: eqs }] = await Promise.all([
-      supabase.from('consultores').select('id, nome, gestor, equipe, setor, meta_mensal, telefone, email, ativo').order('nome'),
+      supabase.from('consultores').select('id, nome, gestor, diretor, gestor_intermediario, equipe, setor, meta_mensal, meta_inicio, telefone, email, ativo').order('nome'),
       supabase.from('equipes').select('id, nome, cor').order('nome'),
     ]);
     setConsultores(cons || []);
@@ -83,10 +181,13 @@ function PaginaVendedores({ equipesDB = [] }) {
     setSalvando(true); setErro('');
     const { error } = await supabase.from('consultores').insert({
       nome:        form.nome.trim(),
-      gestor:      form.gestor || null,
-      equipe:      form.equipe || null,
-      setor:       form.setor  || null,
-      meta_mensal: parseFloat(form.meta_mensal) || 0,
+      gestor:               form.diretor || null,   // mantém compatibilidade
+      diretor:              form.diretor || null,
+      gestor_intermediario: form.gestor_intermediario || null,
+      equipe:               form.equipe || null,
+      setor:                form.setor  || null,
+      meta_mensal:          parseFloat(form.meta_mensal) || 0,
+      meta_inicio:          form.meta_inicio || null,
       telefone:    form.telefone || null,
       email:       form.email    || null,
       ativo:       form.ativo,
@@ -101,10 +202,13 @@ function PaginaVendedores({ equipesDB = [] }) {
     setSalvando(true); setErro('');
     const { error } = await supabase.from('consultores').update({
       nome:        editando.nome.trim(),
-      gestor:      editando.gestor  || null,
-      equipe:      editando.equipe  || null,
-      setor:       editando.setor   || null,
-      meta_mensal: parseFloat(editando.meta_mensal) || 0,
+      gestor:               editando.diretor  || null,  // mantém compatibilidade
+      diretor:              editando.diretor  || null,
+      gestor_intermediario: editando.gestor_intermediario || null,
+      equipe:               editando.equipe  || null,
+      setor:                editando.setor   || null,
+      meta_mensal:          parseFloat(editando.meta_mensal) || 0,
+      meta_inicio:          editando.meta_inicio || null,
       telefone:    editando.telefone || null,
       email:       editando.email    || null,
       ativo:       editando.ativo,
@@ -156,122 +260,6 @@ function PaginaVendedores({ equipesDB = [] }) {
   const totalAtivos   = consultores.filter(c => c.ativo).length;
   const totalInativos = consultores.filter(c => !c.ativo).length;
   const equipes       = [...new Set(consultores.map(c => c.equipe || 'Sem Equipe').filter(Boolean))];
-
-  const FormVendedor = ({ val, onChange, onSalvar, onCancelar, titulo }) => (
-    <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12,
-      padding:24, marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>{titulo}</div>
-      {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
-        padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem', marginBottom:12 }}>{erro}</div>}
-
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12, marginBottom:16 }}>
-        {/* Nome */}
-        <div style={{ gridColumn:'span 2' }}>
-          <label style={sL}>Nome *</label>
-          <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome completo"/>
-        </div>
-
-        {/* Diretor */}
-        <div>
-          <label style={sL}>Diretor</label>
-          <select style={sI} value={val.diretor||''} onChange={e=>onChange('diretor',e.target.value)}>
-            <option value=''>— Selecionar —</option>
-            {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        </div>
-
-        {/* Gestor intermediário */}
-        <div>
-          <label style={sL}>Gestor</label>
-          <input style={sI} value={val.gestor_intermediario||''} onChange={e=>onChange('gestor_intermediario',e.target.value)}
-            placeholder="Nome do gestor (opcional)"/>
-          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Deixe vazio se o Diretor é o gestor direto</span>
-        </div>
-
-        {/* Equipe */}
-        <div>
-          <label style={sL}>Equipe</label>
-          <select style={sI} value={val.equipe||''} onChange={e=>onChange('equipe',e.target.value)}>
-            <option value=''>— Selecionar —</option>
-            {equipesList.map(e => <option key={e.id} value={e.nome}>{e.nome}</option>)}
-          </select>
-        </div>
-
-        {/* Setor */}
-        <div>
-          <label style={sL}>Setor / Cargo</label>
-          <input style={sI} value={val.setor||''} onChange={e=>onChange('setor',e.target.value)} placeholder="Ex: Consultor Senior"/>
-        </div>
-
-        {/* Meta mensal */}
-        <div>
-          <label style={sL}>Meta Mensal (R$)</label>
-          <input style={sI} type='number' value={val.meta_mensal||0} onChange={e=>onChange('meta_mensal',e.target.value)} placeholder="0,00"/>
-        </div>
-
-        {/* Meta início */}
-        <div>
-          <label style={sL}>Meta válida a partir de</label>
-          <select style={sI} value={val.meta_inicio||''} onChange={e=>onChange('meta_inicio',e.target.value)}>
-            <option value=''>— Desde o início —</option>
-            {(() => {
-              const meses = [];
-              const hoje = new Date();
-              for (let i = -6; i <= 6; i++) {
-                const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
-                const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-                const label = d.toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).replace(' de ',' ');
-                meses.push({ val, label });
-              }
-              return meses.map(m => <option key={m.val} value={m.val}>{m.label}</option>);
-            })()}
-          </select>
-          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>A meta só é contabilizada a partir deste mês</span>
-        </div>
-
-        {/* Telefone */}
-        <div>
-          <label style={sL}>Telefone</label>
-          <input style={sI} value={val.telefone||''} onChange={e=>onChange('telefone',e.target.value)} placeholder="(11) 99999-9999"/>
-        </div>
-
-        {/* Email */}
-        <div>
-          <label style={sL}>E-mail</label>
-          <input style={sI} value={val.email||''} onChange={e=>onChange('email',e.target.value)} placeholder="email@exemplo.com"/>
-        </div>
-
-        {/* Status */}
-        <div>
-          <label style={sL}>Status</label>
-          <select style={sI} value={String(val.ativo)} onChange={e=>onChange('ativo',e.target.value==='true')}>
-            <option value='true'>✅ Ativo</option>
-            <option value='false'>❌ Inativo</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Preview hierarquia */}
-      {(val.diretor || val.gestor_intermediario) && (
-        <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8,
-          padding:'10px 14px', marginBottom:14, fontSize:'0.78rem', color:'#4a5068' }}>
-          <span style={{ fontWeight:600 }}>Hierarquia:</span>{' '}
-          {val.nome || 'Vendedor'} →{' '}
-          {val.gestor_intermediario ? (
-            <>{val.gestor_intermediario} <span style={{ color:'#8b92b0' }}>(Gestor)</span> → </>
-          ) : null}
-          {val.diretor ? <span style={{ fontWeight:700, color:'#1a1d2e' }}>{val.diretor} <span style={{ color:'#8b92b0' }}>(Diretor)</span></span> : '—'}
-        </div>
-      )}
-
-      <div style={{ display:'flex', gap:10 }}>
-        <button style={sBtnPri} onClick={onSalvar} disabled={salvando}>
-          {salvando ? 'Salvando...' : '💾 Salvar'}
-        </button>
-        <button style={sBtnSec} onClick={onCancelar}>Cancelar</button>
-      </div>
-    </div>
-  );
 
   return (
     <div>
@@ -360,7 +348,8 @@ function PaginaVendedores({ equipesDB = [] }) {
       {adicionando && (
         <FormVendedor val={form} onChange={setF} onSalvar={salvarNovo}
           onCancelar={() => { setAdicionando(false); setErro(''); }}
-          titulo="➕ Novo Vendedor" />
+          titulo="➕ Novo Vendedor"
+          erro={erro} salvando={salvando} equipesList={equipesList} />
       )}
 
       {/* Modal edição */}
@@ -373,7 +362,8 @@ function PaginaVendedores({ equipesDB = [] }) {
             onClick={e=>e.stopPropagation()}>
             <FormVendedor val={editando} onChange={setE} onSalvar={salvarEdicao}
               onCancelar={() => { setEditando(null); setErro(''); }}
-              titulo={`✏️ Editar — ${editando.nome}`} />
+              titulo={`✏️ Editar — ${editando.nome}`}
+              erro={erro} salvando={salvando} equipesList={equipesList} />
           </div>
         </div>
       )}
@@ -417,7 +407,7 @@ function PaginaVendedores({ equipesDB = [] }) {
                         <div>
                           <div style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{c.nome}</div>
                           <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginTop:2 }}>
-                            {c.setor || '—'} {c.gestor ? `· ${c.gestor.split(' ')[0]}` : ''}
+                            {c.setor || '—'} {c.diretor ? `· ${c.diretor.split(' ')[0]}` : c.gestor ? `· ${c.gestor.split(' ')[0]}` : ''}{c.gestor_intermediario ? ` / ${c.gestor_intermediario.split(' ')[0]}` : ''}
                           </div>
                         </div>
                         <span style={{
@@ -453,7 +443,7 @@ function PaginaVendedores({ equipesDB = [] }) {
                       {/* Ações */}
                       <div style={{ display:'flex', gap:8, paddingTop:10, borderTop:'1px solid #f0f2f8' }}>
                         <button style={{ ...sBtnSec, flex:1, fontSize:'0.78rem', padding:'6px 10px' }}
-                          onClick={() => { setEditando({...c}); setErro(''); }}>
+                          onClick={() => { setEditando({...c, diretor: c.diretor||c.gestor||'', gestor_intermediario: c.gestor_intermediario||'', meta_inicio: c.meta_inicio||''}); setErro(''); }}>
                           ✏️ Editar
                         </button>
                         <button onClick={() => toggleAtivo(c)}
