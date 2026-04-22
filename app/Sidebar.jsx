@@ -8,6 +8,7 @@ const nav = [
   { href: '/',                  icon: '◈',  label: 'Início',        pagina: 'inicio'            },
   { href: '/vendedor',          icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
   { href: '/movimentacoes',     icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
+  { href: '/importar-base',     icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
   { href: '/gestao',            icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
   { href: '/relatorios',        icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
   { href: '/relatorio-empresas',icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio-empresas' },
