@@ -62,7 +62,7 @@ function BannerFiltros({ filtros, onLimpar }) {
   const tags = [];
   if (filtros.diretor   !== 'todos') tags.push({ label: `Diretor: ${filtros.diretor}`,       cor: '#a78bfa' });
   if (filtros.gestor    !== 'todos') tags.push({ label: `Gestor: ${filtros.gestor}`,          cor: '#60a5fa' });
-  if (filtros.depto     !== 'todos') tags.push({ label: `Depto: ${filtros.depto}`,            cor: '#f97316' });
+  if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,            cor: '#f97316' });
   if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: '#34d399' });
   if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
   if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Creditaram' : '❌ Sem crédito', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
@@ -257,7 +257,7 @@ export default function Evolucao() {
       supabase
         .from('empresas')
         .select(`id, produto_id, nome, categoria, potencial_movimentacao, peso_categoria,
-          consultor_principal:consultor_principal_id (id, nome, setor, gestor, tipo)`)
+          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo)`)
         .eq('ativo', true)
         .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus']),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
@@ -284,8 +284,8 @@ export default function Evolucao() {
       creditou:     totalCreditado > 0,
       pctPot:       e.potencial_movimentacao > 0 ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria || 1) * meses.length)) * 100 : null,
       ultimoValor:  vals[vals.length - 1] || 0,
-      // Hierarquia: setor = departamento, gestor = gestor, gestor.gestor = diretor
-      depto:        e.consultor_principal?.setor  || '—',
+      // depto vem do campo equipe do consultor (Parcerias, Venda Nova, etc)
+      depto:        e.consultor_principal?.equipe || e.consultor_principal?.setor || '—',
       gestor:       e.consultor_principal?.gestor || '—',
       diretor:      e.consultor_principal?.gestor || '—', // será ajustado abaixo
       vendedor:     e.consultor_principal?.nome   || '—',
@@ -460,7 +460,7 @@ export default function Evolucao() {
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
-              <option value="todos">Todos os departamentos</option>
+              <option value="todos">Todas as equipes</option>
               {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
@@ -537,7 +537,7 @@ export default function Evolucao() {
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
-              <option value="todos">Todos os departamentos</option>
+              <option value="todos">Todas as equipes</option>
               {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
