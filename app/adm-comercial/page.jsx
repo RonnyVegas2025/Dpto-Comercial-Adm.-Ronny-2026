@@ -64,8 +64,30 @@ function getMesesOpcoes() {
   return meses;
 }
 
-function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salvando, equipesList }) {
+function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salvando, equipesList, diretoresList, gestoresList }) {
   const mesesOpcoes = getMesesOpcoes();
+
+  // Gestores filtrados pelo diretor selecionado
+  const gestoresFiltrados = val.diretor_id
+    ? (gestoresList || []).filter(g => g.diretor_id === val.diretor_id)
+    : (gestoresList || []);
+
+  // Quando muda o diretor, limpa o gestor
+  function handleDiretorChange(id) {
+    onChange('diretor_id', id);
+    onChange('gestor_id', '');
+    // Mantém compatibilidade com campo texto
+    const dir = (diretoresList || []).find(d => d.id === id);
+    onChange('diretor', dir?.nome || '');
+    onChange('gestor', '');
+  }
+
+  function handleGestorChange(id) {
+    onChange('gestor_id', id);
+    const gest = (gestoresList || []).find(g => g.id === id);
+    onChange('gestor_intermediario', gest?.nome || '');
+  }
+
   return (
     <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12,
       padding:24, marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
@@ -78,19 +100,26 @@ function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salva
           <label style={sL}>Nome *</label>
           <input style={sI} value={val.nome||''} onChange={e=>onChange('nome',e.target.value)} placeholder="Nome completo"/>
         </div>
+
+        {/* Diretor — dropdown do banco */}
         <div>
           <label style={sL}>Diretor</label>
-          <select style={sI} value={val.diretor||''} onChange={e=>onChange('diretor',e.target.value)}>
-            <option value=''>— Selecionar —</option>
-            {GESTORES.map(g => <option key={g} value={g}>{g}</option>)}
+          <select style={sI} value={val.diretor_id||''} onChange={e => handleDiretorChange(e.target.value)}>
+            <option value="">— Selecionar —</option>
+            {(diretoresList||[]).map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
           </select>
         </div>
+
+        {/* Gestor — dropdown filtrado pelo diretor */}
         <div>
-          <label style={sL}>Gestor</label>
-          <input style={sI} value={val.gestor_intermediario||''} onChange={e=>onChange('gestor_intermediario',e.target.value)}
-            placeholder="Nome do gestor (opcional)"/>
+          <label style={sL}>Gestor {val.diretor_id ? <span style={{ color:'#f0b429' }}>· filtrado</span> : ''}</label>
+          <select style={sI} value={val.gestor_id||''} onChange={e => handleGestorChange(e.target.value)}>
+            <option value="">{val.diretor_id ? (gestoresFiltrados.length === 0 ? 'Sem gestores neste diretor' : '— Selecionar —') : '— Selecionar diretor primeiro —'}</option>
+            {gestoresFiltrados.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
+          </select>
           <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Deixe vazio se o Diretor é o gestor direto</span>
         </div>
+
         <div>
           <label style={sL}>Equipe</label>
           <select style={sI} value={val.equipe||''} onChange={e=>onChange('equipe',e.target.value)}>
@@ -131,13 +160,18 @@ function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salva
         </div>
       </div>
 
-      {(val.diretor || val.gestor_intermediario) && (
+      {/* Preview hierarquia */}
+      {(val.diretor_id || val.gestor_id) && (
         <div style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:8,
           padding:'10px 14px', marginBottom:14, fontSize:'0.78rem', color:'#4a5068' }}>
           <span style={{ fontWeight:600 }}>Hierarquia:</span>{' '}
-          {val.nome || 'Vendedor'} →{' '}
-          {val.gestor_intermediario ? <>{val.gestor_intermediario} <span style={{ color:'#8b92b0' }}>(Gestor)</span> → </> : null}
-          {val.diretor ? <span style={{ fontWeight:700, color:'#1a1d2e' }}>{val.diretor} <span style={{ color:'#8b92b0' }}>(Diretor)</span></span> : '—'}
+          {val.nome || 'Vendedor'}{' → '}
+          {val.gestor_id
+            ? <>{(gestoresList||[]).find(g=>g.id===val.gestor_id)?.nome} <span style={{ color:'#8b92b0' }}>(Gestor)</span> → </>
+            : null}
+          {val.diretor_id
+            ? <span style={{ fontWeight:700, color:'#1a1d2e' }}>{(diretoresList||[]).find(d=>d.id===val.diretor_id)?.nome} <span style={{ color:'#8b92b0' }}>(Diretor)</span></span>
+            : '—'}
         </div>
       )}
 
@@ -148,10 +182,11 @@ function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salva
     </div>
   );
 }
-
 function PaginaVendedores({ equipesDB = [] }) {
   const [consultores, setConsultores]   = useState([]);
   const [equipesList, setEquipesList]   = useState([]);
+  const [diretoresList, setDiretoresList] = useState([]);
+  const [gestoresList, setGestoresList] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
   const [editando, setEditando]         = useState(null);
@@ -162,37 +197,45 @@ function PaginaVendedores({ equipesDB = [] }) {
   const [erro, setErro]                 = useState('');
   const [sucesso, setSucesso]           = useState('');
 
-  const formVazio = { nome:'', diretor:'', gestor_intermediario:'', equipe:'', setor:'', meta_mensal:0, meta_inicio:'', telefone:'', email:'', ativo:true };
+  const formVazio = { nome:'', diretor:'', diretor_id:'', gestor_intermediario:'', gestor_id:'', equipe:'', setor:'', meta_mensal:0, meta_inicio:'', telefone:'', email:'', ativo:true };
   const [form, setForm] = useState(formVazio);
 
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
     setLoading(true);
-    const [{ data: cons }, { data: eqs }] = await Promise.all([
-      supabase.from('consultores').select('id, nome, gestor, diretor, gestor_intermediario, equipe, setor, meta_mensal, meta_inicio, telefone, email, ativo').order('nome'),
+    const [{ data: cons }, { data: eqs }, { data: dirs }, { data: gests }] = await Promise.all([
+      supabase.from('consultores').select('id, nome, gestor, diretor, diretor_id, gestor_id, gestor_intermediario, equipe, setor, meta_mensal, meta_inicio, telefone, email, ativo').order('nome'),
       supabase.from('equipes').select('id, nome, cor').order('nome'),
+      supabase.from('diretores').select('id, nome').eq('ativo', true).order('nome'),
+      supabase.from('gestores').select('id, nome, diretor_id').eq('ativo', true).order('nome'),
     ]);
     setConsultores(cons || []);
     setEquipesList(eqs || []);
+    setDiretoresList(dirs || []);
+    setGestoresList(gests || []);
     setLoading(false);
   }
 
   async function salvarNovo() {
     if (!form.nome.trim()) { setErro('Informe o nome do vendedor'); return; }
     setSalvando(true); setErro('');
+    const dirNome  = (diretoresList.find(d => d.id === form.diretor_id))?.nome || form.diretor || null;
+    const gestNome = (gestoresList.find(g => g.id === form.gestor_id))?.nome || form.gestor_intermediario || null;
     const { error } = await supabase.from('consultores').insert({
-      nome:        form.nome.trim(),
-      gestor:               form.diretor || null,   // mantém compatibilidade
-      diretor:              form.diretor || null,
-      gestor_intermediario: form.gestor_intermediario || null,
+      nome:                 form.nome.trim(),
+      gestor:               dirNome,
+      diretor:              dirNome,
+      diretor_id:           form.diretor_id || null,
+      gestor_intermediario: gestNome,
+      gestor_id:            form.gestor_id || null,
       equipe:               form.equipe || null,
       setor:                form.setor  || null,
       meta_mensal:          parseFloat(form.meta_mensal) || 0,
       meta_inicio:          form.meta_inicio || null,
-      telefone:    form.telefone || null,
-      email:       form.email    || null,
-      ativo:       form.ativo,
+      telefone:             form.telefone || null,
+      email:                form.email    || null,
+      ativo:                form.ativo,
     });
     if (error) { setErro('Erro: ' + error.message); }
     else { setSucesso('Vendedor cadastrado!'); setForm(formVazio); setAdicionando(false); await carregar(); setTimeout(() => setSucesso(''), 3000); }
@@ -202,18 +245,22 @@ function PaginaVendedores({ equipesDB = [] }) {
   async function salvarEdicao() {
     if (!editando?.nome?.trim()) { setErro('Informe o nome'); return; }
     setSalvando(true); setErro('');
+    const dirNome  = (diretoresList.find(d => d.id === editando.diretor_id))?.nome || editando.diretor || null;
+    const gestNome = (gestoresList.find(g => g.id === editando.gestor_id))?.nome || editando.gestor_intermediario || null;
     const { error } = await supabase.from('consultores').update({
-      nome:        editando.nome.trim(),
-      gestor:               editando.diretor  || null,  // mantém compatibilidade
-      diretor:              editando.diretor  || null,
-      gestor_intermediario: editando.gestor_intermediario || null,
+      nome:                 editando.nome.trim(),
+      gestor:               dirNome,
+      diretor:              dirNome,
+      diretor_id:           editando.diretor_id || null,
+      gestor_intermediario: gestNome,
+      gestor_id:            editando.gestor_id || null,
       equipe:               editando.equipe  || null,
       setor:                editando.setor   || null,
       meta_mensal:          parseFloat(editando.meta_mensal) || 0,
       meta_inicio:          editando.meta_inicio || null,
-      telefone:    editando.telefone || null,
-      email:       editando.email    || null,
-      ativo:       editando.ativo,
+      telefone:             editando.telefone || null,
+      email:                editando.email    || null,
+      ativo:                editando.ativo,
     }).eq('id', editando.id);
     if (error) { setErro('Erro: ' + error.message); }
     else { setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000); }
@@ -225,29 +272,21 @@ function PaginaVendedores({ equipesDB = [] }) {
     await carregar();
   }
 
-  const setF  = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const setE  = (k, v) => setEditando(e => ({ ...e, [k]: v }));
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setE = (k, v) => setEditando(e => ({ ...e, [k]: v }));
 
-  // Equipes disponíveis para o gestor selecionado
-  const equipesDoGestor = filtroGestor
-    ? [...new Set(
-        consultores
-          .filter(c => c.gestor === filtroGestor)
-          .map(c => c.equipe || 'Outros')
-      )].sort()
+  // Gestores do diretor filtrado (para filtro da lista)
+  const gestoresDoFiltro = filtroGestor
+    ? consultores.filter(c => (c.gestor || c.diretor) === filtroGestor).map(c => c.equipe).filter(Boolean)
     : equipesList.map(e => e.nome);
 
-  // Reseta equipe se não existe no gestor selecionado
-  const handleGestorChange = (g) => {
-    setFiltroGestor(g);
-    setFiltroEquipe(''); // limpa equipe ao trocar gestor
-  };
+  const handleFiltroGestorChange = (g) => { setFiltroGestor(g); setFiltroEquipe(''); };
 
-  // Agrupa por equipe para exibição
+  // Lista filtrada
   const filtrados = consultores.filter(c => {
     if (busca && !c.nome?.toLowerCase().includes(busca.toLowerCase())) return false;
     if (filtroEquipe && (c.equipe || 'Outros') !== filtroEquipe) return false;
-    if (filtroGestor && c.gestor !== filtroGestor) return false;
+    if (filtroGestor && (c.gestor || c.diretor) !== filtroGestor) return false;
     return true;
   });
 
@@ -258,7 +297,8 @@ function PaginaVendedores({ equipesDB = [] }) {
     porEquipe[eq].push(c);
   });
 
-  // KPIs
+  // Diretores únicos para o filtro
+  const diretoresUnicos = [...new Set(consultores.map(c => c.gestor || c.diretor).filter(Boolean))].sort();
   const totalAtivos   = consultores.filter(c => c.ativo).length;
   const totalInativos = consultores.filter(c => !c.ativo).length;
   const equipes       = [...new Set(consultores.map(c => c.equipe || 'Sem Equipe').filter(Boolean))];
@@ -268,15 +308,13 @@ function PaginaVendedores({ equipesDB = [] }) {
       {/* KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px,1fr))', gap:12, marginBottom:20 }}>
         {[
-          { label:'Total Vendedores', val:consultores.length,  cor:'#1a1d2e' },
-          { label:'Ativos',           val:totalAtivos,          cor:'#16a34a' },
-          { label:'Inativos',         val:totalInativos,        cor:'#dc2626' },
-          { label:'Equipes',          val:equipes.length,       cor:'#7c3aed' },
+          { label:'Total Vendedores', val:consultores.length, cor:'#1a1d2e' },
+          { label:'Ativos',           val:totalAtivos,         cor:'#16a34a' },
+          { label:'Inativos',         val:totalInativos,       cor:'#dc2626' },
+          { label:'Equipes',          val:equipes.length,      cor:'#7c3aed' },
         ].map(k => (
-          <div key={k.label} style={{ background:'#ffffff', border:'1px solid #e4e7ef',
-            borderRadius:12, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase',
-              letterSpacing:1, marginBottom:6 }}>{k.label}</div>
+          <div key={k.label} style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ color:'#8b92b0', fontSize:'0.65rem', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>{k.label}</div>
             <div style={{ fontSize:'1.4rem', fontWeight:800, color:k.cor }}>{k.val}</div>
           </div>
         ))}
@@ -284,57 +322,31 @@ function PaginaVendedores({ equipesDB = [] }) {
 
       {/* Barra de ações */}
       <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
-        <input placeholder="🔍 Buscar vendedor..." value={busca}
-          onChange={e=>setBusca(e.target.value)}
-          style={{ ...sI, flex:2, minWidth:200 }}/>
+        <input placeholder="🔍 Buscar vendedor..." value={busca} onChange={e=>setBusca(e.target.value)} style={{ ...sI, flex:2, minWidth:200 }}/>
 
-        {/* Gestor — primeiro filtro */}
         <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:170 }}>
-          <span style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>
-            Gestor
-          </span>
-          <select value={filtroGestor} onChange={e=>handleGestorChange(e.target.value)}
-            style={{ ...sI,
-              borderColor: filtroGestor ? '#f0b429' : '#e4e7ef',
-              background:  filtroGestor ? '#fff8e6' : '#ffffff',
-              color:       filtroGestor ? '#b45309' : '#8b92b0',
-              fontWeight:  filtroGestor ? 600 : 400,
-            }}>
-            <option value=''>Todos os gestores</option>
-            {GESTORES.map(g => <option key={g} value={g}>{g.split(' ')[0]}</option>)}
+          <span style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>Diretor</span>
+          <select value={filtroGestor} onChange={e=>handleFiltroGestorChange(e.target.value)}
+            style={{ ...sI, borderColor: filtroGestor ? '#f0b429' : '#e4e7ef', background: filtroGestor ? '#fff8e6' : '#ffffff', color: filtroGestor ? '#b45309' : '#8b92b0', fontWeight: filtroGestor ? 600 : 400 }}>
+            <option value=''>Todos os diretores</option>
+            {diretoresUnicos.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
         </div>
 
-        {/* Equipe — dependente do gestor */}
         <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:170 }}>
           <span style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>
-            Equipe {filtroGestor && <span style={{ color:'#f0b429' }}>· {filtroGestor.split(' ')[0]}</span>}
+            Equipe {filtroGestor && <span style={{ color:'#f0b429' }}>· filtrada</span>}
           </span>
           <select value={filtroEquipe} onChange={e=>setFiltroEquipe(e.target.value)}
-            style={{ ...sI,
-              borderColor: filtroEquipe ? '#f0b429' : '#e4e7ef',
-              background:  filtroEquipe ? '#fff8e6' : '#ffffff',
-              color:       filtroEquipe ? '#b45309' : '#8b92b0',
-              fontWeight:  filtroEquipe ? 600 : 400,
-            }}>
-            <option value=''>
-              {filtroGestor ? `Todas (${equipesDoGestor.length})` : 'Todas as equipes'}
-            </option>
-            {equipesDoGestor.map(e => {
-              const total = consultores.filter(c =>
-                (c.equipe||'Outros') === e && (!filtroGestor || c.gestor === filtroGestor)
-              ).length;
-              return <option key={e} value={e}>{e} ({total})</option>;
-            })}
+            style={{ ...sI, borderColor: filtroEquipe ? '#f0b429' : '#e4e7ef', background: filtroEquipe ? '#fff8e6' : '#ffffff', color: filtroEquipe ? '#b45309' : '#8b92b0', fontWeight: filtroEquipe ? 600 : 400 }}>
+            <option value=''>Todas as equipes</option>
+            {[...new Set(gestoresDoFiltro)].map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
 
-        {/* Limpar filtros */}
         {(busca || filtroGestor || filtroEquipe) && (
           <button onClick={() => { setBusca(''); setFiltroGestor(''); setFiltroEquipe(''); }}
-            style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8,
-              padding:'8px 14px', color:'#dc2626', fontSize:'0.78rem',
-              cursor:'pointer', fontFamily:'inherit', fontWeight:600, alignSelf:'flex-end' }}>
+            style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 14px', color:'#dc2626', fontSize:'0.78rem', cursor:'pointer', fontFamily:'inherit', fontWeight:600, alignSelf:'flex-end' }}>
             ✕ Limpar
           </button>
         )}
@@ -351,21 +363,25 @@ function PaginaVendedores({ equipesDB = [] }) {
         <FormVendedor val={form} onChange={setF} onSalvar={salvarNovo}
           onCancelar={() => { setAdicionando(false); setErro(''); }}
           titulo="➕ Novo Vendedor"
-          erro={erro} salvando={salvando} equipesList={equipesList} />
+          erro={erro} salvando={salvando}
+          equipesList={equipesList}
+          diretoresList={diretoresList}
+          gestoresList={gestoresList} />
       )}
 
       {/* Modal edição */}
       {editando && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setEditando(null)}>
-          <div style={{ background:'#f5f6fa', borderRadius:16, padding:24,
-            width:'100%', maxWidth:760, maxHeight:'90vh', overflowY:'auto' }}
+          <div style={{ background:'#f5f6fa', borderRadius:16, padding:24, width:'100%', maxWidth:760, maxHeight:'90vh', overflowY:'auto' }}
             onClick={e=>e.stopPropagation()}>
             <FormVendedor val={editando} onChange={setE} onSalvar={salvarEdicao}
               onCancelar={() => { setEditando(null); setErro(''); }}
               titulo={`✏️ Editar — ${editando.nome}`}
-              erro={erro} salvando={salvando} equipesList={equipesList} />
+              erro={erro} salvando={salvando}
+              equipesList={equipesList}
+              diretoresList={diretoresList}
+              gestoresList={gestoresList} />
           </div>
         </div>
       )}
@@ -374,102 +390,65 @@ function PaginaVendedores({ equipesDB = [] }) {
       {loading ? (
         <div style={{ textAlign:'center', padding:48, color:'#8b92b0' }}>Carregando...</div>
       ) : (
-        Object.entries(porEquipe)
-          .sort(([a],[b]) => a.localeCompare(b))
-          .map(([equipe, membros]) => {
-            const eqObj = equipesList.find(e => e.nome === equipe);
-            const cor = eqObj?.cor || COR_EQUIPE[equipe] || '#6b7280';
-            const ativos = membros.filter(m => m.ativo).length;
-            return (
-              <div key={equipe} style={{ marginBottom:20 }}>
-                {/* Header da equipe */}
-                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-                  <div style={{ background:`${cor}15`, border:`1px solid ${cor}30`,
-                    borderRadius:8, padding:'4px 14px', color:cor, fontWeight:700,
-                    fontSize:'0.82rem' }}>
-                    {equipe}
-                  </div>
-                  <span style={{ color:'#8b92b0', fontSize:'0.75rem' }}>
-                    {membros.length} vendedor{membros.length!==1?'es':''} · {ativos} ativo{ativos!==1?'s':''}
-                  </span>
-                  <div style={{ flex:1, height:1, background:'#e4e7ef' }}></div>
-                </div>
-
-                {/* Cards dos vendedores */}
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
-                  {membros.map(c => (
-                    <div key={c.id} style={{
-                      background:'#ffffff', border:`1px solid ${c.ativo ? '#e4e7ef' : '#fca5a5'}`,
-                      borderRadius:12, padding:'16px 18px',
-                      boxShadow:'0 1px 3px rgba(0,0,0,0.05)',
-                      opacity: c.ativo ? 1 : 0.65,
-                    }}>
-                      {/* Nome + status */}
+        Object.entries(porEquipe).sort(([a],[b]) => a.localeCompare(b)).map(([equipe, membros]) => {
+          const eqObj = equipesList.find(e => e.nome === equipe);
+          const cor = eqObj?.cor || COR_EQUIPE[equipe] || '#6b7280';
+          const ativos = membros.filter(m => m.ativo).length;
+          return (
+            <div key={equipe} style={{ marginBottom:20 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                <div style={{ background:`${cor}15`, border:`1px solid ${cor}30`, borderRadius:8, padding:'4px 14px', color:cor, fontWeight:700, fontSize:'0.82rem' }}>{equipe}</div>
+                <span style={{ color:'#8b92b0', fontSize:'0.75rem' }}>{membros.length} vendedor{membros.length!==1?'es':''} · {ativos} ativo{ativos!==1?'s':''}</span>
+                <div style={{ flex:1, height:1, background:'#e4e7ef' }}></div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
+                {membros.map(c => {
+                  const dirNome  = c.diretor || c.gestor || '';
+                  const gestNome = c.gestor_intermediario || '';
+                  return (
+                    <div key={c.id} style={{ background:'#ffffff', border:`1px solid ${c.ativo ? '#e4e7ef' : '#fca5a5'}`, borderRadius:12, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,0.05)', opacity: c.ativo ? 1 : 0.65 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
                         <div>
                           <div style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{c.nome}</div>
                           <div style={{ fontSize:'0.72rem', color:'#8b92b0', marginTop:2 }}>
-                            {c.setor || '—'} {c.diretor ? `· ${c.diretor.split(' ')[0]}` : c.gestor ? `· ${c.gestor.split(' ')[0]}` : ''}{c.gestor_intermediario ? ` / ${c.gestor_intermediario.split(' ')[0]}` : ''}
+                            {c.setor || '—'}
+                            {gestNome ? ` · ${gestNome.split(' ')[0]}` : dirNome ? ` · ${dirNome.split(' ')[0]}` : ''}
                           </div>
                         </div>
-                        <span style={{
-                          background: c.ativo ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
-                          color: c.ativo ? '#16a34a' : '#dc2626',
-                          border: `1px solid ${c.ativo ? 'rgba(22,163,74,0.2)' : 'rgba(220,38,38,0.2)'}`,
-                          borderRadius:6, padding:'2px 8px', fontSize:'0.65rem', fontWeight:600,
-                        }}>
+                        <span style={{ background: c.ativo ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)', color: c.ativo ? '#16a34a' : '#dc2626', border: `1px solid ${c.ativo ? 'rgba(22,163,74,0.2)' : 'rgba(220,38,38,0.2)'}`, borderRadius:6, padding:'2px 8px', fontSize:'0.65rem', fontWeight:600 }}>
                           {c.ativo ? '● Ativo' : '● Inativo'}
                         </span>
                       </div>
-
-                      {/* Info */}
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
                         <div>
                           <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Meta Mensal</div>
-                          <div style={{ fontWeight:700, fontSize:'0.82rem', color:'#f0b429' }}>
-                            {c.meta_mensal > 0 ? fmt(c.meta_mensal) : '—'}
-                          </div>
+                          <div style={{ fontWeight:700, fontSize:'0.82rem', color:'#f0b429' }}>{c.meta_mensal > 0 ? Number(c.meta_mensal).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—'}</div>
                         </div>
                         <div>
                           <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Telefone</div>
                           <div style={{ fontSize:'0.78rem', color:'#4a5068' }}>{c.telefone || '—'}</div>
                         </div>
-                        {c.email && (
-                          <div style={{ gridColumn:'span 2' }}>
-                            <div style={{ color:'#8b92b0', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>E-mail</div>
-                            <div style={{ fontSize:'0.75rem', color:'#4a5068' }}>{c.email}</div>
-                          </div>
-                        )}
                       </div>
-
-                      {/* Ações */}
                       <div style={{ display:'flex', gap:8, paddingTop:10, borderTop:'1px solid #f0f2f8' }}>
                         <button style={{ ...sBtnSec, flex:1, fontSize:'0.78rem', padding:'6px 10px' }}
-                          onClick={() => { setEditando({...c, diretor: c.diretor||c.gestor||'', gestor_intermediario: c.gestor_intermediario||'', meta_inicio: c.meta_inicio||''}); setErro(''); }}>
+                          onClick={() => { setEditando({...c, diretor_id: c.diretor_id||'', gestor_id: c.gestor_id||'', meta_inicio: c.meta_inicio||''}); setErro(''); }}>
                           ✏️ Editar
                         </button>
                         <button onClick={() => toggleAtivo(c)}
-                          style={{ background: c.ativo ? '#fef2f2' : '#f0fdf4',
-                            border: `1px solid ${c.ativo ? '#fca5a5' : '#86efac'}`,
-                            borderRadius:8, padding:'6px 10px', flex:1,
-                            color: c.ativo ? '#dc2626' : '#16a34a',
-                            fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                          style={{ background: c.ativo ? '#fef2f2' : '#f0fdf4', border: `1px solid ${c.ativo ? '#fca5a5' : '#86efac'}`, borderRadius:8, padding:'6px 10px', flex:1, color: c.ativo ? '#dc2626' : '#16a34a', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                           {c.ativo ? '⏸ Inativar' : '▶ Ativar'}
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            );
-          })
+            </div>
+          );
+        })
       )}
-
       {filtrados.length === 0 && !loading && (
-        <div style={{ textAlign:'center', padding:48, color:'#8b92b0', background:'#ffffff',
-          border:'1px solid #e4e7ef', borderRadius:12 }}>
-          Nenhum vendedor encontrado
-        </div>
+        <div style={{ textAlign:'center', padding:48, color:'#8b92b0', background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12 }}>Nenhum vendedor encontrado</div>
       )}
     </div>
   );
