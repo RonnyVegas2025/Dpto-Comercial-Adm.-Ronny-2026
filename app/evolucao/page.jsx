@@ -62,6 +62,7 @@ function BannerFiltros({ filtros, onLimpar }) {
   const tags = [];
   if (filtros.diretor   !== 'todos') tags.push({ label: `Diretor: ${filtros.diretor}`,       cor: '#a78bfa' });
   if (filtros.gestor    !== 'todos') tags.push({ label: `Gestor: ${filtros.gestor}`,          cor: '#60a5fa' });
+  if (filtros.produto   !== 'todos') tags.push({ label: `Produto: ${filtros.produto}`,        cor: '#a78bfa' });
   if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,            cor: '#f97316' });
   if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: '#34d399' });
   if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
@@ -117,9 +118,9 @@ function TabelaEvolucao({ lista, meses, libMap }) {
             <tr>
               <th style={s.th}>Empresa</th>
               <th style={s.th}>Categoria</th>
+              <th style={s.th}>Produto</th>
               <th style={s.th}>Vendedor</th>
               <th style={s.th}>Gestor</th>
-              <th style={s.th}>Diretor</th>
               {meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
               <th style={{ ...s.th, textAlign: 'right' }}>Total</th>
               <th style={{ ...s.th, textAlign: 'center' }}>Status</th>
@@ -133,9 +134,9 @@ function TabelaEvolucao({ lista, meses, libMap }) {
                 <tr key={e.produto_id} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', opacity: !e.creditou ? 0.6 : 1 }}>
                   <td style={s.td}><div style={{ fontWeight: 600 }}>{e.nome}</div><div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div></td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
+                  <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>
                   <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
-                  <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.diretor}</td>
                   {meses.map(m => {
                     const v = libMap[`${e.produto_id}__${m}`] || 0;
                     return <td key={m} style={{ ...s.td, textAlign: 'right' }}>{v > 0 ? <span style={{ color: '#34d399', fontWeight: 500 }}>{fmt(v)}</span> : <span style={{ color: '#374151' }}>—</span>}</td>;
@@ -242,6 +243,7 @@ export default function Evolucao() {
   const [filtroGestor, setFiltroGestor]       = useState('todos');
   const [filtroDepto, setFiltroDepto]         = useState('todos');
   const [filtroVendedor, setFiltroVendedor]   = useState('todos');
+  const [filtroProduto, setFiltroProduto]     = useState('todos');
   const [filtroStatus, setFiltroStatus]       = useState('todos');
   const [filtroTend, setFiltroTend]           = useState('todos');
   const [ordenar, setOrdenar]                 = useState('ultimo');
@@ -256,7 +258,7 @@ export default function Evolucao() {
     const [{ data: emps }, { data: libsData }] = await Promise.all([
       supabase
         .from('empresas')
-        .select(`id, produto_id, nome, categoria, potencial_movimentacao, peso_categoria,
+        .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo)`)
         .eq('ativo', true)
         .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus']),
@@ -289,6 +291,7 @@ export default function Evolucao() {
       gestor:       e.consultor_principal?.gestor || '—',
       diretor:      e.consultor_principal?.gestor || '—', // será ajustado abaixo
       vendedor:     e.consultor_principal?.nome   || '—',
+      produto:      e.produto_contratado || '—',
     };
   }), [empresas, meses, libMap]);
 
@@ -297,6 +300,7 @@ export default function Evolucao() {
     const categorias = [...new Set(listaCompleta.map(e => e.categoria).filter(Boolean))].sort();
     const diretores  = [...new Set(listaCompleta.map(e => e.diretor).filter(v => v !== '—'))].sort();
     const deptos     = [...new Set(listaCompleta.map(e => e.depto).filter(v => v !== '—'))].sort();
+    const produtos   = [...new Set(listaCompleta.map(e => e.produto).filter(v => v !== '—'))].sort();
 
     // Gestores filtrados pelo diretor selecionado
     const baseGest   = filtroDiretor === 'todos' ? listaCompleta : listaCompleta.filter(e => e.diretor === filtroDiretor);
@@ -306,7 +310,7 @@ export default function Evolucao() {
     const baseVend   = filtroGestor === 'todos' ? baseGest : baseGest.filter(e => e.gestor === filtroGestor);
     const vendedores = [...new Set(baseVend.map(e => e.vendedor).filter(v => v !== '—'))].sort();
 
-    return { categorias, diretores, deptos, gestores, vendedores };
+    return { categorias, diretores, deptos, gestores, vendedores, produtos };
   }, [listaCompleta, filtroDiretor, filtroGestor]);
 
   const listaFiltrada = useMemo(() => {
@@ -317,6 +321,7 @@ export default function Evolucao() {
     if (filtroGestor    !== 'todos') arr = arr.filter(e => e.gestor    === filtroGestor);
     if (filtroDepto     !== 'todos') arr = arr.filter(e => e.depto     === filtroDepto);
     if (filtroVendedor  !== 'todos') arr = arr.filter(e => e.vendedor  === filtroVendedor);
+    if (filtroProduto   !== 'todos') arr = arr.filter(e => e.produto   === filtroProduto);
     if (filtroStatus === 'creditou')    arr = arr.filter(e =>  e.creditou);
     if (filtroStatus === 'sem_credito') arr = arr.filter(e => !e.creditou);
     if (filtroTend !== 'todos') arr = arr.filter(e => e.tend === filtroTend);
@@ -346,13 +351,13 @@ export default function Evolucao() {
   function limparFiltros() {
     setBusca(''); setFiltroCategoria('todos'); setFiltroDiretor('todos');
     setFiltroGestor('todos'); setFiltroDepto('todos'); setFiltroVendedor('todos');
-    setFiltroStatus('todos'); setFiltroTend('todos'); setOrdenar('ultimo');
+    setFiltroProduto('todos'); setFiltroStatus('todos'); setFiltroTend('todos'); setOrdenar('ultimo');
   }
 
-  const filtrosAtivos = { diretor: filtroDiretor, gestor: filtroGestor, depto: filtroDepto, vendedor: filtroVendedor, categoria: filtroCategoria, status: filtroStatus, tend: filtroTend, busca };
+  const filtrosAtivos = { diretor: filtroDiretor, gestor: filtroGestor, depto: filtroDepto, vendedor: filtroVendedor, categoria: filtroCategoria, produto: filtroProduto, status: filtroStatus, tend: filtroTend, busca };
   const temFiltro = filtroDiretor !== 'todos' || filtroGestor !== 'todos' || filtroDepto !== 'todos' ||
-    filtroVendedor !== 'todos' || filtroCategoria !== 'todos' || filtroStatus !== 'todos' ||
-    filtroTend !== 'todos' || busca.trim();
+    filtroVendedor !== 'todos' || filtroCategoria !== 'todos' || filtroProduto !== 'todos' ||
+    filtroStatus !== 'todos' || filtroTend !== 'todos' || busca.trim();
 
   if (loading) return (
     <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -447,6 +452,11 @@ export default function Evolucao() {
             <select style={s.sel} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
               <option value="todos">Todas as categorias</option>
               {opcoes.categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroProduto !== 'todos' ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroProduto !== 'todos' ? '#a78bfa' : '#e8eaf0' }}
+              value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)}>
+              <option value="todos">Todos os produtos</option>
+              {opcoes.produtos.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           {/* Linha 2: hierarquia em cascata + depto + ordenar */}
