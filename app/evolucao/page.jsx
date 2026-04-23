@@ -331,7 +331,7 @@ export default function Evolucao() {
     if (ordenar === 'potencial') arr.sort((a, b) => (b.potencial_movimentacao || 0) - (a.potencial_movimentacao || 0));
     if (ordenar === 'sem')       arr.sort((a, b) => Number(a.creditou) - Number(b.creditou));
     return arr;
-  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroStatus, filtroTend, ordenar]);
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, ordenar]);
 
   const kpis = useMemo(() => {
     const total       = listaFiltrada.length;
