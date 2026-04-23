@@ -6,8 +6,8 @@ const menus = [
     icon: '📥',
     items: [
       { href: '/importar',            icon: '🏢', label: 'Empresas',    sub: 'Importar cadastro do Excel',         cor: '#f0b429' },
-      { href: '/importar-liberacoes', icon: '💳', label: 'Liberações',  sub: 'Créditos liberados por mês',         cor: '#34d399' },
-      { href: '/importar-fechamento', icon: '📊', label: 'Fechamento',  sub: 'Vendas e taxas mensais',             cor: '#60a5fa' },
+      { href: '/importar-liberacoes', icon: '💳', label: 'Liberações',  sub: 'Créditos liberados por mês',         cor: '#22c55e' },
+      { href: '/importar-fechamento', icon: '📊', label: 'Fechamento',  sub: 'Vendas e taxas mensais',             cor: '#3b82f6' },
     ],
   },
   {
@@ -15,7 +15,7 @@ const menus = [
     icon: '📈',
     items: [
       { href: '/previsao',  icon: '🔮', label: 'Previsão',   sub: 'Potencial vs meta por consultor',    cor: '#f0b429' },
-      { href: '/evolucao',  icon: '📈', label: 'Evolução',   sub: 'Histórico de créditos por empresa',  cor: '#34d399' },
+      { href: '/evolucao',  icon: '📈', label: 'Evolução',   sub: 'Histórico de créditos por empresa',  cor: '#22c55e' },
       { href: '#',          icon: '📉', label: 'Dashboard',  sub: 'Resultados reais (em breve)',        cor: '#9ca3af', breve: true },
       { href: '#',          icon: '💰', label: 'Comissões',  sub: 'Cálculo por consultor (em breve)',   cor: '#9ca3af', breve: true },
     ],
@@ -27,7 +27,7 @@ export default function Home() {
     <div style={s.page}>
       <div style={s.inner}>
 
-        {/* Header — mesmo padrão das outras páginas do sistema */}
+        {/* Header */}
         <div style={s.header}>
           <div style={s.tag}>♠ Vegas Card</div>
           <h1 style={s.title}>Painel de Controle</h1>
@@ -36,7 +36,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Grupos de navegação */}
+        {/* Grupos */}
         {menus.map((group) => (
           <div key={group.group} style={s.group}>
             <div style={s.groupLabel}>
@@ -66,16 +66,22 @@ export default function Home() {
           </div>
         ))}
       </div>
+
+      <style>{`
+        a[href]:hover > div:first-child { opacity: 1; }
+        a[href]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10) !important; transform: translateY(-1px); }
+        a[href] { transition: box-shadow 0.15s, transform 0.15s; }
+      `}</style>
     </div>
   );
 }
 
 const s = {
   page: {
-    background: '#0a0c10',
+    background: '#f3f4f6',
     minHeight: '100vh',
     fontFamily: "'DM Sans', sans-serif",
-    color: '#e8eaf0',
+    color: '#111827',
   },
   inner: {
     maxWidth: 1100,
@@ -83,23 +89,22 @@ const s = {
     padding: '32px 24px',
   },
 
-  // Header idêntico ao padrão das páginas existentes
   header: {
     marginBottom: 36,
   },
   tag: {
     color: '#f0b429',
     fontWeight: 800,
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     letterSpacing: 2,
-    marginBottom: 12,
+    marginBottom: 10,
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: '1.8rem',
+    fontSize: '1.9rem',
     fontWeight: 700,
     margin: '0 0 8px',
-    color: '#e8eaf0',
+    color: '#111827',
   },
   sub: {
     color: '#6b7280',
@@ -114,7 +119,7 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    color: '#4b5563',
+    color: '#9ca3af',
     fontSize: '0.72rem',
     fontWeight: 700,
     textTransform: 'uppercase',
@@ -125,12 +130,12 @@ const s = {
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    gap: 12,
+    gap: 14,
   },
   card: {
     position: 'relative',
-    background: '#161a26',
-    border: '1px solid rgba(255,255,255,0.07)',
+    background: '#ffffff',
+    border: '1px solid #e5e7eb',
     borderRadius: 14,
     padding: '22px 20px 18px',
     cursor: 'pointer',
@@ -138,9 +143,10 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     gap: 5,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
   },
   cardDisabled: {
-    opacity: 0.38,
+    opacity: 0.45,
     cursor: 'default',
     pointerEvents: 'none',
   },
@@ -149,7 +155,7 @@ const s = {
     top: 0,
     left: 0,
     right: 0,
-    height: 2,
+    height: 3,
     borderRadius: '14px 14px 0 0',
   },
   cardIcon: {
@@ -159,7 +165,7 @@ const s = {
   cardLabel: {
     fontSize: '1rem',
     fontWeight: 700,
-    color: '#e8eaf0',
+    color: '#111827',
   },
   cardSub: {
     fontSize: '0.8rem',
@@ -174,12 +180,12 @@ const s = {
   brevisBadge: {
     display: 'inline-block',
     marginTop: 8,
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: '#f3f4f6',
+    border: '1px solid #e5e7eb',
     borderRadius: 6,
     padding: '3px 10px',
     fontSize: '0.7rem',
-    color: '#4b5563',
+    color: '#9ca3af',
     alignSelf: 'flex-start',
   },
 };
