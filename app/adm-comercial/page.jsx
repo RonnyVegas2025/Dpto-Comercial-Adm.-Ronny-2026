@@ -1404,7 +1404,242 @@ function PaginaParceiros() {
     </div>
   );
 }
+function PaginaDiretores() {
+  const [diretores, setDiretores] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [salvando, setSalvando]   = useState(false);
+  const [nome, setNome]           = useState('');
+  const [email, setEmail]         = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+  const [editNome, setEditNome]   = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [erro, setErro]           = useState('');
+  const [sucesso, setSucesso]     = useState('');
 
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    const { data } = await supabase.from('diretores').select('id, nome, email, ativo').order('nome');
+    setDiretores(data || []);
+    setLoading(false);
+  }
+
+  async function adicionar() {
+    if (!nome.trim()) { setErro('Informe o nome'); return; }
+    setSalvando(true); setErro('');
+    const { error } = await supabase.from('diretores').insert({ nome: nome.trim(), email: email.trim() || null });
+    if (error) setErro('Erro: ' + error.message);
+    else { setSucesso('Diretor criado!'); setNome(''); setEmail(''); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    setSalvando(false);
+  }
+
+  async function salvarEdicao(id) {
+    if (!editNome.trim()) return;
+    setSalvando(true);
+    await supabase.from('diretores').update({ nome: editNome.trim(), email: editEmail.trim() || null }).eq('id', id);
+    setEditandoId(null); setSucesso('Salvo!'); await carregar(); setTimeout(() => setSucesso(''), 3000);
+    setSalvando(false);
+  }
+
+  async function toggleAtivo(d) {
+    await supabase.from('diretores').update({ ativo: !d.ativo }).eq('id', d.id);
+    carregar();
+  }
+
+  async function remover(id) {
+    if (!confirm('Remover diretor?')) return;
+    await supabase.from('diretores').delete().eq('id', id);
+    carregar();
+  }
+
+  return (
+    <div>
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12, padding:24, marginBottom:20, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>➕ Novo Diretor</div>
+        {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem', marginBottom:12 }}>{erro}</div>}
+        {sucesso && <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'8px 14px', color:'#16a34a', fontSize:'0.82rem', marginBottom:12 }}>✅ {sucesso}</div>}
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
+          <div style={{ flex:2, minWidth:200 }}>
+            <label style={sL}>Nome *</label>
+            <input style={sI} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Ronny Peterson Izidorio" onKeyDown={e => e.key === 'Enter' && adicionar()} />
+          </div>
+          <div style={{ flex:1, minWidth:180 }}>
+            <label style={sL}>E-mail</label>
+            <input style={sI} value={email} onChange={e => setEmail(e.target.value)} placeholder="email@exemplo.com" type="email" />
+          </div>
+          <button style={{ ...sBtnPri, whiteSpace:'nowrap', alignSelf:'flex-end' }} onClick={adicionar} disabled={salvando || !nome.trim()}>
+            {salvando ? 'Salvando...' : '+ Criar Diretor'}
+          </button>
+        </div>
+      </div>
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12, padding:24, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>Diretores Cadastrados {!loading && `(${diretores.length})`}</div>
+        {loading ? <div style={{ color:'#8b92b0', padding:20 }}>Carregando...</div> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {diretores.length === 0 && <div style={{ color:'#8b92b0', textAlign:'center', padding:32 }}>Nenhum diretor cadastrado ainda.</div>}
+            {diretores.map(d => (
+              <div key={d.id} style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:10, padding:'14px 16px', display:'flex', alignItems:'center', gap:14, opacity: d.ativo ? 1 : 0.55 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background: d.ativo ? '#f0b429' : '#d1d5db', flexShrink:0 }} />
+                {editandoId === d.id ? (
+                  <div style={{ flex:1, display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
+                    <div style={{ flex:2, minWidth:160 }}><label style={sL}>Nome</label><input style={sI} value={editNome} onChange={e => setEditNome(e.target.value)} onKeyDown={e => e.key === 'Enter' && salvarEdicao(d.id)} /></div>
+                    <div style={{ flex:1, minWidth:160 }}><label style={sL}>E-mail</label><input style={sI} value={editEmail} onChange={e => setEditEmail(e.target.value)} type="email" /></div>
+                    <div style={{ display:'flex', gap:8, alignSelf:'flex-end' }}>
+                      <button style={sBtnPri} onClick={() => salvarEdicao(d.id)} disabled={salvando}>{salvando ? '...' : '💾 Salvar'}</button>
+                      <button style={sBtnSec} onClick={() => setEditandoId(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{d.nome}</div>
+                      <div style={{ color:'#8b92b0', fontSize:'0.75rem', marginTop:2 }}>{d.email || 'Sem e-mail'} · {d.ativo ? 'Ativo' : 'Inativo'}</div>
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <button style={{ ...sBtnSec, fontSize:'0.78rem', padding:'6px 12px' }} onClick={() => { setEditandoId(d.id); setEditNome(d.nome); setEditEmail(d.email || ''); }}>✏️ Editar</button>
+                      <button onClick={() => toggleAtivo(d)} style={{ background: d.ativo?'#fef2f2':'#f0fdf4', border:`1px solid ${d.ativo?'#fca5a5':'#86efac'}`, borderRadius:8, padding:'6px 12px', color: d.ativo?'#dc2626':'#16a34a', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>{d.ativo ? '⏸ Inativar' : '▶ Ativar'}</button>
+                      <button onClick={() => remover(d.id)} style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'6px 12px', color:'#dc2626', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>🗑</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaginaGestores() {
+  const [gestores, setGestores]   = useState([]);
+  const [diretores, setDiretores] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [salvando, setSalvando]   = useState(false);
+  const [nome, setNome]           = useState('');
+  const [email, setEmail]         = useState('');
+  const [diretorId, setDiretorId] = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+  const [editNome, setEditNome]   = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editDiretorId, setEditDiretorId] = useState('');
+  const [filtroDiretor, setFiltroDiretor] = useState('');
+  const [erro, setErro]           = useState('');
+  const [sucesso, setSucesso]     = useState('');
+
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    const [{ data: gs }, { data: ds }] = await Promise.all([
+      supabase.from('gestores').select('id, nome, email, ativo, diretor_id, diretor:diretor_id(nome)').order('nome'),
+      supabase.from('diretores').select('id, nome').eq('ativo', true).order('nome'),
+    ]);
+    setGestores(gs || []);
+    setDiretores(ds || []);
+    setLoading(false);
+  }
+
+  async function adicionar() {
+    if (!nome.trim()) { setErro('Informe o nome'); return; }
+    setSalvando(true); setErro('');
+    const { error } = await supabase.from('gestores').insert({ nome: nome.trim(), email: email.trim() || null, diretor_id: diretorId || null });
+    if (error) setErro('Erro: ' + error.message);
+    else { setSucesso('Gestor criado!'); setNome(''); setEmail(''); setDiretorId(''); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    setSalvando(false);
+  }
+
+  async function salvarEdicao(id) {
+    if (!editNome.trim()) return;
+    setSalvando(true);
+    await supabase.from('gestores').update({ nome: editNome.trim(), email: editEmail.trim() || null, diretor_id: editDiretorId || null }).eq('id', id);
+    setEditandoId(null); setSucesso('Salvo!'); await carregar(); setTimeout(() => setSucesso(''), 3000);
+    setSalvando(false);
+  }
+
+  async function toggleAtivo(g) {
+    await supabase.from('gestores').update({ ativo: !g.ativo }).eq('id', g.id);
+    carregar();
+  }
+
+  async function remover(id) {
+    if (!confirm('Remover gestor?')) return;
+    await supabase.from('gestores').delete().eq('id', id);
+    carregar();
+  }
+
+  const listaFiltrada = filtroDiretor ? gestores.filter(g => g.diretor_id === filtroDiretor) : gestores;
+
+  return (
+    <div>
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12, padding:24, marginBottom:20, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>➕ Novo Gestor</div>
+        {erro && <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 14px', color:'#dc2626', fontSize:'0.82rem', marginBottom:12 }}>{erro}</div>}
+        {sucesso && <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'8px 14px', color:'#16a34a', fontSize:'0.82rem', marginBottom:12 }}>✅ {sucesso}</div>}
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
+          <div style={{ flex:2, minWidth:200 }}><label style={sL}>Nome *</label><input style={sI} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Marcos Rossi" /></div>
+          <div style={{ flex:1, minWidth:180 }}>
+            <label style={sL}>Diretor responsável</label>
+            <select style={sI} value={diretorId} onChange={e => setDiretorId(e.target.value)}>
+              <option value="">— Selecionar diretor —</option>
+              {diretores.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
+            </select>
+          </div>
+          <div style={{ flex:1, minWidth:160 }}><label style={sL}>E-mail</label><input style={sI} value={email} onChange={e => setEmail(e.target.value)} placeholder="email@exemplo.com" type="email" /></div>
+          <button style={{ ...sBtnPri, whiteSpace:'nowrap', alignSelf:'flex-end' }} onClick={adicionar} disabled={salvando || !nome.trim()}>{salvando ? 'Salvando...' : '+ Criar Gestor'}</button>
+        </div>
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14, flexWrap:'wrap' }}>
+        <span style={{ color:'#8b92b0', fontSize:'0.78rem', fontWeight:600 }}>Filtrar por Diretor:</span>
+        <select style={{ ...sI, width:'auto', minWidth:220 }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
+          <option value="">Todos os diretores ({gestores.length})</option>
+          {diretores.map(d => { const count = gestores.filter(g => g.diretor_id === d.id).length; return <option key={d.id} value={d.id}>{d.nome} ({count})</option>; })}
+        </select>
+        {filtroDiretor && <button onClick={() => setFiltroDiretor('')} style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:'5px 12px', color:'#dc2626', fontSize:'0.75rem', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>✕ Limpar</button>}
+      </div>
+      <div style={{ background:'#ffffff', border:'1px solid #e4e7ef', borderRadius:12, padding:24, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ fontWeight:700, fontSize:'0.95rem', color:'#1a1d2e', marginBottom:16 }}>Gestores Cadastrados {!loading && `(${listaFiltrada.length})`}</div>
+        {loading ? <div style={{ color:'#8b92b0', padding:20 }}>Carregando...</div> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {listaFiltrada.length === 0 && <div style={{ color:'#8b92b0', textAlign:'center', padding:32 }}>Nenhum gestor cadastrado ainda.</div>}
+            {listaFiltrada.map(g => (
+              <div key={g.id} style={{ background:'#f9fafb', border:'1px solid #e4e7ef', borderRadius:10, padding:'14px 16px', display:'flex', alignItems:'center', gap:14, opacity: g.ativo ? 1 : 0.55 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background: g.ativo ? '#2563eb' : '#d1d5db', flexShrink:0 }} />
+                {editandoId === g.id ? (
+                  <div style={{ flex:1, display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
+                    <div style={{ flex:2, minWidth:160 }}><label style={sL}>Nome</label><input style={sI} value={editNome} onChange={e => setEditNome(e.target.value)} /></div>
+                    <div style={{ flex:1, minWidth:160 }}><label style={sL}>Diretor</label><select style={sI} value={editDiretorId} onChange={e => setEditDiretorId(e.target.value)}><option value="">— Sem diretor —</option>{diretores.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></div>
+                    <div style={{ flex:1, minWidth:140 }}><label style={sL}>E-mail</label><input style={sI} value={editEmail} onChange={e => setEditEmail(e.target.value)} type="email" /></div>
+                    <div style={{ display:'flex', gap:8, alignSelf:'flex-end' }}>
+                      <button style={sBtnPri} onClick={() => salvarEdicao(g.id)} disabled={salvando}>{salvando ? '...' : '💾'}</button>
+                      <button style={sBtnSec} onClick={() => setEditandoId(null)}>✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontWeight:700, fontSize:'0.9rem', color:'#1a1d2e' }}>{g.nome}</span>
+                        {g.diretor?.nome && <span style={{ background:'#fff8e6', color:'#b45309', border:'1px solid #f0b42940', borderRadius:5, padding:'1px 8px', fontSize:'0.68rem', fontWeight:600 }}>👔 {g.diretor.nome}</span>}
+                      </div>
+                      <div style={{ color:'#8b92b0', fontSize:'0.75rem', marginTop:2 }}>{g.email || 'Sem e-mail'} · {g.ativo ? 'Ativo' : 'Inativo'}</div>
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <button style={{ ...sBtnSec, fontSize:'0.78rem', padding:'6px 12px' }} onClick={() => { setEditandoId(g.id); setEditNome(g.nome); setEditEmail(g.email || ''); setEditDiretorId(g.diretor_id || ''); }}>✏️ Editar</button>
+                      <button onClick={() => toggleAtivo(g)} style={{ background: g.ativo?'#fef2f2':'#f0fdf4', border:`1px solid ${g.ativo?'#fca5a5':'#86efac'}`, borderRadius:8, padding:'6px 12px', color: g.ativo?'#dc2626':'#16a34a', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>{g.ativo ? '⏸ Inativar' : '▶ Ativar'}</button>
+                      <button onClick={() => remover(g.id)} style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, padding:'6px 12px', color:'#dc2626', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>🗑</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // ══════════════════════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL — Adm Comercial
 // ══════════════════════════════════════════════════════════════════════════
