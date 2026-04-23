@@ -42,6 +42,8 @@ const COR_EQUIPE = {
 const SUBS = [
   { key: 'vendedores', icon: '👤', label: 'Cadastro de Vendedores', desc: 'Gerencie a equipe comercial por time' },
   { key: 'equipes',    icon: '🏷️', label: 'Gerenciar Equipes',      desc: 'Crie e edite as equipes comerciais' },
+  { key: 'diretores',  icon: '👔', label: 'Cadastro de Diretores',  desc: 'Gerencie os diretores da equipe comercial' },
+  { key: 'gestores',   icon: '👥', label: 'Cadastro de Gestores',   desc: 'Gerencie os gestores vinculados a cada diretor' },
   { key: 'usuarios',   icon: '🔐', label: 'Usuários & Acessos',     desc: 'Gerencie logins e permissões do sistema' },
   { key: 'parceiros',  icon: '🤝', label: 'Parceiros Comerciais',   desc: 'Cadastro e comissões de parceiros' },
 ];
@@ -1465,6 +1467,8 @@ export default function AdmComercial() {
       {/* Conteúdo da subpágina */}
       {subPagina === 'vendedores' && <PaginaVendedores equipesDB={equipesDB} />}
       {subPagina === 'equipes'    && <PaginaEquipes onEquipesChange={setEquipesDB} />}
+      {subPagina === 'diretores'  && <PaginaDiretores />}
+      {subPagina === 'gestores'   && <PaginaGestores />}
       {subPagina === 'usuarios'   && <PaginaUsuarios />}
       {subPagina === 'parceiros'  && <PaginaParceiros />}
     </div>
