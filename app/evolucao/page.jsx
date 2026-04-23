@@ -39,16 +39,228 @@ const TEND = {
 
 const POR_PAGINA = 25;
 
+// Componente de paginação separado
+function Paginacao({ pagina, total, onChange }) {
+  if (total <= 1) return null;
+  const start = Math.max(1, pagina - 2);
+  const end   = Math.min(total, pagina + 2);
+  const pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button style={{ ...ps.btn, ...(pagina === 1 ? ps.disabled : {}) }}
+        onClick={() => onChange(pagina - 1)} disabled={pagina === 1}>‹</button>
+      {start > 1 && <><button style={ps.btn} onClick={() => onChange(1)}>1</button><span style={ps.dots}>…</span></>}
+      {pages.map(p => (
+        <button key={p} style={{ ...ps.btn, ...(p === pagina ? ps.ativo : {}) }} onClick={() => onChange(p)}>{p}</button>
+      ))}
+      {end < total && <><span style={ps.dots}>…</span><button style={ps.btn} onClick={() => onChange(total)}>{total}</button></>}
+      <button style={{ ...ps.btn, ...(pagina === total ? ps.disabled : {}) }}
+        onClick={() => onChange(pagina + 1)} disabled={pagina === total}>›</button>
+      <span style={{ color: '#4b5563', fontSize: '0.75rem', marginLeft: 4 }}>de {total}</span>
+    </div>
+  );
+}
+
+// Tabela de evolução com totais por mês
+function TabelaEvolucao({ lista, meses, libMap, paginaInicial = 1 }) {
+  const [pagina, setPagina] = useState(paginaInicial);
+  useEffect(() => { setPagina(1); }, [lista.length]);
+
+  const totalPaginas = Math.ceil(lista.length / POR_PAGINA);
+  const listaPagina  = lista.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+  // Totais por mês (sobre a lista filtrada completa, não só a página)
+  const totaisMes = meses.map(m => lista.reduce((s, e) => s + (libMap[`${e.produto_id}__${m}`] || 0), 0));
+  const totalGeral = lista.reduce((s, e) => s + e.totalCreditado, 0);
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
+          Exibindo <strong style={{ color: '#e8eaf0' }}>{listaPagina.length}</strong> de{' '}
+          <strong style={{ color: '#e8eaf0' }}>{lista.length}</strong> empresas
+        </div>
+        <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Empresa</th>
+              <th style={s.th}>Categoria</th>
+              <th style={s.th}>Vendedor</th>
+              <th style={s.th}>Gestor</th>
+              {meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
+              <th style={{ ...s.th, textAlign: 'right' }}>Total</th>
+              <th style={{ ...s.th, textAlign: 'center' }}>Status</th>
+              <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listaPagina.map((e, i) => {
+              const ts = TEND[e.tend];
+              return (
+                <tr key={e.produto_id} style={{
+                  background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                  opacity: !e.creditou ? 0.6 : 1,
+                }}>
+                  <td style={s.td}>
+                    <div style={{ fontWeight: 600 }}>{e.nome}</div>
+                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                  </td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
+                  {meses.map(m => {
+                    const v = libMap[`${e.produto_id}__${m}`] || 0;
+                    return (
+                      <td key={m} style={{ ...s.td, textAlign: 'right' }}>
+                        {v > 0 ? <span style={{ color: '#34d399', fontWeight: 500 }}>{fmt(v)}</span>
+                               : <span style={{ color: '#374151' }}>—</span>}
+                      </td>
+                    );
+                  })}
+                  <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>
+                    {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}
+                  </td>
+                  <td style={{ ...s.td, textAlign: 'center' }}>
+                    {e.creditou
+                      ? <span style={s.badgeGreen}>✅ Creditou</span>
+                      : <span style={s.badgeRed}>❌ Sem crédito</span>}
+                  </td>
+                  <td style={{ ...s.td, textAlign: 'center' }}>
+                    <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {/* Linha de totais */}
+          <tfoot>
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
+              <td colSpan={4} style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
+                TOTAL ({lista.length} empresas)
+              </td>
+              {totaisMes.map((t, i) => (
+                <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
+                  {t > 0 ? fmt(t) : <span style={{ color: '#374151' }}>—</span>}
+                </td>
+              ))}
+              <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
+                {fmt(totalGeral)}
+              </td>
+              <td colSpan={2} style={{ ...s.td, paddingTop: 14 }} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {totalPaginas > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+          <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// Tabela potencial vs creditado com sua própria paginação
+function TabelaCruzamento({ lista, meses }) {
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => { setPagina(1); }, [lista.length]);
+
+  const listaSorted    = [...lista].filter(e => e.potencial_movimentacao > 0).sort((a, b) => (b.pctPot || 0) - (a.pctPot || 0));
+  const totalPaginas   = Math.ceil(listaSorted.length / POR_PAGINA);
+  const listaPagina    = listaSorted.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+  // Totais da linha de rodapé
+  const totPotencial   = listaSorted.reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
+  const totEsperado    = listaSorted.reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length), 0);
+  const totCreditado   = listaSorted.reduce((s, e) => s + e.totalCreditado, 0);
+  const pctGeral       = totEsperado > 0 ? (totCreditado / totEsperado) * 100 : 0;
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
+          <strong style={{ color: '#e8eaf0' }}>{listaSorted.length}</strong> empresas com potencial cadastrado
+        </div>
+        <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              {['Empresa','Cat.','Vendedor','Gestor','Potencial/mês','Esperado Total','Creditado Total','% Realizado','Barra','Status'].map(h =>
+                <th key={h} style={s.th}>{h}</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {listaPagina.map((e, i) => {
+              const pct = e.pctPot || 0;
+              const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f0b429' : '#dc2626';
+              const statusLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
+              return (
+                <tr key={e.produto_id} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
+                  <td style={s.td}>
+                    <div style={{ fontWeight: 600 }}>{e.nome}</div>
+                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                  </td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
+                  <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
+                  <td style={{ ...s.td, color: '#f0b429' }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length)}</td>
+                  <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.totalCreditado)}</td>
+                  <td style={{ ...s.td, color: cor, fontWeight: 700 }}>{fmtPct(pct)}</td>
+                  <td style={{ ...s.td, minWidth: 100 }}>
+                    <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                      <div style={{ background: cor, height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4 }}></div>
+                    </div>
+                  </td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{statusLabel}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {/* Linha de totais */}
+          <tfoot>
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
+              <td colSpan={4} style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
+                TOTAL ({listaSorted.length} empresas)
+              </td>
+              <td style={{ ...s.td, fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totPotencial)}</td>
+              <td style={{ ...s.td, color: '#f0b429', fontWeight: 700, paddingTop: 14 }}>{fmt(totEsperado)}</td>
+              <td style={{ ...s.td, color: '#34d399', fontWeight: 700, paddingTop: 14 }}>{fmt(totCreditado)}</td>
+              <td style={{ ...s.td, fontWeight: 700, color: pctGeral >= 80 ? '#16a34a' : pctGeral >= 40 ? '#f0b429' : '#dc2626', paddingTop: 14 }}>{fmtPct(pctGeral)}</td>
+              <td colSpan={2} style={{ ...s.td, paddingTop: 14 }} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {totalPaginas > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+          <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Página principal ───────────────────────────────────────────────────────
 export default function Evolucao() {
   const [loading, setLoading]   = useState(true);
   const [empresas, setEmpresas] = useState([]);
   const [libs, setLibs]         = useState([]);
   const [meses, setMeses]       = useState([]);
   const [aba, setAba]           = useState('evolucao');
-  const [pagina, setPagina]     = useState(1);
 
-  // Filtros
-  const [busca, setBusca]             = useState('');
+  const [busca, setBusca]                     = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [filtroGestor, setFiltroGestor]       = useState('todos');
   const [filtroVendedor, setFiltroVendedor]   = useState('todos');
@@ -57,11 +269,6 @@ export default function Evolucao() {
   const [ordenar, setOrdenar]                 = useState('ultimo');
 
   useEffect(() => { carregar(); }, []);
-
-  // Reset página ao mudar filtro
-  useEffect(() => { setPagina(1); }, [busca, filtroCategoria, filtroGestor, filtroVendedor, filtroStatus, filtroTend, ordenar]);
-
-  // Reset vendedor quando gestor muda
   useEffect(() => { setFiltroVendedor('todos'); }, [filtroGestor]);
 
   async function carregar() {
@@ -69,21 +276,13 @@ export default function Evolucao() {
     const [{ data: emps }, { data: libsData }] = await Promise.all([
       supabase
         .from('empresas')
-        .select(`
-          id, produto_id, nome, categoria, produto_contratado, cartoes_emitidos,
-          potencial_movimentacao, peso_categoria,
-          consultor_principal:consultor_principal_id (id, nome, setor, gestor),
-          parceiro:parceiro_id (nome)
-        `)
+        .select(`id, produto_id, nome, categoria, potencial_movimentacao, peso_categoria,
+          consultor_principal:consultor_principal_id (id, nome, setor, gestor)`)
         .eq('ativo', true)
         .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus']),
-      supabase
-        .from('liberacoes')
-        .select('produto_id, competencia, total_liberado')
-        .order('competencia'),
+      supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
-    const mesesUnicos = [...new Set((libsData || []).map(l => l.competencia))].sort();
-    setMeses(mesesUnicos);
+    setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
     setEmpresas(emps || []);
     setLibs(libsData || []);
     setLoading(false);
@@ -98,58 +297,42 @@ export default function Evolucao() {
     return m;
   }, [libs]);
 
-  // Lista completa enriquecida
-  const listaCompleta = useMemo(() => {
-    return empresas.map(e => {
-      const vals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
-      const totalCreditado = vals.reduce((s, v) => s + v, 0);
-      const tend = tendencia(vals);
-      const pctPot = e.potencial_movimentacao > 0
+  const listaCompleta = useMemo(() => empresas.map(e => {
+    const vals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
+    const totalCreditado = vals.reduce((s, v) => s + v, 0);
+    const tend = tendencia(vals);
+    return {
+      ...e,
+      vals,
+      totalCreditado,
+      tend,
+      creditou: totalCreditado > 0,
+      pctPot: e.potencial_movimentacao > 0
         ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria || 1) * meses.length)) * 100
-        : null;
-      return {
-        ...e,
-        vals,
-        totalCreditado,
-        tend,
-        creditou: totalCreditado > 0,
-        pctPot,
-        ultimoValor: vals[vals.length - 1] || 0,
-        gestor:   e.consultor_principal?.gestor || '—',
-        vendedor: e.consultor_principal?.nome   || '—',
-        diretoria:e.consultor_principal?.setor  || '—',
-      };
-    });
-  }, [empresas, meses, libMap]);
+        : null,
+      ultimoValor: vals[vals.length - 1] || 0,
+      gestor:   e.consultor_principal?.gestor || '—',
+      vendedor: e.consultor_principal?.nome   || '—',
+    };
+  }), [empresas, meses, libMap]);
 
-  // Opções de filtro — gestores sempre completos, vendedores em cascata
   const opcoes = useMemo(() => {
     const categorias = [...new Set(listaCompleta.map(e => e.categoria).filter(Boolean))].sort();
     const gestores   = [...new Set(listaCompleta.map(e => e.gestor).filter(v => v !== '—'))].sort();
-
-    // Vendedores filtrados pelo gestor selecionado
-    const baseVend = filtroGestor === 'todos'
-      ? listaCompleta
-      : listaCompleta.filter(e => e.gestor === filtroGestor);
+    const baseVend   = filtroGestor === 'todos' ? listaCompleta : listaCompleta.filter(e => e.gestor === filtroGestor);
     const vendedores = [...new Set(baseVend.map(e => e.vendedor).filter(v => v !== '—'))].sort();
-
     return { categorias, gestores, vendedores };
   }, [listaCompleta, filtroGestor]);
 
-  // Lista filtrada (sem paginação) — usada para KPIs
   const listaFiltrada = useMemo(() => {
     let arr = [...listaCompleta];
-    if (busca.trim()) {
-      const b = norm(busca);
-      arr = arr.filter(e => norm(e.nome).includes(b) || String(e.produto_id).includes(b));
-    }
+    if (busca.trim()) { const b = norm(busca); arr = arr.filter(e => norm(e.nome).includes(b) || String(e.produto_id).includes(b)); }
     if (filtroCategoria !== 'todos') arr = arr.filter(e => e.categoria === filtroCategoria);
     if (filtroGestor    !== 'todos') arr = arr.filter(e => e.gestor    === filtroGestor);
     if (filtroVendedor  !== 'todos') arr = arr.filter(e => e.vendedor  === filtroVendedor);
-    if (filtroStatus === 'creditou')    arr = arr.filter(e => e.creditou);
+    if (filtroStatus === 'creditou')    arr = arr.filter(e =>  e.creditou);
     if (filtroStatus === 'sem_credito') arr = arr.filter(e => !e.creditou);
     if (filtroTend !== 'todos') arr = arr.filter(e => e.tend === filtroTend);
-
     if (ordenar === 'ultimo')    arr.sort((a, b) => b.ultimoValor - a.ultimoValor);
     if (ordenar === 'total')     arr.sort((a, b) => b.totalCreditado - a.totalCreditado);
     if (ordenar === 'nome')      arr.sort((a, b) => a.nome.localeCompare(b.nome));
@@ -158,7 +341,6 @@ export default function Evolucao() {
     return arr;
   }, [listaCompleta, busca, filtroCategoria, filtroGestor, filtroVendedor, filtroStatus, filtroTend, ordenar]);
 
-  // KPIs reativos — calculados sobre listaFiltrada
   const kpis = useMemo(() => {
     const total       = listaFiltrada.length;
     const creditaram  = listaFiltrada.filter(e => e.creditou).length;
@@ -174,10 +356,6 @@ export default function Evolucao() {
     return { total, creditaram, semCredito, totalCred, crescendo, pctAtivacao, porMes };
   }, [listaFiltrada, meses, libMap]);
 
-  // Paginação
-  const totalPaginas = Math.ceil(listaFiltrada.length / POR_PAGINA);
-  const listaPagina  = listaFiltrada.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
-
   function limparFiltros() {
     setBusca(''); setFiltroCategoria('todos'); setFiltroGestor('todos');
     setFiltroVendedor('todos'); setFiltroStatus('todos'); setFiltroTend('todos'); setOrdenar('ultimo');
@@ -188,10 +366,7 @@ export default function Evolucao() {
 
   if (loading) return (
     <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={s.spin}></div>
-        <div style={{ color: '#6b7280' }}>Carregando dados...</div>
-      </div>
+      <div style={{ textAlign: 'center' }}><div style={s.spin}></div><div style={{ color: '#6b7280' }}>Carregando...</div></div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -219,7 +394,7 @@ export default function Evolucao() {
         <a href="/importar-liberacoes" style={s.linkBtnGreen}>💳 Importar Liberações</a>
       </div>
 
-      {/* KPIs — reativos aos filtros */}
+      {/* KPIs reativos */}
       <div style={s.kpis}>
         <div style={s.kpi}>
           <span style={s.kpiLabel}>Total Empresas</span>
@@ -260,7 +435,6 @@ export default function Evolucao() {
       {/* ═══ ABA: EVOLUÇÃO ═══ */}
       {aba === 'evolucao' && (
         <div style={s.card}>
-          {/* Filtros linha 1 */}
           <div style={s.filtroRow}>
             <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e => setBusca(e.target.value)} />
             <select style={s.sel} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
@@ -281,17 +455,13 @@ export default function Evolucao() {
               {opcoes.categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-
-          {/* Filtros linha 2 — cascata */}
           <div style={s.filtroRow}>
             <select style={s.sel} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
               <option value="todos">Todos os gestores</option>
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <select style={s.sel} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
-              <option value="todos">
-                {filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}
-              </option>
+              <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
               {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
             <select style={s.sel} value={ordenar} onChange={e => setOrdenar(e.target.value)}>
@@ -301,89 +471,12 @@ export default function Evolucao() {
               <option value="sem">Ordenar: Sem crédito primeiro</option>
               <option value="nome">Ordenar: Nome A-Z</option>
             </select>
-            {temFiltro && (
-              <button style={s.btnLimpar} onClick={limparFiltros}>✕ Limpar filtros</button>
-            )}
+            {temFiltro && <button style={s.btnLimpar} onClick={limparFiltros}>✕ Limpar filtros</button>}
           </div>
-
-          {/* Contador + indicador de filtro ativo */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
-              Exibindo <strong style={{ color: '#e8eaf0' }}>{listaPagina.length}</strong> de{' '}
-              <strong style={{ color: '#e8eaf0' }}>{listaFiltrada.length}</strong> empresas
-              {listaFiltrada.length !== listaCompleta.length && (
-                <span style={{ marginLeft: 8, color: '#f0b429' }}>· filtro ativo</span>
-              )}
-            </div>
-            {/* Paginação topo */}
-            {totalPaginas > 1 && <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />}
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  <th style={s.th}>Empresa</th>
-                  <th style={s.th}>Categoria</th>
-                  <th style={s.th}>Vendedor</th>
-                  <th style={s.th}>Gestor</th>
-                  {meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
-                  <th style={{ ...s.th, textAlign: 'right' }}>Total</th>
-                  <th style={{ ...s.th, textAlign: 'center' }}>Status</th>
-                  <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>
-                </tr>
-              </thead>
-              <tbody>
-                {listaPagina.map((e, i) => {
-                  const ts = TEND[e.tend];
-                  return (
-                    <tr key={e.produto_id} style={{
-                      background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                      opacity: !e.creditou ? 0.6 : 1,
-                    }}>
-                      <td style={s.td}>
-                        <div style={{ fontWeight: 600 }}>{e.nome}</div>
-                        <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
-                      </td>
-                      <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
-                      <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
-                      <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
-                      {meses.map(m => {
-                        const v = libMap[`${e.produto_id}__${m}`] || 0;
-                        return (
-                          <td key={m} style={{ ...s.td, textAlign: 'right' }}>
-                            {v > 0
-                              ? <span style={{ color: '#34d399', fontWeight: 500 }}>{fmt(v)}</span>
-                              : <span style={{ color: '#374151' }}>—</span>
-                            }
-                          </td>
-                        );
-                      })}
-                      <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>
-                        {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}
-                      </td>
-                      <td style={{ ...s.td, textAlign: 'center' }}>
-                        {e.creditou
-                          ? <span style={s.badgeGreen}>✅ Creditou</span>
-                          : <span style={s.badgeRed}>❌ Sem crédito</span>
-                        }
-                      </td>
-                      <td style={{ ...s.td, textAlign: 'center' }}>
-                        <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Paginação rodapé */}
-          {totalPaginas > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
-              <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
-            </div>
+          {temFiltro && (
+            <div style={{ color: '#f0b429', fontSize: '0.78rem', marginBottom: 8 }}>· filtro ativo</div>
           )}
+          <TabelaEvolucao lista={listaFiltrada} meses={meses} libMap={libMap} />
         </div>
       )}
 
@@ -397,16 +490,12 @@ export default function Evolucao() {
                 <div style={s.mesBadge}>{fmtMes(m.mes)}</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#34d399', margin: '12px 0 4px' }}>{fmt(m.total)}</div>
                 <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{m.empresas} empresas creditando</div>
-                <div style={{ color: '#4b5563', fontSize: '0.75rem', marginTop: 2 }}>
-                  {kpis.total - m.empresas} sem crédito neste mês
-                </div>
+                <div style={{ color: '#4b5563', fontSize: '0.75rem', marginTop: 2 }}>{kpis.total - m.empresas} sem crédito neste mês</div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
                     <div style={{ background: '#34d399', height: '100%', width: `${kpis.total > 0 ? (m.empresas / kpis.total) * 100 : 0}%` }}></div>
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>
-                    {kpis.total > 0 ? fmtPct((m.empresas / kpis.total) * 100) : '0%'} de ativação
-                  </div>
+                  <div style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>{kpis.total > 0 ? fmtPct((m.empresas / kpis.total) * 100) : '0%'} de ativação</div>
                 </div>
               </div>
             ))}
@@ -438,107 +527,20 @@ export default function Evolucao() {
           <div style={{ color: '#6b7280', fontSize: '0.82rem', marginTop: 6, marginBottom: 16 }}>
             Empresas com potencial cadastrado · {meses.length} meses de referência
           </div>
-
-          {/* Filtros cascata também aqui */}
           <div style={{ ...s.filtroRow, marginBottom: 16 }}>
             <select style={s.sel} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
               <option value="todos">Todos os gestores</option>
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <select style={s.sel} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
-              <option value="todos">
-                {filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}
-              </option>
+              <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
               {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
+            {temFiltro && <button style={s.btnLimpar} onClick={limparFiltros}>✕ Limpar filtros</button>}
           </div>
-
-          {/* Contador + paginação */}
-          {(() => {
-            const listaCruz = listaFiltrada.filter(e => e.potencial_movimentacao > 0).sort((a, b) => (b.pctPot || 0) - (a.pctPot || 0));
-            const totalPagCruz = Math.ceil(listaCruz.length / POR_PAGINA);
-            const [pagCruz, setPagCruz] = useState(1);
-            const paginaCruz = listaCruz.slice((pagCruz - 1) * POR_PAGINA, pagCruz * POR_PAGINA);
-            return (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
-                    <strong style={{ color: '#e8eaf0' }}>{listaCruz.length}</strong> empresas com potencial cadastrado
-                  </div>
-                  {totalPagCruz > 1 && <Paginacao pagina={pagCruz} total={totalPagCruz} onChange={setPagCruz} />}
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr>
-                        {['Empresa','Cat.','Vendedor','Gestor','Potencial/mês','Esperado Total','Creditado Total','% Realizado','Barra','Status'].map(h =>
-                          <th key={h} style={s.th}>{h}</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginaCruz.map((e, i) => {
-                        const pct = e.pctPot || 0;
-                        const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f0b429' : '#dc2626';
-                        const statusLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
-                        return (
-                          <tr key={e.produto_id} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                            <td style={s.td}>
-                              <div style={{ fontWeight: 600 }}>{e.nome}</div>
-                              <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
-                            </td>
-                            <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
-                            <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
-                            <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
-                            <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                            <td style={{ ...s.td, color: '#f0b429' }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length)}</td>
-                            <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.totalCreditado)}</td>
-                            <td style={{ ...s.td, color: cor, fontWeight: 700 }}>{fmtPct(pct)}</td>
-                            <td style={{ ...s.td, minWidth: 100 }}>
-                              <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                                <div style={{ background: cor, height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4 }}></div>
-                              </div>
-                            </td>
-                            <td style={{ ...s.td, fontSize: '0.78rem' }}>{statusLabel}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {totalPagCruz > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
-                    <Paginacao pagina={pagCruz} total={totalPagCruz} onChange={setPagCruz} />
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          <TabelaCruzamento lista={listaFiltrada} meses={meses} />
         </div>
       )}
-    </div>
-  );
-}
-
-// Componente de paginação
-function Paginacao({ pagina, total, onChange }) {
-  const pages = [];
-  const start = Math.max(1, pagina - 2);
-  const end   = Math.min(total, pagina + 2);
-  for (let i = start; i <= end; i++) pages.push(i);
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <button style={{ ...ps.btn, ...(pagina === 1 ? ps.disabled : {}) }}
-        onClick={() => onChange(pagina - 1)} disabled={pagina === 1}>‹</button>
-      {start > 1 && <><button style={ps.btn} onClick={() => onChange(1)}>1</button><span style={ps.dots}>…</span></>}
-      {pages.map(p => (
-        <button key={p} style={{ ...ps.btn, ...(p === pagina ? ps.ativo : {}) }} onClick={() => onChange(p)}>{p}</button>
-      ))}
-      {end < total && <><span style={ps.dots}>…</span><button style={ps.btn} onClick={() => onChange(total)}>{total}</button></>}
-      <button style={{ ...ps.btn, ...(pagina === total ? ps.disabled : {}) }}
-        onClick={() => onChange(pagina + 1)} disabled={pagina === total}>›</button>
-      <span style={{ color: '#4b5563', fontSize: '0.75rem', marginLeft: 4 }}>de {total}</span>
     </div>
   );
 }
