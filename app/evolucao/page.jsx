@@ -37,7 +37,7 @@ const TEND = {
   none: { color: '#4b5563', label: '— Sem crédito' },
 };
 
-const POR_PAGINA = 25;
+const POR_PAGINA = 12;
 
 function Paginacao({ pagina, total, onChange }) {
   if (total <= 1) return null;
