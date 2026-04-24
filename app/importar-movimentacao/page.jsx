@@ -25,17 +25,27 @@ function excelDateToISO(v) {
   if (v instanceof Date) {
     return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-01`;
   }
-  if (typeof v === 'number') {
+  if (typeof v === 'number' && v > 40000 && v < 55000) {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-01`;
   }
   const s = String(v).trim();
-  // Formato: "2026-01-01 00:00:00" ou "2026-01-01T00:00:00"
-  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return `${match[1]}-${match[2]}-01`;
-  // Formato: "01/01/2026"
-  const parts = s.split('/');
-  if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-01`;
+  // "2026-01-01" ou "2026-01-01 00:00:00"
+  const matchISO = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (matchISO) return `${matchISO[1]}-${matchISO[2]}-01`;
+  // "01/01/2026"
+  const matchBR = s.split('/');
+  if (matchBR.length === 3 && matchBR[2].length === 4) {
+    return `${matchBR[2]}-${matchBR[1].padStart(2,'0')}-01`;
+  }
+  // "Jan/26", "Fev/26", "Mar/26" etc
+  const MESES = { jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12' };
+  const matchNome = s.toLowerCase().match(/^([a-z]{3})[\/\-](\d{2,4})$/);
+  if (matchNome) {
+    const mes = MESES[matchNome[1]];
+    const ano = matchNome[2].length === 2 ? `20${matchNome[2]}` : matchNome[2];
+    if (mes) return `${ano}-${mes}-01`;
+  }
   return null;
 }
 
@@ -70,19 +80,9 @@ export default function ImportarMovimentacao() {
 
         if (raw.length === 0) throw new Error('Planilha vazia');
 
-        // Detecta colunas que são datas (meses)
-        // xlsx.js pode retornar datas como: Date object, número serial, string "2026-01-01 00:00:00"
+        // Detecta colunas de mês em qualquer formato
         const primeiraLinha = raw[0];
-        const colsMes = Object.keys(primeiraLinha).filter(k => {
-          if (k instanceof Date) return true;
-          // Número serial do Excel (datas ficam entre 40000 e 50000 para anos 2009-2036)
-          if (typeof k === 'number' && k > 40000 && k < 55000) return true;
-          // String com formato de data
-          const s = String(k).trim();
-          if (s.match(/^\d{4}-\d{2}-\d{2}/)) return true;
-          if (s.match(/^\d{2}\/\d{2}\/\d{4}/)) return true;
-          return false;
-        });
+        const colsMes = Object.keys(primeiraLinha).filter(k => excelDateToISO(k) !== null);
 
         if (colsMes.length === 0) throw new Error('Nenhuma coluna de mês detectada. Use colunas com datas (ex: 2026-01-01).');
 
