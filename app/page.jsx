@@ -6,8 +6,9 @@ const menus = [
     icon: '📥',
     items: [
       { href: '/importar',            icon: '🏢', label: 'Empresas',    sub: 'Importar cadastro do Excel',         cor: '#f0b429' },
-      { href: '/importar-liberacoes', icon: '💳', label: 'Liberações',  sub: 'Créditos liberados por mês',         cor: '#22c55e' },
-      { href: '/importar-fechamento', icon: '📊', label: 'Fechamento',  sub: 'Vendas e taxas mensais',             cor: '#3b82f6' },
+      { href: '/importar-liberacoes',  icon: '💳', label: 'Liberações',    sub: 'Créditos liberados por mês',        cor: '#22c55e' },
+      { href: '/importar-movimentacao',icon: '📊', label: 'Movimentação',  sub: 'Convênio, Mobilidade e outros',     cor: '#3b82f6' },
+      { href: '/importar-fechamento',  icon: '📈', label: 'Fechamento',    sub: 'Vendas e taxas mensais',            cor: '#a78bfa' },
     ],
   },
   {
@@ -15,7 +16,7 @@ const menus = [
     icon: '📈',
     items: [
       { href: '/previsao',  icon: '🔮', label: 'Previsão',   sub: 'Potencial vs meta por consultor',    cor: '#f0b429' },
-      { href: '/evolucao',  icon: '📈', label: 'Evolução',   sub: 'Histórico de créditos por empresa',  cor: '#22c55e' },
+      { href: '/evolucao',  icon: '📈', label: 'Evolução',   sub: 'Movimentação de todas as categorias', cor: '#22c55e' },
       { href: '#',          icon: '📉', label: 'Dashboard',  sub: 'Resultados reais (em breve)',        cor: '#9ca3af', breve: true },
       { href: '#',          icon: '💰', label: 'Comissões',  sub: 'Cálculo por consultor (em breve)',   cor: '#9ca3af', breve: true },
     ],
