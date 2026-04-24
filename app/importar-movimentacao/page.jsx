@@ -30,7 +30,12 @@ function excelDateToISO(v) {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-01`;
   }
   const s = String(v).trim();
-  if (s.match(/^\d{4}-\d{2}/)) return s.substring(0,7) + '-01';
+  // Formato: "2026-01-01 00:00:00" ou "2026-01-01T00:00:00"
+  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-01`;
+  // Formato: "01/01/2026"
+  const parts = s.split('/');
+  if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-01`;
   return null;
 }
 
@@ -66,10 +71,17 @@ export default function ImportarMovimentacao() {
         if (raw.length === 0) throw new Error('Planilha vazia');
 
         // Detecta colunas que são datas (meses)
+        // xlsx.js pode retornar datas como: Date object, número serial, string "2026-01-01 00:00:00"
         const primeiraLinha = raw[0];
         const colsMes = Object.keys(primeiraLinha).filter(k => {
-          const comp = excelDateToISO(k);
-          return comp !== null;
+          if (k instanceof Date) return true;
+          // Número serial do Excel (datas ficam entre 40000 e 50000 para anos 2009-2036)
+          if (typeof k === 'number' && k > 40000 && k < 55000) return true;
+          // String com formato de data
+          const s = String(k).trim();
+          if (s.match(/^\d{4}-\d{2}-\d{2}/)) return true;
+          if (s.match(/^\d{2}\/\d{2}\/\d{4}/)) return true;
+          return false;
         });
 
         if (colsMes.length === 0) throw new Error('Nenhuma coluna de mês detectada. Use colunas com datas (ex: 2026-01-01).');
@@ -366,4 +378,3 @@ const s = {
   errBox:     { background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 10, padding: 16, marginBottom: 20, color: '#f87171', fontSize: '0.82rem', textAlign: 'left' },
   info:       { background: 'rgba(240,180,41,0.05)', border: '1px solid rgba(240,180,41,0.15)', borderRadius: 14, padding: 24 },
 };
-
