@@ -34,7 +34,7 @@ const TEND = {
   down: { color: '#dc2626', label: '↓ Caindo' },
   flat: { color: '#6b7280', label: '→ Estável' },
   new:  { color: '#2563eb', label: '✦ Nova' },
-  none: { color: '#4b5563', label: '— Sem crédito' },
+  none: { color: '#4b5563', label: '— Sem movimentação' },
 };
 
 const POR_PAGINA = 12;
@@ -66,7 +66,7 @@ function BannerFiltros({ filtros, onLimpar }) {
   if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,            cor: '#f97316' });
   if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: '#34d399' });
   if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
-  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Creditaram' : '❌ Sem crédito', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
+  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
   if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
   if (filtros.busca.trim())          tags.push({ label: `Busca: "${filtros.busca}"`,           cor: '#e8eaf0' });
   if (tags.length === 0) return null;
@@ -142,7 +142,7 @@ function TabelaEvolucao({ lista, meses, libMap }) {
                     return <td key={m} style={{ ...s.td, textAlign: 'right' }}>{v > 0 ? <span style={{ color: '#34d399', fontWeight: 500 }}>{fmt(v)}</span> : <span style={{ color: '#374151' }}>—</span>}</td>;
                   })}
                   <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>{e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}</td>
-                  <td style={{ ...s.td, textAlign: 'center' }}>{e.creditou ? <span style={s.badgeGreen}>✅ Creditou</span> : <span style={s.badgeRed}>❌ Sem crédito</span>}</td>
+                  <td style={{ ...s.td, textAlign: 'center' }}>{e.creditou ? <span style={s.badgeGreen}>✅ Movimentou</span> : <span style={s.badgeRed}>❌ Sem movimentação</span>}</td>
                   <td style={{ ...s.td, textAlign: 'center' }}><span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span></td>
                 </tr>
               );
@@ -261,7 +261,7 @@ export default function Evolucao() {
         .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo)`)
         .eq('ativo', true)
-        .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus']),
+        .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus', 'Convênio', 'Convenio', 'Mobilidade', 'Taxa Negativa']),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
     setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
@@ -383,10 +383,13 @@ export default function Evolucao() {
       <div style={s.header}>
         <div>
           <div style={s.tag}>♠ Vegas Card</div>
-          <h1 style={s.title}>Evolução de Créditos</h1>
-          <p style={s.sub}>Empresas Benefícios/Bônus — acompanhe quem creditou e quem ainda não creditou</p>
+          <h1 style={s.title}>Evolução de Novas Empresas</h1>
+          <p style={s.sub}>Todas as categorias — acompanhe quem movimentou e quem ainda não movimentou</p>
         </div>
-        <a href="/importar-liberacoes" style={s.linkBtnGreen}>💳 Importar Liberações</a>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
+          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color: '#60a5fa', borderColor: 'rgba(96,165,250,0.2)', background: 'rgba(96,165,250,0.08)' }}>💳 Importar Liberações</a>
+        </div>
       </div>
 
       {/* Banner de filtros ativos — visível em TODAS as abas */}
@@ -397,17 +400,17 @@ export default function Evolucao() {
         <div style={s.kpi}>
           <span style={s.kpiLabel}>Total Empresas</span>
           <span style={s.kpiVal}>{kpis.total}</span>
-          <span style={s.kpiSub}>Benefícios + Bônus</span>
+          <span style={s.kpiSub}>Todas as categorias</span>
         </div>
         <div style={{ ...s.kpi, borderColor: 'rgba(22,163,74,0.35)' }}>
-          <span style={s.kpiLabel}>Creditaram</span>
+          <span style={s.kpiLabel}>Movimentaram</span>
           <span style={{ ...s.kpiVal, color: '#16a34a' }}>{kpis.creditaram}</span>
           <span style={s.kpiSub}>{fmtPct(kpis.pctAtivacao)} de ativação</span>
         </div>
         <div style={{ ...s.kpi, borderColor: 'rgba(220,38,38,0.35)' }}>
-          <span style={s.kpiLabel}>Sem Crédito</span>
+          <span style={s.kpiLabel}>Sem Movimentação</span>
           <span style={{ ...s.kpiVal, color: '#dc2626' }}>{kpis.semCredito}</span>
-          <span style={s.kpiSub}>ainda não creditaram</span>
+          <span style={s.kpiSub}>ainda não movimentaram</span>
         </div>
         <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)' }}>
           <span style={s.kpiLabel}>Total Creditado</span>
