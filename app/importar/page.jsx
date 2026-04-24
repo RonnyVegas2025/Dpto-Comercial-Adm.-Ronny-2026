@@ -68,7 +68,7 @@ function parseRow(row) {
     dias_prazo:             parseInt(cleanNum(findKey(row,'Dias de Prazo'))) || 0,
     _consultor_principal:   clean(findKey(row,'Consultor Principal')),
     _consultor_agregado:    clean(findKey(row,'Consultor Agregado') ?? findKey(row,'Consultor Agregado 1')),
-    _consultor_agregado_2:  clean(findKey(row,'Consultor Agregado 2')),
+    _consultor_agregado_2:  clean(findKey(row,'Consultor Agregado 2') ?? null),
     _parceiro:              clean(findKey(row,'Parceiro Comercial')),
   };
 }
