@@ -12,45 +12,45 @@ const fmt     = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency
 const fmtPct  = (v) => v != null ? `${Number(v * 100).toFixed(2)}%` : '—';
 const fmtDate = (d) => { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
 
-// ─── Definição de todas as colunas disponíveis ─────────────────────────────
 const TODAS_COLUNAS = [
   // Identificação
-  { key: 'produto_id',          grupo: 'Identificação',   label: 'ID Produto',           render: e => e.produto_id || '—' },
-  { key: 'nome',                grupo: 'Identificação',   label: 'Empresa',              render: e => e.nome || '—' },
-  { key: 'cnpj',                grupo: 'Identificação',   label: 'CNPJ',                 render: e => e.cnpj || '—' },
-  { key: 'data_cadastro',       grupo: 'Identificação',   label: 'Data Cadastro',        render: e => fmtDate(e.data_cadastro) },
-  { key: 'ativo',               grupo: 'Identificação',   label: 'Ativo',                render: e => e.ativo ? 'Sim' : 'Não' },
+  { key: 'produto_id',           grupo: 'Identificação', label: 'ID Produto',          render: e => e.produto_id || '—' },
+  { key: 'nome',                 grupo: 'Identificação', label: 'Empresa',             render: e => e.nome || '—' },
+  { key: 'cnpj',                 grupo: 'Identificação', label: 'CNPJ',                render: e => e.cnpj || '—' },
+  { key: 'data_cadastro',        grupo: 'Identificação', label: 'Data Cadastro',       render: e => fmtDate(e.data_cadastro) },
+  { key: 'ativo',                grupo: 'Identificação', label: 'Ativo',               render: e => e.ativo ? 'Sim' : 'Não' },
 
   // Produto & Categoria
-  { key: 'produto_contratado',  grupo: 'Produto',         label: 'Produto Contratado',   render: e => e.produto_contratado || '—' },
-  { key: 'categoria',           grupo: 'Produto',         label: 'Categoria',            render: e => e.categoria || '—' },
-  { key: 'peso_categoria',      grupo: 'Produto',         label: 'Peso (%)',             render: e => e.peso_categoria != null ? `${(e.peso_categoria * 100).toFixed(0)}%` : '—' },
-  { key: 'tipo_boleto',         grupo: 'Produto',         label: 'Tipo Boleto',          render: e => e.tipo_boleto || '—' },
-  { key: 'cartoes_emitidos',    grupo: 'Produto',         label: 'Cartões Emitidos',     render: e => e.cartoes_emitidos ?? 0 },
-  { key: 'dias_prazo',          grupo: 'Produto',         label: 'Dias Prazo',           render: e => e.dias_prazo ?? '—' },
-  { key: 'confeccao_cartao',    grupo: 'Produto',         label: 'Confecção Cartão',     render: e => e.confeccao_cartao != null ? fmt(e.confeccao_cartao) : '—' },
+  { key: 'produto_contratado',   grupo: 'Produto',       label: 'Produto Contratado',  render: e => e.produto_contratado || '—' },
+  { key: 'categoria',            grupo: 'Produto',       label: 'Categoria',           render: e => e.categoria || '—' },
+  { key: 'peso_categoria',       grupo: 'Produto',       label: 'Peso (%)',            render: e => e.peso_categoria != null ? `${(e.peso_categoria * 100).toFixed(0)}%` : '—' },
+  { key: 'tipo_boleto',          grupo: 'Produto',       label: 'Tipo Boleto',         render: e => e.tipo_boleto || '—' },
+  { key: 'cartoes_emitidos',     grupo: 'Produto',       label: 'Cartões Emitidos',    render: e => e.cartoes_emitidos ?? 0 },
+  { key: 'dias_prazo',           grupo: 'Produto',       label: 'Dias Prazo',          render: e => e.dias_prazo ?? '—' },
+  { key: 'confeccao_cartao',     grupo: 'Produto',       label: 'Confecção Cartão',    render: e => e.confeccao_cartao != null ? fmt(e.confeccao_cartao) : '—' },
 
   // Localização
-  { key: 'cidade',              grupo: 'Localização',     label: 'Cidade',               render: e => e.cidade || '—' },
-  { key: 'estado',              grupo: 'Localização',     label: 'Estado',               render: e => e.estado || '—' },
+  { key: 'cidade',               grupo: 'Localização',   label: 'Cidade',              render: e => e.cidade || '—' },
+  { key: 'estado',               grupo: 'Localização',   label: 'Estado',              render: e => e.estado || '—' },
 
   // Financeiro
-  { key: 'potencial_movimentacao', grupo: 'Financeiro',   label: 'Potencial Mensal',     render: e => fmt(e.potencial_movimentacao) },
-  { key: 'resultado_esperado',  grupo: 'Financeiro',      label: 'Resultado Esperado',   render: e => fmt((e.potencial_movimentacao||0)*(e.peso_categoria||1)) },
-  { key: 'taxa_positiva',       grupo: 'Financeiro',      label: 'Taxa Positiva',        render: e => fmtPct(e.taxa_positiva) },
-  { key: 'taxa_negativa',       grupo: 'Financeiro',      label: 'Taxa Negativa',        render: e => fmtPct(e.taxa_negativa) },
+  { key: 'potencial_movimentacao', grupo: 'Financeiro',  label: 'Potencial Mensal',    render: e => fmt(e.potencial_movimentacao) },
+  { key: 'resultado_esperado',   grupo: 'Financeiro',    label: 'Resultado Esperado',  render: e => fmt((e.potencial_movimentacao||0)*(e.peso_categoria||1)) },
+  { key: 'taxa_positiva',        grupo: 'Financeiro',    label: 'Taxa Positiva',       render: e => fmtPct(e.taxa_positiva) },
+  { key: 'taxa_negativa',        grupo: 'Financeiro',    label: 'Taxa Negativa',       render: e => fmtPct(e.taxa_negativa) },
 
   // Comercial
-  { key: 'consultor_principal', grupo: 'Comercial',       label: 'Consultor Principal',  render: e => e.consultor_principal?.nome || '—' },
-  { key: 'gestor',              grupo: 'Comercial',       label: 'Gestor',               render: e => e.consultor_principal?.gestor || '—' },
-  { key: 'consultor_agregado',  grupo: 'Comercial',       label: 'Consultor Agregado',   render: e => e.consultor_agregado?.nome || '—' },
-  { key: 'parceiro',            grupo: 'Comercial',       label: 'Parceiro Comercial',   render: e => e.parceiro?.nome || '—' },
+  { key: 'consultor_principal',  grupo: 'Comercial',     label: 'Consultor Principal', render: e => e.consultor_principal?.nome || '—' },
+  { key: 'gestor',               grupo: 'Comercial',     label: 'Gestor',              render: e => e.consultor_principal?.gestor || '—' },
+  { key: 'consultor_agregado',   grupo: 'Comercial',     label: 'Consultor Agregado',  render: e => e.consultor_agregado?.nome || '—' },
+  { key: 'consultor_agregado_2', grupo: 'Comercial',     label: 'Consultor Agr. 2',    render: e => e.consultor_agregado_2?.nome || '—' },
+  { key: 'parceiro',             grupo: 'Comercial',     label: 'Parceiro Comercial',  render: e => e.parceiro?.nome || '—' },
 ];
 
 const COLUNAS_PADRAO = [
   'produto_id','nome','cnpj','data_cadastro','produto_contratado','categoria',
   'cidade','estado','potencial_movimentacao','taxa_positiva','taxa_negativa',
-  'consultor_principal','parceiro',
+  'consultor_principal','consultor_agregado','parceiro',
 ];
 
 const GRUPOS = [...new Set(TODAS_COLUNAS.map(c => c.grupo))];
@@ -60,18 +60,16 @@ export default function RelatorioEmpresas() {
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading]   = useState(true);
 
-  // Filtros de linha
-  const [busca,            setBusca]           = useState('');
-  const [filtroCategoria,  setFiltroCategoria] = useState('');
-  const [filtroGestor,     setFiltroGestor]    = useState('');
-  const [filtroConsultor,  setFiltroConsultor] = useState('');
-  const [filtroParceiro,   setFiltroParceiro]  = useState('');
-  const [filtroProduto,    setFiltroProduto]   = useState('');
-  const [filtroAtivo,      setFiltroAtivo]     = useState('');
+  const [busca,           setBusca]           = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroGestor,    setFiltroGestor]    = useState('');
+  const [filtroConsultor, setFiltroConsultor] = useState('');
+  const [filtroParceiro,  setFiltroParceiro]  = useState('');
+  const [filtroProduto,   setFiltroProduto]   = useState('');
+  const [filtroAtivo,     setFiltroAtivo]     = useState('');
 
-  // Seleção de colunas
   const [colsSelecionadas, setColsSelecionadas] = useState(new Set(COLUNAS_PADRAO));
-  const [painelCols, setPainelCols]             = useState(false);
+  const [painelCols,       setPainelCols]       = useState(false);
 
   useEffect(() => { import('xlsx').then(m => setXlsxLib(m)); carregarEmpresas(); }, []);
 
@@ -86,6 +84,7 @@ export default function RelatorioEmpresas() {
         tipo_boleto, confeccao_cartao, dias_prazo, ativo,
         consultor_principal:consultor_principal_id (id, nome, gestor),
         consultor_agregado:consultor_agregado_id (id, nome),
+        consultor_agregado_2:consultor_agregado_2_id (id, nome),
         parceiro:parceiro_id (nome)
       `)
       .order('nome');
@@ -93,7 +92,6 @@ export default function RelatorioEmpresas() {
     setLoading(false);
   }
 
-  // Opções únicas para filtros
   const opts = useMemo(() => ({
     categorias:  [...new Set(empresas.map(e => e.categoria).filter(Boolean))].sort(),
     gestores:    [...new Set(empresas.map(e => e.consultor_principal?.gestor).filter(Boolean))].sort(),
@@ -102,7 +100,6 @@ export default function RelatorioEmpresas() {
     produtos:    [...new Set(empresas.map(e => e.produto_contratado).filter(Boolean))].sort(),
   }), [empresas]);
 
-  // Empresas filtradas
   const lista = useMemo(() => empresas.filter(e => {
     if (busca) {
       const q = busca.toLowerCase();
@@ -116,14 +113,12 @@ export default function RelatorioEmpresas() {
     if (filtroParceiro  && e.parceiro?.nome !== filtroParceiro) return false;
     if (filtroProduto   && e.produto_contratado !== filtroProduto) return false;
     if (filtroAtivo === 'sim' && !e.ativo) return false;
-    if (filtroAtivo === 'nao' && e.ativo)  return false;
+    if (filtroAtivo === 'nao' &&  e.ativo) return false;
     return true;
   }), [empresas, busca, filtroCategoria, filtroGestor, filtroConsultor, filtroParceiro, filtroProduto, filtroAtivo]);
 
-  // Colunas visíveis na ordem definida
   const colunas = TODAS_COLUNAS.filter(c => colsSelecionadas.has(c.key));
 
-  // Toggle coluna individual
   const toggleCol = (key) => {
     setColsSelecionadas(prev => {
       const next = new Set(prev);
@@ -132,7 +127,6 @@ export default function RelatorioEmpresas() {
     });
   };
 
-  // Toggle grupo inteiro
   const toggleGrupo = (grupo) => {
     const keys = TODAS_COLUNAS.filter(c => c.grupo === grupo).map(c => c.key);
     const todosAtivos = keys.every(k => colsSelecionadas.has(k));
@@ -172,7 +166,7 @@ export default function RelatorioEmpresas() {
   return (
     <div style={s.page}>
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* Header */}
       <div style={s.header}>
         <div>
           <div style={s.tag}>♠ Vegas Card</div>
@@ -182,13 +176,13 @@ export default function RelatorioEmpresas() {
         <button onClick={exportar} disabled={!xlsxLib || lista.length === 0} style={{
           ...s.btnPri,
           opacity: (!xlsxLib || lista.length === 0) ? 0.5 : 1,
-          cursor: (!xlsxLib || lista.length === 0) ? 'not-allowed' : 'pointer',
+          cursor:  (!xlsxLib || lista.length === 0) ? 'not-allowed' : 'pointer',
         }}>
           📥 Exportar Excel ({lista.length})
         </button>
       </div>
 
-      {/* ── Filtros de linha ────────────────────────────────────────── */}
+      {/* Filtros */}
       <div style={s.filtrosBox}>
         <div style={{ color:'#f0b429', fontSize:'0.72rem', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>
           🔽 Filtrar registros
@@ -200,11 +194,11 @@ export default function RelatorioEmpresas() {
             style={{ ...s.input, minWidth:200, flex:2 }}
           />
           {[
-            { val: filtroProduto,    set: setFiltroProduto,    opts: opts.produtos,    ph: 'Produto'    },
-            { val: filtroCategoria,  set: setFiltroCategoria,  opts: opts.categorias,  ph: 'Categoria'  },
-            { val: filtroGestor,     set: setFiltroGestor,     opts: opts.gestores,    ph: 'Gestor'     },
-            { val: filtroConsultor,  set: setFiltroConsultor,  opts: opts.consultores, ph: 'Consultor'  },
-            { val: filtroParceiro,   set: setFiltroParceiro,   opts: opts.parceiros,   ph: 'Parceiro'   },
+            { val: filtroProduto,   set: setFiltroProduto,   opts: opts.produtos,    ph: 'Produto'   },
+            { val: filtroCategoria, set: setFiltroCategoria, opts: opts.categorias,  ph: 'Categoria' },
+            { val: filtroGestor,    set: setFiltroGestor,    opts: opts.gestores,    ph: 'Gestor'    },
+            { val: filtroConsultor, set: setFiltroConsultor, opts: opts.consultores, ph: 'Consultor' },
+            { val: filtroParceiro,  set: setFiltroParceiro,  opts: opts.parceiros,   ph: 'Parceiro'  },
           ].map(({ val, set, opts: o, ph }) => (
             <select key={ph} value={val} onChange={e => set(e.target.value)} style={{ ...s.input, minWidth:140 }}>
               <option value=''>{ph} — Todos</option>
@@ -222,7 +216,7 @@ export default function RelatorioEmpresas() {
         </div>
       </div>
 
-      {/* ── Seletor de colunas ──────────────────────────────────────── */}
+      {/* Seletor de colunas */}
       <div style={s.colsBar}>
         <button
           onClick={() => setPainelCols(v => !v)}
@@ -239,7 +233,7 @@ export default function RelatorioEmpresas() {
         </span>
       </div>
 
-      {/* ── Painel de checkboxes ─────────────────────────────────────── */}
+      {/* Painel de checkboxes */}
       {painelCols && (
         <div style={s.painelCols}>
           {GRUPOS.map(grupo => {
@@ -248,11 +242,11 @@ export default function RelatorioEmpresas() {
             const todosAtivos = nAtivos === cols.length;
             return (
               <div key={grupo} style={s.grupoBox}>
-                {/* Header do grupo — clica para toggle */}
                 <div style={s.grupoHeader} onClick={() => toggleGrupo(grupo)}>
                   <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                     <span style={{
-                      width:14, height:14, borderRadius:4, border:`2px solid ${todosAtivos ? '#f0b429' : '#4b5563'}`,
+                      width:14, height:14, borderRadius:4,
+                      border:`2px solid ${todosAtivos ? '#f0b429' : '#4b5563'}`,
                       background: todosAtivos ? '#f0b429' : 'transparent',
                       display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'0.6rem',
                     }}>
@@ -262,7 +256,6 @@ export default function RelatorioEmpresas() {
                   </div>
                   <span style={{ fontSize:'0.68rem', color:'#8b92b0' }}>{nAtivos}/{cols.length}</span>
                 </div>
-                {/* Itens */}
                 <div style={s.grupoItens}>
                   {cols.map(c => {
                     const ativo = colsSelecionadas.has(c.key);
@@ -285,7 +278,7 @@ export default function RelatorioEmpresas() {
         </div>
       )}
 
-      {/* ── Tabela ──────────────────────────────────────────────────── */}
+      {/* Tabela */}
       <div style={s.card}>
         {loading ? (
           <div style={{ textAlign:'center', padding:48 }}>
