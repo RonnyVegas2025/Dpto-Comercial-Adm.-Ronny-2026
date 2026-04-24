@@ -60,14 +60,15 @@ function parseRow(row) {
     cidade:                 clean(findKey(row,'Cidade')),
     estado:                 clean(findKey(row,'Estado')),
     cartoes_emitidos:       parseInt(cleanNum(findKey(row,'Cartoes Emitidos') ?? findKey(row,'Cartões Emitidos'))) || 0,
-    potencial_movimentacao: cleanNum(findKey(row,'Potencial de Movimentacao') ?? findKey(row,'Potencial de Movimentação')),
+    potencial_movimentacao: cleanNum(findKey(row,'Potencial de Movimentacao') ?? findKey(row,'Potencial de Movimentação') ?? findKey(row,'Potencial')),
     tipo_boleto:            clean(findKey(row,'Tipo do Boleto')),
-    confeccao_cartao:       cleanNum(findKey(row,'Confeccao de Cartao') ?? findKey(row,'Confecção de Cartão')),
+    confeccao_cartao:       cleanNum(findKey(row,'Confeccao de Cartao') ?? findKey(row,'Confecção de Cartão') ?? findKey(row,'Cobrança 1ª Via Cartão')),
     taxa_negativa:          cleanNum(findKey(row,'Taxa Negativa')),
-    taxa_positiva:          cleanNum(findKey(row,'Taxa Positiva')),
+    taxa_positiva:          cleanNum(findKey(row,'Taxa Positiva') ?? findKey(row,'Taxa Positva')),
     dias_prazo:             parseInt(cleanNum(findKey(row,'Dias de Prazo'))) || 0,
     _consultor_principal:   clean(findKey(row,'Consultor Principal')),
-    _consultor_agregado:    clean(findKey(row,'Consultor Agregado')),
+    _consultor_agregado:    clean(findKey(row,'Consultor Agregado') ?? findKey(row,'Consultor Agregado 1')),
+    _consultor_agregado_2:  clean(findKey(row,'Consultor Agregado 2')),
     _parceiro:              clean(findKey(row,'Parceiro Comercial')),
   };
 }
@@ -84,9 +85,10 @@ async function resolveIds(rows) {
   const novosConsult   = new Set();
   const novosParceiros = new Set();
   rows.forEach(r => {
-    if (r._consultor_principal && !consultMap[norm(r._consultor_principal)]) novosConsult.add(r._consultor_principal);
-    if (r._consultor_agregado  && !consultMap[norm(r._consultor_agregado)])  novosConsult.add(r._consultor_agregado);
-    if (r._parceiro            && !parcMap[norm(r._parceiro)])               novosParceiros.add(r._parceiro);
+    if (r._consultor_principal  && !consultMap[norm(r._consultor_principal)])  novosConsult.add(r._consultor_principal);
+    if (r._consultor_agregado   && !consultMap[norm(r._consultor_agregado)])   novosConsult.add(r._consultor_agregado);
+    if (r._consultor_agregado_2 && !consultMap[norm(r._consultor_agregado_2)]) novosConsult.add(r._consultor_agregado_2);
+    if (r._parceiro             && !parcMap[norm(r._parceiro)])                novosParceiros.add(r._parceiro);
   });
 
   if (novosConsult.size > 0) {
@@ -102,14 +104,15 @@ async function resolveIds(rows) {
 
   return rows.map(r => {
     const prod = prodMap[norm(r.produto_contratado||'')];
-    const { _consultor_principal, _consultor_agregado, _parceiro, ...rest } = r;
+    const { _consultor_principal, _consultor_agregado, _consultor_agregado_2, _parceiro, ...rest } = r;
     return {
       ...rest,
-      produto_id_ref:         prod?.id   || null,
-      peso_categoria:         prod?.peso ?? 1.0,
-      consultor_principal_id: _consultor_principal ? consultMap[norm(_consultor_principal)] || null : null,
-      consultor_agregado_id:  _consultor_agregado  ? consultMap[norm(_consultor_agregado)]  || null : null,
-      parceiro_id:            _parceiro            ? parcMap[norm(_parceiro)]                || null : null,
+      produto_id_ref:          prod?.id   || null,
+      peso_categoria:          prod?.peso ?? 1.0,
+      consultor_principal_id:  _consultor_principal  ? consultMap[norm(_consultor_principal)]  || null : null,
+      consultor_agregado_id:   _consultor_agregado   ? consultMap[norm(_consultor_agregado)]   || null : null,
+      consultor_agregado_2_id: _consultor_agregado_2 ? consultMap[norm(_consultor_agregado_2)] || null : null,
+      parceiro_id:             _parceiro             ? parcMap[norm(_parceiro)]                || null : null,
     };
   });
 }
@@ -208,7 +211,7 @@ export default function ImportarEmpresas() {
           </div>
           <div style={{overflowX:'auto'}}>
             <table style={s.table}>
-              <thead><tr>{['ID','Empresa','Produto','Categoria','Peso','Cidade/UF','Potencial','Consultor','Parceiro'].map(h=>
+              <thead><tr>{['ID','Empresa','Produto','Categoria','Cidade/UF','Potencial','Consultor','Agr. 1','Agr. 2','Parceiro'].map(h=>
                 <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {preview.slice(0,20).map((r,i)=>(
@@ -217,14 +220,15 @@ export default function ImportarEmpresas() {
                     <td style={{...s.td,fontWeight:600}}>{r.nome}</td>
                     <td style={s.td}>{r.produto_contratado||'—'}</td>
                     <td style={{...s.td,color:'#9ca3af'}}>{r.categoria}</td>
-                    <td style={{...s.td,color:'#f0b429'}}>{r.produto_contratado}</td>
                     <td style={s.td}>{r.cidade} / {r.estado}</td>
                     <td style={{...s.td,color:r.potencial_movimentacao>0?'#34d399':'#6b7280'}}>{fmt(r.potencial_movimentacao)}</td>
                     <td style={s.td}>{r._consultor_principal||'—'}</td>
+                    <td style={{...s.td,color:'#9ca3af'}}>{r._consultor_agregado||'—'}</td>
+                    <td style={{...s.td,color:'#9ca3af'}}>{r._consultor_agregado_2||'—'}</td>
                     <td style={s.td}>{r._parceiro||'—'}</td>
                   </tr>
                 ))}
-                {preview.length>20&&<tr><td colSpan={9} style={{...s.td,textAlign:'center',color:'#6b7280'}}>... e mais {preview.length-20} empresas</td></tr>}
+                {preview.length>20&&<tr><td colSpan={10} style={{...s.td,textAlign:'center',color:'#6b7280'}}>... e mais {preview.length-20} empresas</td></tr>}
               </tbody>
             </table>
           </div>
@@ -274,6 +278,7 @@ export default function ImportarEmpresas() {
           <li>Arraste o arquivo aqui ou clique para selecionar</li>
           <li>Confira o preview e clique em Importar</li>
           <li>Empresas já existentes são atualizadas automaticamente</li>
+          <li>Suporte a <strong style={{color:'#d1d5db'}}>Consultor Agregado 1 e 2</strong> na mesma importação</li>
         </ol>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -282,7 +287,7 @@ export default function ImportarEmpresas() {
 }
 
 const s = {
-  page:      {maxWidth:1100,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans', sans-serif",color:'#e8eaf0',background:'#0a0c10',minHeight:'100vh'},
+  page:      {maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans', sans-serif",color:'#e8eaf0',background:'#0a0c10',minHeight:'100vh'},
   header:    {marginBottom:32},
   tag:       {color:'#f0b429',fontWeight:800,fontSize:'0.9rem',letterSpacing:2,marginBottom:12,textTransform:'uppercase'},
   title:     {fontSize:'1.8rem',fontWeight:700,margin:'0 0 8px'},
