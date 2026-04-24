@@ -122,7 +122,7 @@ function TabelaEvolucao({ lista, meses, libMap }) {
               <th style={s.th}>Vendedor</th>
               <th style={s.th}>Gestor</th>
               {meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
-              <th style={{ ...s.th, textAlign: 'right' }}>Total</th>
+              <th style={{ ...s.th, textAlign: 'right' }}>Movimentado</th>
               <th style={{ ...s.th, textAlign: 'center' }}>Status</th>
               <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>
             </tr>
@@ -184,7 +184,7 @@ function TabelaCruzamento({ lista, meses }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={s.table}>
           <thead>
-            <tr>{['Empresa','Cat.','Vendedor','Gestor','Diretor','Potencial/mês','Esperado Total','Creditado Total','% Realizado','Barra','Status'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
+            <tr>{['Empresa','Cat.','Vendedor','Gestor','Diretor','Potencial/mês','Esperado Total','Movimentado Total','% Realizado','Barra','Status'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {listaPagina.map((e, i) => {
@@ -413,9 +413,9 @@ export default function Evolucao() {
           <span style={s.kpiSub}>ainda não movimentaram</span>
         </div>
         <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)' }}>
-          <span style={s.kpiLabel}>Total Creditado</span>
+          <span style={s.kpiLabel}>Total Movimentado</span>
           <span style={{ ...s.kpiVal, color: '#f0b429' }}>{fmt(kpis.totalCred)}</span>
-          <span style={s.kpiSub}>{meses.length} meses</span>
+          <span style={s.kpiSub}>{meses.length} meses · todas as categorias</span>
         </div>
         <div style={s.kpi}>
           <span style={s.kpiLabel}>Crescendo</span>
@@ -482,7 +482,7 @@ export default function Evolucao() {
             </select>
             <select style={s.sel} value={ordenar} onChange={e => setOrdenar(e.target.value)}>
               <option value="ultimo">Ordenar: Último mês</option>
-              <option value="total">Ordenar: Total creditado</option>
+              <option value="total">Ordenar: Total movimentado</option>
               <option value="potencial">Ordenar: Potencial</option>
               <option value="sem">Ordenar: Sem crédito primeiro</option>
               <option value="nome">Ordenar: Nome A-Z</option>
