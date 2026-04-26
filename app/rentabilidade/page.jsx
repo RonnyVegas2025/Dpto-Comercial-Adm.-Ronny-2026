@@ -109,6 +109,11 @@ export default function Rentabilidade() {
         return mov > 0 ? (sp / mov) * 100 : null;
       });
 
+      const mesesComMov = movVals.filter(v=>v>0).length;
+      const mediaMovimentacao = mesesComMov > 0 ? totalMov / mesesComMov : 0;
+      const mesesComSpread = vals.filter(v=>v>0).length;
+      const mediaSpreadMensal = mesesComSpread > 0 ? totalSpread / mesesComSpread : 0;
+
       return {
         ...e,
         vals,
@@ -117,7 +122,9 @@ export default function Rentabilidade() {
         totalMov,
         pctMedio,
         pctPorMes,
-        mediaSpread:  vals.filter(v=>v>0).length > 0 ? totalSpread/meses.length : 0,
+        mediaMovimentacao,
+        mediaSpreadMensal,
+        mediaSpread:  mediaSpreadMensal,
         ultimoSpread: vals[vals.length-1] || 0,
         temSpread:    totalSpread > 0,
         vendedor:     e.consultor_principal?.nome || '—',
@@ -300,6 +307,7 @@ export default function Rentabilidade() {
                   <th style={s.th}>Vendedor</th>
                   {meses.map(m=><th key={m} style={{ ...s.th, textAlign:'right' }}>{fmtMes(m)}</th>)}
                   <th style={{ ...s.th, textAlign:'right' }}>Total</th>
+                  <th style={{ ...s.th, textAlign:'right' }}>Méd. Mov.</th>
                   <th style={{ ...s.th, textAlign:'right' }}>% Spread</th>
                 </tr>
               </thead>
@@ -325,6 +333,11 @@ export default function Rentabilidade() {
                       {e.totalSpread>0?fmt(e.totalSpread):<span style={{ color:'#374151' }}>—</span>}
                     </td>
                     <td style={{ ...s.td, textAlign:'right' }}>
+                      {e.mediaMovimentacao>0
+                        ? <span style={{ color:'#60a5fa', fontWeight:500 }}>{fmt(e.mediaMovimentacao)}</span>
+                        : <span style={{ color:'#374151' }}>—</span>}
+                    </td>
+                    <td style={{ ...s.td, textAlign:'right' }}>
                       {e.pctMedio!=null ? <span style={{ color:e.pctMedio>1?'#34d399':e.pctMedio>0.5?'#f0b429':'#9ca3af', fontWeight:600 }}>{fmtPct(e.pctMedio)}</span> : <span style={{ color:'#374151' }}>—</span>}
                     </td>
                   </tr>
@@ -339,6 +352,9 @@ export default function Rentabilidade() {
                     return <td key={m} style={{ ...s.td, textAlign:'right', fontWeight:700, color:'#a78bfa', paddingTop:14 }}>{t>0?fmt(t):<span style={{ color:'#374151' }}>—</span>}</td>;
                   })}
                   <td style={{ ...s.td, textAlign:'right', fontWeight:700, color:'#a78bfa', paddingTop:14 }}>{fmt(listaFiltrada.reduce((s,e)=>s+e.totalSpread,0))}</td>
+                  <td style={{ ...s.td, textAlign:'right', fontWeight:700, color:'#60a5fa', paddingTop:14 }}>
+                    {kpis.totalMov > 0 ? fmt(kpis.totalMov / Math.max(meses.length,1)) : '—'}
+                  </td>
                   <td style={{ ...s.td, textAlign:'right', fontWeight:700, color:'#34d399', paddingTop:14 }}>{fmtPct(kpis.pctGeral)}</td>
                 </tr>
               </tfoot>
