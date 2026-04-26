@@ -58,9 +58,9 @@ export default function Rentabilidade() {
   async function carregar() {
     setLoading(true);
     const [{ data: sp }, { data: emps }, { data: libs }] = await Promise.all([
-      supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia'),
+      supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia').limit(10000),
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
-      supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+      supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia').limit(10000),
     ]);
     // Normaliza datas removendo parte de hora (Supabase pode retornar "2026-02-01T00:00:00")
     const normDate = (d) => d ? String(d).substring(0, 10) : d;
