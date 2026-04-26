@@ -261,7 +261,9 @@ export default function Evolucao() {
         .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo)`)
         .eq('ativo', true)
-        .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus', 'Convênio', 'Convenio', 'Mobilidade', 'Taxa Negativa']),
+        .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus', 'Convênio', 'Convenio', 'Mobilidade'])
+        .not('produto_contratado', 'ilike', '%desconto condicional%')
+        .not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
     setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
@@ -276,7 +278,9 @@ export default function Evolucao() {
     return m;
   }, [libs]);
 
-  const listaCompleta = useMemo(() => empresas.map(e => {
+  const listaCompleta = useMemo(() => empresas
+    .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa')
+    .map(e => {
     const vals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
     const totalCreditado = vals.reduce((s, v) => s + v, 0);
     const tend = tendencia(vals);
