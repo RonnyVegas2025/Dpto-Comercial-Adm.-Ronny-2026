@@ -40,6 +40,7 @@ export default function Rentabilidade() {
   const [loading, setLoading]   = useState(true);
   const [spreads, setSpreads]   = useState([]);
   const [empresas, setEmpresas] = useState([]);
+  const [libs,    setLibs]      = useState([]);
   const [meses,   setMeses]     = useState([]);
   const [aba,     setAba]       = useState('evolucao');
   const [pagina,  setPagina]    = useState(1);
@@ -56,17 +57,27 @@ export default function Rentabilidade() {
 
   async function carregar() {
     setLoading(true);
-    const [{ data: sp }, { data: emps }] = await Promise.all([
+    const [{ data: sp }, { data: emps }, { data: libs }] = await Promise.all([
       supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_total').order('competencia'),
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true),
+      supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
     setMeses([...new Set((sp||[]).map(s => s.competencia))].sort());
     setSpreads(sp || []);
     setEmpresas(emps || []);
+    setLibs(libs || []);
     setLoading(false);
   }
 
-  // Mapa spread: produto_id__competencia → valores
+  // Mapa movimentação: produto_id__competencia → total_liberado
+  const libMap = useMemo(() => {
+    const m = {};
+    for (const l of libs) {
+      const key = `${l.produto_id}__${l.competencia}`;
+      m[key] = (m[key] || 0) + l.total_liberado;
+    }
+    return m;
+  }, [libs]);
   const spreadMap = useMemo(() => {
     const m = {};
     for (const s of spreads) {
@@ -82,24 +93,38 @@ export default function Rentabilidade() {
   // Lista completa enriquecida
   const listaCompleta = useMemo(() => {
     return empresas.map(e => {
-      const vals = meses.map(m => spreadMap[`${e.produto_id}__${m}`]?.total || 0);
+      const vals    = meses.map(m => spreadMap[`${e.produto_id}__${m}`]?.total || 0);
+      const movVals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
+
       const totalSpread = vals.reduce((s,v) => s+v, 0);
-      const totalMov    = meses.length > 0 && e.potencial_movimentacao > 0 ? e.potencial_movimentacao * meses.length : 0;
-      const mediaSpread = vals.filter(v=>v>0).length > 0 ? vals.reduce((s,v)=>s+v,0)/meses.length : 0;
-      const pctMedio    = totalMov > 0 ? (totalSpread / totalMov) * 100 : null;
+      const totalMov    = movVals.reduce((s,v) => s+v, 0); // movimentação real
+
+      // % spread = spread total / movimentação real total
+      const pctMedio = totalMov > 0 ? (totalSpread / totalMov) * 100 : null;
+
+      // % por mês para exibir na tabela
+      const pctPorMes = meses.map((m, i) => {
+        const mov = movVals[i];
+        const sp  = vals[i];
+        return mov > 0 ? (sp / mov) * 100 : null;
+      });
+
       return {
         ...e,
         vals,
+        movVals,
         totalSpread,
-        mediaSpread,
+        totalMov,
         pctMedio,
+        pctPorMes,
+        mediaSpread:  vals.filter(v=>v>0).length > 0 ? totalSpread/meses.length : 0,
         ultimoSpread: vals[vals.length-1] || 0,
-        temSpread: totalSpread > 0,
-        vendedor: e.consultor_principal?.nome || '—',
-        gestor:   e.consultor_principal?.gestor || '—',
+        temSpread:    totalSpread > 0,
+        vendedor:     e.consultor_principal?.nome || '—',
+        gestor:       e.consultor_principal?.gestor || '—',
       };
     });
-  }, [empresas, meses, spreadMap]);
+  }, [empresas, meses, spreadMap, libMap]);
 
   // Opções de filtro
   const opcoes = useMemo(() => ({
@@ -129,20 +154,26 @@ export default function Rentabilidade() {
   const kpis = useMemo(() => {
     const total        = listaFiltrada.length;
     const totalSpread  = listaFiltrada.reduce((s,e)=>s+e.totalSpread,0);
+    const totalMov     = listaFiltrada.reduce((s,e)=>s+e.totalMov,0); // movimentação REAL (liberacoes)
     const comSpread    = listaFiltrada.filter(e=>e.temSpread).length;
-    const totalMov     = listaFiltrada.reduce((s,e)=>s+(e.potencial_movimentacao||0)*meses.length,0);
     const pctGeral     = totalMov > 0 ? (totalSpread/totalMov)*100 : 0;
     const spreadBandeira = spreads.filter(s => {
       const e = empresas.find(x=>x.produto_id===s.produto_id);
       return e?.produto_contratado?.toLowerCase().includes('vegas benef');
-    }).reduce((s,x)=>s+x.spread_bandeira,0);
-    const porMes = meses.map(m => ({
-      mes: m,
-      total: listaFiltrada.reduce((s,e)=>s+(spreadMap[`${e.produto_id}__${m}`]?.total||0),0),
-      empresas: listaFiltrada.filter(e=>(spreadMap[`${e.produto_id}__${m}`]?.total||0)>0).length,
-    }));
-    return { total, totalSpread, comSpread, pctGeral, spreadBandeira, porMes };
-  }, [listaFiltrada, meses, spreadMap, spreads, empresas]);
+    }).reduce((s,x)=>s+(x.spread_bandeira||0),0);
+    const porMes = meses.map(m => {
+      const totMesSpread = listaFiltrada.reduce((s,e)=>s+(spreadMap[`${e.produto_id}__${m}`]?.total||0),0);
+      const totMesMov    = listaFiltrada.reduce((s,e)=>s+(libMap[`${e.produto_id}__${m}`]||0),0);
+      return {
+        mes: m,
+        total:    totMesSpread,
+        mov:      totMesMov,
+        pct:      totMesMov > 0 ? (totMesSpread/totMesMov)*100 : 0,
+        empresas: listaFiltrada.filter(e=>(spreadMap[`${e.produto_id}__${m}`]?.total||0)>0).length,
+      };
+    });
+    return { total, totalSpread, totalMov, comSpread, pctGeral, spreadBandeira, porMes };
+  }, [listaFiltrada, meses, spreadMap, libMap, spreads, empresas]);
 
   // Paginação
   const totalPaginas = Math.ceil(listaFiltrada.length / POR_PAGINA);
@@ -196,7 +227,8 @@ export default function Rentabilidade() {
         <div style={{ ...s.kpi, borderColor:'rgba(52,211,153,0.35)' }}>
           <span style={s.kpiLabel}>% Spread Médio</span>
           <span style={{ ...s.kpiVal, color:'#34d399' }}>{fmtPct(kpis.pctGeral)}</span>
-          <span style={s.kpiSub}>sobre o potencial</span>
+          <span style={s.kpiSub}>spread ÷ movimentação real</span>
+          {kpis.totalMov > 0 && <span style={{ color:'#4b5563', fontSize:'0.68rem' }}>mov: {fmt(kpis.totalMov)}</span>}
         </div>
         <div style={{ ...s.kpi, borderColor:'rgba(240,180,41,0.35)' }}>
           <span style={s.kpiLabel}>Bandeira Vegas Benef.</span>
@@ -326,11 +358,18 @@ export default function Rentabilidade() {
                 <div style={{ display:'inline-block', background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.3)', color:'#a78bfa', borderRadius:8, padding:'4px 12px', fontSize:'0.85rem', fontWeight:700, marginBottom:12 }}>{fmtMes(m.mes)}</div>
                 <div style={{ fontSize:'1.5rem', fontWeight:700, color:'#a78bfa', marginBottom:4 }}>{fmt(m.total)}</div>
                 <div style={{ color:'#9ca3af', fontSize:'0.8rem' }}>{m.empresas} empresas com spread</div>
+                {m.mov > 0 && (
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
+                    <span style={{ color:'#34d399', fontWeight:700, fontSize:'1rem' }}>{fmtPct(m.pct)}</span>
+                    <span style={{ color:'#4b5563', fontSize:'0.72rem' }}>spread / movimentação</span>
+                  </div>
+                )}
+                {m.mov > 0 && <div style={{ color:'#6b7280', fontSize:'0.7rem', marginTop:2 }}>mov: {fmt(m.mov)}</div>}
                 <div style={{ marginTop:10 }}>
                   <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:6, overflow:'hidden' }}>
                     <div style={{ background:'#a78bfa', height:'100%', width:`${kpis.totalSpread>0?(m.total/kpis.totalSpread)*100:0}%` }}></div>
                   </div>
-                  <div style={{ color:'#6b7280', fontSize:'0.72rem', marginTop:4 }}>{kpis.totalSpread>0?fmtPct((m.total/kpis.totalSpread)*100):'0%'} do total</div>
+                  <div style={{ color:'#6b7280', fontSize:'0.72rem', marginTop:4 }}>{kpis.totalSpread>0?fmtPct((m.total/kpis.totalSpread)*100):'0%'} do spread total</div>
                 </div>
               </div>
             ))}
@@ -397,4 +436,3 @@ const s = {
   td:       { padding:'10px 12px', borderBottom:'1px solid rgba(255,255,255,0.04)', whiteSpace:'nowrap' },
   spin:     { width:40, height:40, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #a78bfa', borderRadius:'50%', margin:'0 auto 20px', animation:'spin 0.8s linear infinite' },
 };
-
