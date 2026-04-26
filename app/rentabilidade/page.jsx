@@ -58,7 +58,7 @@ export default function Rentabilidade() {
   async function carregar() {
     setLoading(true);
     const [{ data: sp }, { data: emps }, { data: libs }] = await Promise.all([
-      supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_total').order('competencia'),
+      supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia'),
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
@@ -82,9 +82,10 @@ export default function Rentabilidade() {
     const m = {};
     for (const s of spreads) {
       m[`${s.produto_id}__${s.competencia}`] = {
-        planilha: s.spread_planilha,
-        bandeira: s.spread_bandeira,
-        total:    s.spread_total,
+        planilha:  s.spread_planilha,
+        bandeira:  s.spread_bandeira,
+        negativo:  s.spread_negativo || 0,
+        total:     s.spread_total,
       };
     }
     return m;
@@ -318,13 +319,16 @@ export default function Rentabilidade() {
                     <td style={{ ...s.td, color:'#9ca3af', fontSize:'0.78rem' }}>{e.produto_contratado||'—'}</td>
                     <td style={{ ...s.td, fontSize:'0.78rem' }}>{e.vendedor}</td>
                     {meses.map(m => {
-                      const v = spreadMap[`${e.produto_id}__${m}`]?.total || 0;
-                      const band = spreadMap[`${e.produto_id}__${m}`]?.bandeira || 0;
+                      const sp   = spreadMap[`${e.produto_id}__${m}`];
+                      const v    = sp?.total || 0;
+                      const band = sp?.bandeira || 0;
+                      const neg  = sp?.negativo || 0;
                       return <td key={m} style={{ ...s.td, textAlign:'right' }}>
-                        {v>0 ? (
+                        {v>0 || band>0 ? (
                           <div>
-                            <div style={{ color:'#a78bfa', fontWeight:500 }}>{fmt(v)}</div>
+                            <div style={{ color:'#a78bfa', fontWeight:500 }}>{v>0?fmt(v):fmt(band)}</div>
                             {band>0 && <div style={{ color:'#f0b429', fontSize:'0.68rem' }}>+{fmt(band)} bdra</div>}
+                            {neg>0  && <div style={{ color:'#f87171', fontSize:'0.68rem' }}>-{fmt(neg)} neg</div>}
                           </div>
                         ) : <span style={{ color:'#374151' }}>—</span>}
                       </td>;
