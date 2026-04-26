@@ -62,11 +62,14 @@ export default function Rentabilidade() {
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
-    setMeses([...new Set((sp||[]).map(s => s.competencia))].sort());
-    // spreads has all 3 months regardless of spread_total > 0
-    setSpreads(sp || []);
+    // Normaliza datas removendo parte de hora (Supabase pode retornar "2026-02-01T00:00:00")
+    const normDate = (d) => d ? String(d).substring(0, 10) : d;
+    const spNorm = (sp||[]).map(s => ({...s, competencia: normDate(s.competencia)}));
+    const libsNorm = (libs||[]).map(l => ({...l, competencia: normDate(l.competencia)}));
+    setMeses([...new Set(spNorm.map(s => s.competencia))].sort());
+    setSpreads(spNorm);
+    setLibs(libsNorm);
     setEmpresas(emps || []);
-    setLibs(libs || []);
     setLoading(false);
   }
 
