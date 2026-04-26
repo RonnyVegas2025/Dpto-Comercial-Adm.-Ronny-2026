@@ -59,10 +59,11 @@ export default function Rentabilidade() {
     setLoading(true);
     const [{ data: sp }, { data: emps }, { data: libs }] = await Promise.all([
       supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia'),
-      supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true),
+      supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
     ]);
     setMeses([...new Set((sp||[]).map(s => s.competencia))].sort());
+    // spreads has all 3 months regardless of spread_total > 0
     setSpreads(sp || []);
     setEmpresas(emps || []);
     setLibs(libs || []);
@@ -93,8 +94,12 @@ export default function Rentabilidade() {
 
   // Lista completa enriquecida
   const listaCompleta = useMemo(() => {
-    return empresas.map(e => {
-      const vals    = meses.map(m => spreadMap[`${e.produto_id}__${m}`]?.total || 0);
+    return empresas
+      .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa')
+      .map(e => {
+      // spread_total = planilha + bandeira - negativo (can be negative for taxa negativa companies)
+      // Use max(0, spread_total) for display but show breakdown
+      const vals    = meses.map(m => Math.max(0, spreadMap[`${e.produto_id}__${m}`]?.total || 0));
       const movVals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
 
       const totalSpread = vals.reduce((s,v) => s+v, 0);
@@ -160,7 +165,9 @@ export default function Rentabilidade() {
 
   // KPIs
   const kpis = useMemo(() => {
-    const total        = listaFiltrada.length;
+    const total           = listaFiltrada.length;
+    const totalSpreadBruto = listaFiltrada.reduce((s,e)=>s+e.vals.reduce((ss,v)=>ss+Math.max(0,v),0)+meses.reduce((ss,m)=>ss+(spreadMap[`${e.produto_id}__${m}`]?.bandeira||0),0),0);
+    const totalNegativo    = listaFiltrada.reduce((s,e)=>s+meses.reduce((ss,m)=>ss+(spreadMap[`${e.produto_id}__${m}`]?.negativo||0),0),0);
     const totalSpread  = listaFiltrada.reduce((s,e)=>s+e.totalSpread,0);
     const totalMov     = listaFiltrada.reduce((s,e)=>s+e.totalMov,0); // movimentação REAL (liberacoes)
     const comSpread    = listaFiltrada.filter(e=>e.temSpread).length;
@@ -180,7 +187,7 @@ export default function Rentabilidade() {
         empresas: listaFiltrada.filter(e=>(spreadMap[`${e.produto_id}__${m}`]?.total||0)>0).length,
       };
     });
-    return { total, totalSpread, totalMov, comSpread, pctGeral, spreadBandeira, porMes };
+    return { total, totalSpread, totalSpreadBruto, totalNegativo, totalMov, comSpread, pctGeral, spreadBandeira, porMes };
   }, [listaFiltrada, meses, spreadMap, libMap, spreads, empresas]);
 
   // Paginação
@@ -228,9 +235,19 @@ export default function Rentabilidade() {
           <span style={s.kpiSub}>{kpis.comSpread} com spread</span>
         </div>
         <div style={{ ...s.kpi, borderColor:'rgba(167,139,250,0.35)' }}>
-          <span style={s.kpiLabel}>Total Spread</span>
-          <span style={{ ...s.kpiVal, color:'#a78bfa' }}>{fmt(kpis.totalSpread)}</span>
-          <span style={s.kpiSub}>{meses.length} meses</span>
+          <span style={s.kpiLabel}>Spread Bruto</span>
+          <span style={{ ...s.kpiVal, color:'#a78bfa' }}>{fmt(kpis.totalSpreadBruto)}</span>
+          <span style={s.kpiSub}>{meses.length} meses de dados</span>
+        </div>
+        <div style={{ ...s.kpi, borderColor:'rgba(248,113,113,0.35)' }}>
+          <span style={s.kpiLabel}>Taxa Negativa (custo)</span>
+          <span style={{ ...s.kpiVal, color:'#f87171' }}>-{fmt(kpis.totalNegativo)}</span>
+          <span style={s.kpiSub}>pago ao cliente</span>
+        </div>
+        <div style={{ ...s.kpi, borderColor:'rgba(52,211,153,0.35)' }}>
+          <span style={s.kpiLabel}>Spread Líquido</span>
+          <span style={{ ...s.kpiVal, color:'#34d399' }}>{fmt(kpis.totalSpread)}</span>
+          <span style={s.kpiSub}>bruto - taxa negativa</span>
         </div>
         <div style={{ ...s.kpi, borderColor:'rgba(52,211,153,0.35)' }}>
           <span style={s.kpiLabel}>% Spread Médio</span>
