@@ -243,6 +243,7 @@ function TabelaCruzamento({ lista, meses }) {
 export default function Evolucao() {
   const [loading, setLoading]   = useState(true);
   const [xlsxLib, setXlsxLib] = useState(null);
+  const [ajustes, setAjustes]           = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [libs, setLibs]         = useState([]);
   const [meses, setMeses]       = useState([]);
@@ -267,7 +268,7 @@ export default function Evolucao() {
 
   async function carregar() {
     setLoading(true);
-    const [{ data: emps }, { data: libsData }] = await Promise.all([
+    const [{ data: emps }, { data: libsData }, { data: ajustes }] = await Promise.all([
       supabase
         .from('empresas')
         .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
@@ -280,10 +281,12 @@ export default function Evolucao() {
         .not('produto_contratado', 'ilike', '%desconto condicional%')
         .not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+      supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
     ]);
     setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
     setEmpresas(emps || []);
     setLibs(libsData || []);
+    setAjustes(ajustes || []);
     setLoading(false);
   }
 
@@ -293,13 +296,27 @@ export default function Evolucao() {
     return m;
   }, [libs]);
 
+  // Mapa de ajustes: empresa_id__competencia → valor_considerado
+  const ajusteMap = useMemo(() => {
+    const m = {};
+    for (const a of ajustes) {
+      const comp = a.competencia?.substring(0,10);
+      m[`${a.empresa_id}__${comp}`] = a.valor_considerado;
+    }
+    return m;
+  }, [ajustes]);
+
   const listaCompleta = useMemo(() => {
     const baseEmpresas = empresas
       .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa');
 
     const expanded = [];
     for (const e of baseEmpresas) {
-      const valsBase = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
+      const valsBase = meses.map(m => {
+        const comp = m?.substring(0,10);
+        const ajustado = ajusteMap[`${e.id}__${comp}`];
+        return ajustado !== undefined ? ajustado : (libMap[`${e.produto_id}__${m}`] || 0);
+      });
       const totalBase = valsBase.reduce((s, v) => s + v, 0);
       const tend = tendencia(valsBase);
 
