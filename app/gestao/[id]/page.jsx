@@ -66,8 +66,16 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   async function carregar() {
     setLoading(true);
+    // ETAPA 1: busca empresa primeiro para ter o produto_id
+    const { data: emp } = await supabase.from('empresas').select(`
+        *, consultor_principal:consultor_principal_id(id,nome,gestor),
+        consultor_agregado:consultor_agregado_id(id,nome),
+        consultor_agregado_2:consultor_agregado_2_id(id,nome),
+        parceiro:parceiro_id(id,nome)
+      `).eq('id', id).single();
+
+    // ETAPA 2: busca o restante em paralelo usando produto_id da empresa
     const [
-      { data: emp },
       { data: cons },
       { data: parc },
       { data: prods },
@@ -75,18 +83,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
       { data: movs },
       { data: ajms, error: ajmError },
     ] = await Promise.all([
-      supabase.from('empresas').select(`
-        *, consultor_principal:consultor_principal_id(id,nome,gestor),
-        consultor_agregado:consultor_agregado_id(id,nome),
-        consultor_agregado_2:consultor_agregado_2_id(id,nome),
-        parceiro:parceiro_id(id,nome)
-      `).eq('id', id).single(),
       supabase.from('consultores').select('id,nome,gestor').eq('ativo',true).order('nome'),
       supabase.from('parceiros').select('id,nome').order('nome'),
       supabase.from('produtos').select('id,nome,peso').order('nome'),
       supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
       supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id || 0).order('competencia'),
-      supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia').throwOnError(false),
+      supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
     ]);
 
     setEmpresa(emp);
@@ -95,7 +97,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
     setProdutos(prods||[]);
     setHistorico(hist||[]);
     setMovimentos(movs||[]);
-    setAjustes(ajmError ? [] : (ajms||[])); // tabela pode não existir ainda
+    setAjustes(ajmError ? [] : (ajms||[]));
 
     if(emp) setForm({
       potencial_movimentacao: emp.potencial_movimentacao||0,
