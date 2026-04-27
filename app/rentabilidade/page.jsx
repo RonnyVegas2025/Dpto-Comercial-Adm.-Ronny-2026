@@ -62,8 +62,17 @@ export default function Rentabilidade() {
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia').limit(10000),
     ]);
-    // Normaliza datas removendo parte de hora (Supabase pode retornar "2026-02-01T00:00:00")
-    const normDate = (d) => d ? String(d).substring(0, 10) : d;
+    // Normaliza datas — Supabase pode retornar Date object, "2026-03-01T00:00:00" ou "2026-03-01"
+    const normDate = (d) => {
+      if (!d) return d;
+      if (d instanceof Date) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
+      }
+      const s = String(d);
+      // Formato ISO: "2026-03-01T00:00:00" ou "2026-03-01"
+      if (s.match(/^\d{4}-\d{2}/)) return s.substring(0, 7) + '-01';
+      return s;
+    };
     const spNorm = (sp||[]).map(s => ({...s, competencia: normDate(s.competencia)}));
     const libsNorm = (libs||[]).map(l => ({...l, competencia: normDate(l.competencia)}));
     setMeses([...new Set(spNorm.map(s => s.competencia))].sort());
