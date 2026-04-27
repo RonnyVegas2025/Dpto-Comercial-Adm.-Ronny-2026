@@ -73,7 +73,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       { data: prods },
       { data: hist },
       { data: movs },
-      { data: ajms },
+      { data: ajms, error: ajmError },
     ] = await Promise.all([
       supabase.from('empresas').select(`
         *, consultor_principal:consultor_principal_id(id,nome,gestor),
@@ -86,7 +86,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('produtos').select('id,nome,peso').order('nome'),
       supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
       supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id || 0).order('competencia'),
-      supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
+      supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia').throwOnError(false),
     ]);
 
     setEmpresa(emp);
@@ -95,7 +95,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
     setProdutos(prods||[]);
     setHistorico(hist||[]);
     setMovimentos(movs||[]);
-    setAjustes(ajms||[]);
+    setAjustes(ajmError ? [] : (ajms||[])); // tabela pode não existir ainda
 
     if(emp) setForm({
       potencial_movimentacao: emp.potencial_movimentacao||0,
