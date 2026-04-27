@@ -363,6 +363,44 @@ export default function Evolucao() {
     filtroVendedor !== 'todos' || filtroCategoria !== 'todos' || filtroProduto !== 'todos' ||
     filtroStatus !== 'todos' || filtroTend !== 'todos' || busca.trim();
 
+  function exportarExcel() {
+    if (!xlsxLib) return;
+    const headers = ['ID', 'Empresa', 'Categoria', 'Produto', 'Vendedor', 'Gestor', 'Diretor'];
+    meses.forEach(m => headers.push(fmtMes(m)));
+    headers.push('Total Movimentado', 'Status');
+
+    const rows = listaFiltrada.map(e => {
+      const row = [
+        e.produto_id, e.nome, e.categoria, e.produto, e.vendedor, e.gestor, e.diretor,
+      ];
+      let total = 0;
+      meses.forEach(m => {
+        const v = libMap[`${e.produto_id}__${m}`] || 0;
+        total += v;
+        row.push(v > 0 ? v : 0);
+      });
+      row.push(total);
+      row.push(e.creditou ? 'Movimentou' : 'Sem movimentação');
+      return row;
+    });
+
+    // Linha de totais
+    const totRow = ['', 'TOTAL', '', '', '', '', ''];
+    meses.forEach(m => {
+      const t = listaFiltrada.reduce((s,e)=>s+(libMap[`${e.produto_id}__${m}`]||0),0);
+      totRow.push(t);
+    });
+    totRow.push(listaFiltrada.reduce((s,e)=>s+e.totalCreditado,0));
+    totRow.push('');
+    rows.push(totRow);
+
+    const ws = xlsxLib.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map((_,i) => ({ wch: i < 7 ? 20 : 16 }));
+    const wb = xlsxLib.utils.book_new();
+    xlsxLib.utils.book_append_sheet(wb, ws, 'Evolução');
+    xlsxLib.writeFile(wb, `evolucao-novas-empresas-${new Date().toISOString().substring(0,10)}.xlsx`);
+  }
+
   if (loading) return (
     <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <div style={{ textAlign: 'center' }}><div style={s.spin}></div><div style={{ color: '#6b7280' }}>Carregando...</div></div>
@@ -391,7 +429,10 @@ export default function Evolucao() {
           <p style={s.sub}>Todas as categorias — acompanhe quem movimentou e quem ainda não movimentou</p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
+          <button onClick={exportarExcel} disabled={!xlsxLib || listaFiltrada.length===0} style={{ ...s.linkBtnGreen, background:'rgba(52,211,153,0.08)', borderColor:'rgba(52,211,153,0.2)', color:'#34d399', cursor:'pointer', border:'1px solid rgba(52,211,153,0.2)', fontFamily:'inherit', opacity: (!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
+          📥 Exportar Excel ({listaFiltrada.length})
+        </button>
+        <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
           <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color: '#60a5fa', borderColor: 'rgba(96,165,250,0.2)', background: 'rgba(96,165,250,0.08)' }}>💳 Importar Liberações</a>
         </div>
       </div>
