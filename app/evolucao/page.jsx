@@ -101,7 +101,7 @@ function TabelaEvolucao({ lista, meses, libMap }) {
   useEffect(() => { setPagina(1); }, [lista.length]);
   const totalPaginas = Math.ceil(lista.length / POR_PAGINA);
   const listaPagina  = lista.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
-  const totaisMes    = meses.map(m => lista.reduce((s, e) => s + (libMap[`${e.produto_id}__${m}`] || 0), 0));
+  const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + (e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
 
   return (
@@ -143,7 +143,7 @@ function TabelaEvolucao({ lista, meses, libMap }) {
                   </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
                   {meses.map(m => {
-                    const v = libMap[`${e.produto_id}__${m}`] || 0;
+                    const mi = meses.indexOf(m); const v = e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0);
                     return <td key={m} style={{ ...s.td, textAlign: 'right' }}>{v > 0 ? <span style={{ color: '#34d399', fontWeight: 500 }}>{fmt(v)}</span> : <span style={{ color: '#374151' }}>—</span>}</td>;
                   })}
                   <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>{e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}</td>
@@ -388,8 +388,8 @@ export default function Evolucao() {
     const pctAtivacao = total > 0 ? (creditaram / total) * 100 : 0;
     const porMes      = meses.map(m => ({
       mes: m,
-      total:    listaFiltrada.reduce((s, e) => s + (libMap[`${e.produto_id}__${m}`] || 0), 0),
-      empresas: listaFiltrada.filter(e => (libMap[`${e.produto_id}__${m}`] || 0) > 0).length,
+      total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+(e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0)); }, 0),
+      empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return (e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0))>0; }).length,
     }));
     return { total, creditaram, semCredito, totalCred, crescendo, pctAtivacao, porMes };
   }, [listaFiltrada, meses, libMap]);
@@ -417,7 +417,7 @@ export default function Evolucao() {
       ];
       let total = 0;
       meses.forEach(m => {
-        const v = libMap[`${e.produto_id}__${m}`] || 0;
+        const mi2 = meses.indexOf(m); const v = e.vals?.[mi2] ?? (libMap[`${e.produto_id}__${m}`] || 0);
         total += v;
         row.push(v > 0 ? v : 0);
       });
