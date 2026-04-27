@@ -81,7 +81,19 @@ export default function Rentabilidade() {
     };
     const spNorm = (sp||[]).map(s => ({...s, competencia: normDate(s.competencia)}));
     const libsNorm = (libs||[]).map(l => ({...l, competencia: normDate(l.competencia)}));
-    setMeses([...new Set(spNorm.map(s => s.competencia))].sort());
+    const mesesDetectados = [...new Set(spNorm.map(s => s.competencia))].sort();
+    console.log('=== DEBUG SPREADS ===');
+    console.log('Total spreads recebidos:', (sp||[]).length);
+    console.log('Primeiro spread raw:', sp?.[0]);
+    console.log('Primeiro spread competencia raw:', sp?.[0]?.competencia, typeof sp?.[0]?.competencia);
+    console.log('Primeiro spread competencia norm:', spNorm?.[0]?.competencia);
+    console.log('Meses detectados:', mesesDetectados);
+    console.log('Spreads por mês:', mesesDetectados.map(m => ({
+      mes: m,
+      count: spNorm.filter(s => s.competencia === m).length,
+      total: spNorm.filter(s => s.competencia === m).reduce((sum,s) => sum + (s.spread_planilha||0), 0)
+    })));
+    setMeses(mesesDetectados);
     setSpreads(spNorm);
     setLibs(libsNorm);
     setEmpresas(emps || []);
