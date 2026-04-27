@@ -55,12 +55,25 @@ export default function Rentabilidade() {
   useEffect(() => { carregar(); }, []);
   useEffect(() => { setPagina(1); }, [busca, filtroCategoria, filtroProduto, filtroGestor, filtroVendedor, ordenar]);
 
+  async function fetchAll(query) {
+    // Busca todos os registros usando paginação (Supabase limita 1000 por vez)
+    let all = [], from = 0, pageSize = 1000;
+    while (true) {
+      const { data, error } = await query.range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      all = [...all, ...data];
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }
+
   async function carregar() {
     setLoading(true);
-    const [{ data: sp }, { data: emps }, { data: libs }] = await Promise.all([
-      supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia').limit(10000),
-      supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
-      supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia').limit(10000),
+    const [sp, emps, libs] = await Promise.all([
+      fetchAll(supabase.from('spreads').select('produto_id, empresa_nome, competencia, spread_planilha, spread_bandeira, spread_negativo, spread_total').order('competencia')),
+      fetchAll(supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa')),
+      fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
     ]);
     // Normaliza datas para formato YYYY-MM-01
     const normDate = (d) => {
