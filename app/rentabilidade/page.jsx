@@ -38,6 +38,7 @@ function Paginacao({ pagina, total, onChange }) {
 
 export default function Rentabilidade() {
   const [loading, setLoading]   = useState(true);
+  const [xlsxLib, setXlsxLib] = useState(null);
   const [spreads, setSpreads]   = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [libs,    setLibs]      = useState([]);
@@ -53,6 +54,7 @@ export default function Rentabilidade() {
   const [ordenar,         setOrdenar]         = useState('ultimo');
 
   useEffect(() => { carregar(); }, []);
+  useEffect(() => { import('xlsx').then(m => setXlsxLib(m.default || m)); }, []);
   useEffect(() => { setPagina(1); }, [busca, filtroCategoria, filtroProduto, filtroGestor, filtroVendedor, ordenar]);
 
   async function fetchAll(query) {
