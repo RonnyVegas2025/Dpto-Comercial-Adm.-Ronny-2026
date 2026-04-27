@@ -132,7 +132,14 @@ function TabelaEvolucao({ lista, meses, libMap }) {
               const ts = TEND[e.tend];
               return (
                 <tr key={e.produto_id} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', opacity: !e.creditou ? 0.6 : 1 }}>
-                  <td style={s.td}><div style={{ fontWeight: 600 }}>{e.nome}</div><div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div></td>
+                  <td style={s.td}>
+                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer' }}
+                      onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                      onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                      {e.nome}
+                    </a>
+                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                  </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
                   <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>
                   <td style={{ ...s.td, fontSize: '0.78rem' }}>
@@ -198,7 +205,14 @@ function TabelaCruzamento({ lista, meses }) {
               const stLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
               return (
                 <tr key={e.produto_id} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
-                  <td style={s.td}><div style={{ fontWeight: 600 }}>{e.nome}</div><div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div></td>
+                  <td style={s.td}>
+                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer' }}
+                      onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                      onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                      {e.nome}
+                    </a>
+                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                  </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
                   <td style={{ ...s.td, fontSize: '0.78rem' }}>
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
