@@ -43,7 +43,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [form,       setForm]       = useState(null);
   const [historico,  setHistorico]  = useState([]);
   const [movimentos, setMovimentos] = useState([]);
-  const [ajustes,    setAjustes]    = useState([]); // ajustes de valor por mês
+  const [ajustes,    setAjustes]    = useState([]);
+  const [valorMetas, setValorMetas] = useState([]); // ajustes de valor por mês
   const [editandoMes, setEditandoMes] = useState(null); // competencia em edição
   const [ajusteForm, setAjusteForm] = useState({ valor:'', motivo:'upsell', observacao:'' });
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
@@ -89,6 +90,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
       supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id || 0).order('competencia'),
       supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
+      supabase.from('valor_meta_empresa').select('*').eq('empresa_id', id),
     ]);
 
     setEmpresa(emp);
@@ -569,9 +571,29 @@ export default function GestaoEmpresaDetalhe({ params }) {
       {/* ── ABA: MOVIMENTAÇÃO ─────────────────────────── */}
       {abaAtiva==='movimentos' && (
         <div style={sp.card}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:12}}>
             <div style={sp.cardTitle}>📊 Histórico de Movimentação</div>
-            <div style={{color:'#8b92b0',fontSize:'0.75rem'}}>Clique em ✏️ para ajustar o valor considerado no resultado</div>
+            <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+              {/* Valor que entrou na Meta */}
+              {valorMetas.length > 0 && valorMetas.map(vm => {
+                const fmtMesLocal = (d) => { if(!d) return '—'; const [y,m]=String(d).substring(0,7).split('-'); return `${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m)-1]}/${y}`; };
+                return (
+                  <div key={vm.id} style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:8,padding:'6px 14px',display:'flex',gap:10,alignItems:'center'}}>
+                    <div>
+                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>
+                        🎯 Apurado na Meta {vm.regra==='beneficio'?'(1ª recarga)':'(3º mês)'}
+                      </div>
+                      <div style={{fontWeight:700,color:'#16a34a',fontSize:'0.95rem'}}>{Number(vm.valor_meta||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div>
+                      <div style={{color:'#9ca3af',fontSize:'0.65rem'}}>
+                        {fmtMesLocal(vm.competencia_meta)} · {vm.pct_consultor}% do consultor
+                        {vm.valor_considerado !== vm.valor_bruto && ` · ajustado de ${Number(vm.valor_bruto).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{color:'#8b92b0',fontSize:'0.75rem'}}>Clique em ✏️ para ajustar o valor considerado</div>
+            </div>
           </div>
           {movimentos.length===0 ? (
             <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
