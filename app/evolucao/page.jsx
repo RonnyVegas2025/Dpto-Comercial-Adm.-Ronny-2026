@@ -232,6 +232,7 @@ function TabelaCruzamento({ lista, meses }) {
 // ─── Página principal ────────────────────────────────────────────────────────
 export default function Evolucao() {
   const [loading, setLoading]   = useState(true);
+  const [xlsxLib, setXlsxLib] = useState(null);
   const [empresas, setEmpresas] = useState([]);
   const [libs, setLibs]         = useState([]);
   const [meses, setMeses]       = useState([]);
@@ -249,6 +250,7 @@ export default function Evolucao() {
   const [ordenar, setOrdenar]                 = useState('ultimo');
 
   useEffect(() => { carregar(); }, []);
+  useEffect(() => { import('xlsx').then(m => setXlsxLib(m.default || m)); }, []);
   // Cascata: ao mudar diretor → reset gestor e vendedor; ao mudar gestor → reset vendedor
   useEffect(() => { setFiltroGestor('todos'); setFiltroVendedor('todos'); }, [filtroDiretor]);
   useEffect(() => { setFiltroVendedor('todos'); }, [filtroGestor]);
