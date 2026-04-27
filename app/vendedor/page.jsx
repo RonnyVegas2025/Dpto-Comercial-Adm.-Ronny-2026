@@ -61,6 +61,55 @@ export default function DashboardVendedor() {
     setMeses(ms);
   }
 
+    // Calcula o valor que entra na meta para uma empresa/consultor
+  async function calcularEGravarMeta(e, consId, pct, libsTodasMap, ajusteMap) {
+    const catLower = (e.categoria||'').toLowerCase();
+    const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
+    const isConv   = catLower.includes('conv') || catLower.includes('mobil');
+    if (!isBenef && !isConv) return null;
+
+    const libsOrdenadas = (libsTodasMap[e.produto_id]||[])
+      .filter(l => l.val > 0)
+      .sort((a,b) => a.comp.localeCompare(b.comp));
+
+    if (libsOrdenadas.length === 0) return null;
+
+    let mesAlvo = null, mesSeq = 0, valorBruto = 0;
+
+    if (isBenef) {
+      // 1ª recarga
+      mesAlvo   = libsOrdenadas[0].comp;
+      mesSeq    = 1;
+      valorBruto = libsOrdenadas[0].val;
+    } else if (isConv) {
+      // 3º mês com movimentação
+      if (libsOrdenadas.length < 3) return null;
+      mesAlvo    = libsOrdenadas[2].comp;
+      mesSeq     = 3;
+      valorBruto = libsOrdenadas[2].val;
+    }
+
+    if (!mesAlvo) return null;
+
+    // Verifica se há ajuste para esse mês
+    const ajuste = ajusteMap[`${e.id}__${mesAlvo}`];
+    const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
+    const valorMeta = Math.round(valorConsiderado * (pct/100) * 100) / 100;
+
+    return {
+      empresa_id:       e.id,
+      produto_id:       e.produto_id,
+      consultor_id:     consId,
+      competencia_meta: mesAlvo,
+      valor_bruto:      valorBruto,
+      valor_considerado: valorConsiderado,
+      valor_meta:       valorMeta,
+      pct_consultor:    pct,
+      regra:            isBenef ? 'beneficio' : 'convenio',
+      mes_sequencia:    mesSeq,
+    };
+  }
+
   async function carregarDados() {
     setLoading(true); setDados(null);
     try {
@@ -93,7 +142,7 @@ export default function DashboardVendedor() {
       const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
       const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
 
-      const [libs, ajustes] = await Promise.all([
+      const [libs, ajustes, vmetas, libsTodas] = await Promise.all([
         prodIds.length ? fetchAll(
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id',prodIds).gte('competencia',mesInicio).lte('competencia',mesFim)
@@ -101,6 +150,15 @@ export default function DashboardVendedor() {
         empIds.length ? fetchAll(
           supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado')
             .in('empresa_id',empIds)
+        ) : Promise.resolve([]),
+        empIds.length ? fetchAll(
+          supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_bruto,valor_considerado,pct_consultor,regra,mes_sequencia')
+            .in('empresa_id',empIds)
+        ) : Promise.resolve([]),
+        // Todas as liberações (sem filtro de mês) para calcular sequência
+        prodIds.length ? fetchAll(
+          supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
+            .in('produto_id',prodIds).order('competencia')
         ) : Promise.resolve([]),
       ]);
 
@@ -113,6 +171,18 @@ export default function DashboardVendedor() {
       const ajusteMap = {}; // empresa_id__comp → valor_considerado
       for (const a of ajustes) {
         ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`] = a.valor_considerado;
+      }
+      // Mapa todas libs por produto_id → meses ordenados
+      const libsTodasMap = {}; // produto_id → [{comp, val}] ordenado
+      for (const l of libsTodas) {
+        const pid = l.produto_id;
+        if (!libsTodasMap[pid]) libsTodasMap[pid] = [];
+        libsTodasMap[pid].push({ comp: l.competencia?.substring(0,10), val: l.total_liberado||0 });
+      }
+      // Mapa valor_meta por empresa_id__consultor_id
+      const vmetaMap = {}; // empresa_id__consultor_id → valor_meta entry
+      for (const v of vmetas) {
+        vmetaMap[`${v.empresa_id}__${v.consultor_id}`] = v;
       }
 
       // Meses disponíveis
@@ -172,13 +242,19 @@ export default function DashboardVendedor() {
           if (aderencia >= 50 && aderencia < 90) situacao = 'dentro do esperado';
           if (aderencia >= 90) situacao = 'acima do esperado';
 
+          // Valor de meta para esta empresa/consultor
+          const vmEntry = vmetaMap[`${e.id}__${cons.id}`];
+          const valorMetaEmpresa = vmEntry?.valor_meta || 0;
+          const metaComp         = vmEntry?.competencia_meta || null;
+          const metaRegra        = vmEntry?.regra || null;
+
           listaProcessada.push({
             ...e,
-            _key:        `${e.id}__${cons.id}`,
-            _cons:       cons,
-            _pct:        pct,
-            vendedor:    cons.nome,
-            gestor:      cons.gestor || '—',
+            _key:             `${e.id}__${cons.id}`,
+            _cons:            cons,
+            _pct:             pct,
+            vendedor:         cons.nome,
+            gestor:           cons.gestor || '—',
             movPorMes,
             totalMov,
             mediaMovMes,
@@ -186,6 +262,9 @@ export default function DashboardVendedor() {
             esperadoMes,
             aderencia,
             situacao,
+            valorMeta:        valorMetaEmpresa,   // valor que entrou na meta
+            metaComp,                              // mês que gerou a meta
+            metaRegra,                             // beneficio ou convenio
           });
         }
       }
@@ -193,6 +272,7 @@ export default function DashboardVendedor() {
       // ─── KPIs ─────────────────────────────────────────────────────────
       const totalMovReal    = listaProcessada.reduce((s,e)=>s+e.totalMov, 0);
       const totalEsperado   = listaProcessada.reduce((s,e)=>s+e.esperadoMes*(mesesDisp.length||1), 0);
+      const totalValorMeta  = listaProcessada.reduce((s,e)=>s+(e.valorMeta||0), 0); // soma dos valores que entraram na meta
       const totalPotencial  = listaProcessada.reduce((s,e)=>s+(e.potencial_movimentacao||0)*(e._pct/100), 0);
       const meta            = consultoresDaVisao.reduce((s,c)=>s+(c.meta_mensal||0), 0);
       const metaTotal       = meta * (mesesDisp.length||1);
@@ -231,7 +311,7 @@ export default function DashboardVendedor() {
       setDados({
         consultor, consultoresDaVisao, mesesDisp,
         lista: listaProcessada,
-        kpis: { totalMovReal, totalEsperado, totalPotencial, meta, metaTotal, pctMeta, comMov, semMov, crescendo, empresas: listaProcessada.length },
+        kpis: { totalMovReal, totalEsperado, totalPotencial, meta, metaTotal, pctMeta, comMov, semMov, crescendo, empresas: listaProcessada.length, totalValorMeta },
         porProduto: Object.entries(porProduto).map(([nome,v])=>({nome,...v})).sort((a,b)=>b.movReal-a.movReal),
         ranking,
       });
@@ -336,12 +416,12 @@ export default function DashboardVendedor() {
             {/* KPIs */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
               {[
-                { label:'Empresas',           val: kpis.empresas,                cor:'#1a1d2e',  sub:`${kpis.comMov} movimentando` },
-                { label:'Mov. Real Acumulada', val: fmt(kpis.totalMovReal),       cor:'#f0b429',  sub:`${mesesDisp.length||0} meses` },
-                { label:'Mov. Esperada',       val: fmt(kpis.totalEsperado),      cor:'#a78bfa',  sub:'potencial × peso' },
-                { label:'Meta Total',          val: kpis.metaTotal>0?fmt(kpis.metaTotal):'—', cor:'#1a1d2e', sub:`R$${fmt(kpis.meta||0)}/mês` },
-                { label:'% Realizado',         val: fmtPct(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0), cor:'#34d399', sub:'mov / esperado' },
-                { label:'Crescendo',           val: kpis.crescendo,               cor:'#34d399',  sub:'empresas em alta' },
+                { label:'Empresas',            val: kpis.empresas,                cor:'#1a1d2e',  sub:`${kpis.comMov} movimentando` },
+                { label:'Mov. Real Acumulada', val: fmt(kpis.totalMovReal),        cor:'#f0b429',  sub:`${mesesDisp.length||0} meses` },
+                { label:'Valor Apurado Meta',  val: fmt(kpis.totalValorMeta||0),   cor:'#34d399',  sub:'1ª rec. / 3º mês convênio' },
+                { label:'Meta Total Vendedor', val: kpis.metaTotal>0?fmt(kpis.metaTotal):'—', cor:'#1a1d2e', sub:`${fmt(kpis.meta||0)}/mês` },
+                { label:'% Meta Atingida',     val: kpis.metaTotal>0?fmtPct((kpis.totalValorMeta||0)/kpis.metaTotal*100):'—', cor: kpis.metaTotal>0&&(kpis.totalValorMeta||0)/kpis.metaTotal>=1?'#34d399':kpis.metaTotal>0&&(kpis.totalValorMeta||0)/kpis.metaTotal>=0.7?'#f0b429':'#f87171', sub:'apurado / meta' },
+                { label:'Crescendo',           val: kpis.crescendo,                cor:'#34d399',  sub:'empresas em alta' },
               ].map(k=>(
                 <div key={k.label} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                   <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{k.label}</div>
@@ -351,22 +431,57 @@ export default function DashboardVendedor() {
               ))}
             </div>
 
-            {/* Barra de progresso vs esperado */}
-            <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',marginBottom:16,boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-                <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>Movimentação Real vs Esperada</span>
-                <span style={{fontSize:'0.75rem',color:'#8b92b0'}}>{fmt(kpis.totalMovReal)} / {fmt(kpis.totalEsperado)}</span>
+            {/* Barras de progresso */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+
+              {/* Barra 1: Real vs Esperado */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                  <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 Mov. Real vs Esperada</span>
+                  <span style={{fontSize:'0.72rem',color:'#8b92b0'}}>{fmtPct(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0)}</span>
+                </div>
+                <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
+                  <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
+                    width:`${Math.min(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0,100)}%`,
+                    background:'linear-gradient(90deg,#34d399,#059669)'}}></div>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
+                  <span style={{color:'#34d399',fontWeight:600}}>{fmt(kpis.totalMovReal)} realizados</span>
+                  <span>meta: {fmt(kpis.totalEsperado)}</span>
+                </div>
               </div>
-              <div style={{background:'#f0f2f8',borderRadius:8,height:10,overflow:'hidden'}}>
-                <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
-                  width:`${Math.min(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0,100)}%`,
-                  background:'linear-gradient(90deg,#34d399,#059669)'}}></div>
-              </div>
-              <div style={{display:'flex',justifyContent:'space-between',marginTop:6,fontSize:'0.68rem',color:'#8b92b0'}}>
-                <span>0%</span>
-                <span style={{color:'#34d399',fontWeight:600}}>{fmtPct(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0)} realizado</span>
-                <span>{fmt(kpis.totalEsperado)}</span>
-              </div>
+
+              {/* Barra 2: Valor Apurado vs Meta do Vendedor */}
+              {(() => {
+                const apurado    = kpis.totalValorMeta||0;
+                const pctApurado = kpis.metaTotal>0?(apurado/kpis.metaTotal)*100:0;
+                const corMeta2   = pctApurado>=100?'#34d399':pctApurado>=70?'#f0b429':'#f87171';
+                const badge      = pctApurado>=100?'✅ Meta atingida':pctApurado>=70?'⚡ Quase lá':'⚠️ Abaixo da meta';
+                return kpis.metaTotal>0 ? (
+                  <div style={{background:'#ffffff',border:`1px solid ${corMeta2}33`,borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                      <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>🎯 Apurado na Meta vs Meta</span>
+                      <span style={{background:`${corMeta2}15`,color:corMeta2,border:`1px solid ${corMeta2}30`,borderRadius:6,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>{badge}</span>
+                    </div>
+                    <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
+                      <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
+                        width:`${Math.min(pctApurado,100)}%`,
+                        background:`linear-gradient(90deg,${corMeta2},${corMeta2}cc)`}}></div>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
+                      <span style={{color:corMeta2,fontWeight:700}}>{fmt(apurado)} apurado · {fmtPct(pctApurado)}</span>
+                      <span>meta: {fmt(kpis.metaTotal)} ({fmt(kpis.meta)}/mês)</span>
+                    </div>
+                    <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>
+                      Benefícios/Bônus: 1ª recarga · Convênio/Mobilidade: 3º mês
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                    🎯 Meta não cadastrada para este vendedor
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Abas */}
@@ -439,7 +554,7 @@ export default function DashboardVendedor() {
                   <table style={s.table}>
                     <thead>
                       <tr style={{background:'#f9fafb'}}>
-                        {['Empresa','Produto','Vendedor','Esperado/mês',...(mesesDisp.map(m=>fmtMes(m+'-01'))),'Média Real','% Adere','Status'].map(h=>
+                        {['Empresa','Produto','Vendedor','Esperado/mês',...(mesesDisp.map(m=>fmtMes(m+'-01'))),'Média Real','% Adere','Apurado Meta','Status'].map(h=>
                           <th key={h} style={s.th}>{h}</th>)}
                       </tr>
                     </thead>
@@ -478,6 +593,14 @@ export default function DashboardVendedor() {
                                 </div>
                                 <span style={{color:corSit,fontWeight:600,fontSize:'0.75rem'}}>{fmtPct(e.aderencia)}</span>
                               </div>
+                            </td>
+                            <td style={{...s.td,textAlign:'right'}}>
+                              {e.valorMeta>0 ? (
+                                <div>
+                                  <div style={{color:'#34d399',fontWeight:700,fontSize:'0.8rem'}}>{fmt(e.valorMeta)}</div>
+                                  <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec.':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div>
+                                </div>
+                              ) : <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>}
                             </td>
                             <td style={s.td}>
                               <span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
