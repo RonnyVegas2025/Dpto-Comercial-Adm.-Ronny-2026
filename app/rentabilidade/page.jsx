@@ -247,6 +247,37 @@ export default function Rentabilidade() {
 
   function limpar() { setBusca(''); setFiltroCategoria('todos'); setFiltroProduto('todos'); setFiltroGestor('todos'); setFiltroVendedor('todos'); setOrdenar('ultimo'); }
 
+  function exportarExcel() {
+    if (!xlsxLib) return;
+    const headers = ['ID', 'Empresa', 'Produto', 'Vendedor', 'Gestor'];
+    meses.forEach(m => {
+      const mm = fmtMes(m);
+      headers.push(`${mm} Spread Bruto`, `${mm} Tax.Neg.`, `${mm} Spread Líq.`);
+    });
+    headers.push('Total Bruto', 'Total Tax.Neg.', 'Total Líquido', 'Méd. Movimentação', '% Spread');
+
+    const rows = listaFiltrada.map(e => {
+      const row = [e.produto_id, e.nome, e.produto_contratado||'', e.vendedor, e.gestor];
+      meses.forEach(m => {
+        const sp = spreadMap[`${e.produto_id}__${m}`];
+        const bruto = (sp?.planilha||0)+(sp?.bandeira||0);
+        const neg   = sp?.negativo||0;
+        const liq   = sp?.total||0;
+        row.push(bruto, neg, liq);
+      });
+      const totalBruto = meses.reduce((s,m)=>{const sp=spreadMap[`${e.produto_id}__${m}`];return s+(sp?.planilha||0)+(sp?.bandeira||0);},0);
+      const totalNeg   = meses.reduce((s,m)=>s+(spreadMap[`${e.produto_id}__${m}`]?.negativo||0),0);
+      row.push(totalBruto, totalNeg, e.totalSpread, e.mediaMovimentacao||0, e.pctMedio!=null?Number(e.pctMedio.toFixed(2)):0);
+      return row;
+    });
+
+    const ws = xlsxLib.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map(() => ({ wch: 16 }));
+    const wb = xlsxLib.utils.book_new();
+    xlsxLib.utils.book_append_sheet(wb, ws, 'Rentabilidade');
+    xlsxLib.writeFile(wb, `rentabilidade-spread-${new Date().toISOString().substring(0,10)}.xlsx`);
+  }
+
   if (loading) return (
     <div style={{ ...s.page, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
       <div style={{ textAlign:'center' }}><div style={s.spin}></div><div style={{ color:'#6b7280' }}>Carregando dados...</div></div>
@@ -271,6 +302,9 @@ export default function Rentabilidade() {
           <h1 style={s.title}>Rentabilidade / Spread</h1>
           <p style={s.sub}>Evolução da receita de spread e taxa ADM por empresa</p>
         </div>
+        <button onClick={exportarExcel} disabled={!xlsxLib||listaFiltrada.length===0} style={{ background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.2)', borderRadius:10, padding:'10px 20px', color:'#34d399', fontSize:'0.85rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
+          📥 Exportar Excel ({listaFiltrada.length})
+        </button>
         <a href="/importar-spreads" style={{ background:'rgba(167,139,250,0.08)', border:'1px solid rgba(167,139,250,0.2)', borderRadius:10, padding:'10px 20px', color:'#a78bfa', textDecoration:'none', fontSize:'0.85rem', fontWeight:600 }}>
           💹 Importar Spreads
         </a>
