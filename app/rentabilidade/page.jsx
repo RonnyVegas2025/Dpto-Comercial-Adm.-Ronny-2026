@@ -62,15 +62,21 @@ export default function Rentabilidade() {
       supabase.from('empresas').select('produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria, consultor_principal:consultor_principal_id(nome, gestor)').eq('ativo', true).not('produto_contratado', 'ilike', '%desconto condicional%').not('categoria', 'eq', 'Taxa Negativa'),
       supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia').limit(10000),
     ]);
-    // Normaliza datas — Supabase pode retornar Date object, "2026-03-01T00:00:00" ou "2026-03-01"
+    // Normaliza datas para formato YYYY-MM-01
     const normDate = (d) => {
       if (!d) return d;
-      if (d instanceof Date) {
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
-      }
+      try {
+        // Tenta via Date object (mais confiável)
+        const dt = d instanceof Date ? d : new Date(d);
+        if (!isNaN(dt.getTime())) {
+          const y = dt.getUTCFullYear();
+          const m = String(dt.getUTCMonth()+1).padStart(2,'0');
+          return `${y}-${m}-01`;
+        }
+      } catch(e) {}
+      // Fallback: pega primeiros 7 chars se for string ISO
       const s = String(d);
-      // Formato ISO: "2026-03-01T00:00:00" ou "2026-03-01"
-      if (s.match(/^\d{4}-\d{2}/)) return s.substring(0, 7) + '-01';
+      if (s.match(/^\d{4}-\d{2}/)) return s.substring(0,7) + '-01';
       return s;
     };
     const spNorm = (sp||[]).map(s => ({...s, competencia: normDate(s.competencia)}));
@@ -199,7 +205,7 @@ export default function Rentabilidade() {
         empresas: listaFiltrada.filter(e=>(spreadMap[`${e.produto_id}__${m}`]?.total||0)>0).length,
       };
     });
-    return { total, totalSpread, totalSpreadBruto, totalNegativo, totalMov, comSpread, pctGeral, spreadBandeira, porMes };
+    return { total, totalSpread, totalSpreadBruto, totalNegativo, totalMov, comSpread, pctGeral, porMes };
   }, [listaFiltrada, meses, spreadMap, libMap, spreads, empresas]);
 
   // Paginação
@@ -267,11 +273,7 @@ export default function Rentabilidade() {
           <span style={s.kpiSub}>spread ÷ movimentação real</span>
           {kpis.totalMov > 0 && <span style={{ color:'#4b5563', fontSize:'0.68rem' }}>mov: {fmt(kpis.totalMov)}</span>}
         </div>
-        <div style={{ ...s.kpi, borderColor:'rgba(240,180,41,0.35)' }}>
-          <span style={s.kpiLabel}>Bandeira Vegas Benef.</span>
-          <span style={{ ...s.kpiVal, color:'#f0b429' }}>{fmt(kpis.spreadBandeira)}</span>
-          <span style={s.kpiSub}>0,75% × movimentação</span>
-        </div>
+
         {kpis.porMes.slice(-1).map(m => (
           <div key={m.mes} style={{ ...s.kpi, borderColor:'rgba(96,165,250,0.35)' }}>
             <span style={s.kpiLabel}>Último mês ({fmtMes(m.mes)})</span>
