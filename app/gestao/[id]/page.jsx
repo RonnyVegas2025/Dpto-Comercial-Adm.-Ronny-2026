@@ -111,6 +111,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
       consultor_agregado_2_id:emp.consultor_agregado_2_id||'',
       parceiro_id:            emp.parceiro_id||'',
       ativo:                  emp.ativo??true,
+      pct_principal:          emp.pct_principal  ?? 100,
+      pct_agregado_1:         emp.pct_agregado_1 ?? 0,
+      pct_agregado_2:         emp.pct_agregado_2 ?? 0,
+      divisao_manual:         emp.divisao_manual ?? false,
     });
     setLoading(false);
   }
@@ -139,6 +143,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
         consultor_agregado_2_id: form.consultor_agregado_2_id||null,
         parceiro_id:             form.parceiro_id||null,
         ativo:                   form.ativo,
+        pct_principal:           form.pct_principal,
+        pct_agregado_1:          form.pct_agregado_1,
+        pct_agregado_2:          form.pct_agregado_2,
+        divisao_manual:          form.divisao_manual,
       };
       const { error } = await supabase.from('empresas').update(payload).eq('id',id);
       if(error) throw error;
@@ -485,6 +493,50 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       {parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
                   : <span>{empresa.parceiro?.nome||'—'}</span>}
+              </div>
+
+              {/* Divisão de Resultado */}
+              <div style={{gridColumn:'1/-1',borderTop:'1px solid #e4e7ef',paddingTop:16,marginTop:4}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                  <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1}}>Divisão de Resultado</div>
+                  {empresa.divisao_manual && <span style={{background:'rgba(240,180,41,0.1)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600}}>Personalizada</span>}
+                </div>
+                {editando ? (
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                    {[
+                      {label:'100% Principal', p:100, a1:0, a2:0},
+                      {label:'50% / 50%', p:50, a1:50, a2:0},
+                      {label:'34% / 33% / 33%', p:34, a1:33, a2:33},
+                    ].map(opt => {
+                      const ativo = form.pct_principal===opt.p && form.pct_agregado_1===opt.a1 && form.pct_agregado_2===opt.a2;
+                      const temAgr2 = !!empresa.consultor_agregado_2_id || !!form.consultor_agregado_2_id;
+                      const temAgr1 = !!empresa.consultor_agregado_id || !!form.consultor_agregado_id;
+                      if (opt.a2 > 0 && !temAgr2) return null;
+                      if (opt.a1 > 0 && !temAgr1) return null;
+                      return (
+                        <button key={opt.label}
+                          onClick={()=>{ set('pct_principal',opt.p); set('pct_agregado_1',opt.a1); set('pct_agregado_2',opt.a2); set('divisao_manual',true); }}
+                          style={{background:ativo?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${ativo?'rgba(240,180,41,0.4)':'#e4e7ef'}`,borderRadius:8,padding:'8px 16px',color:ativo?'#f0b429':'#4a5068',cursor:'pointer',fontWeight:ativo?700:500,fontSize:'0.82rem',fontFamily:'inherit'}}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                    {[
+                      {nome:empresa.consultor_principal?.nome, pct:empresa.pct_principal??100, label:'Principal'},
+                      empresa.consultor_agregado?.nome && {nome:empresa.consultor_agregado?.nome, pct:empresa.pct_agregado_1??0, label:'Agregado 1'},
+                      empresa.consultor_agregado_2?.nome && {nome:empresa.consultor_agregado_2?.nome, pct:empresa.pct_agregado_2??0, label:'Agregado 2'},
+                    ].filter(Boolean).map((item,i) => (
+                      <div key={i} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{background:item.pct>0?'rgba(240,180,41,0.1)':'#f0f2f8',color:item.pct>0?'#f0b429':'#9ca3af',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
+                        <span style={{fontSize:'0.82rem',fontWeight:500,color:'#1a1d2e'}}>{item.nome}</span>
+                        <span style={{fontSize:'0.68rem',color:'#8b92b0'}}>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
