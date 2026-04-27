@@ -220,13 +220,19 @@ export default function Rentabilidade() {
       return e?.produto_contratado?.toLowerCase().includes('vegas benef');
     }).reduce((s,x)=>s+(x.spread_bandeira||0),0);
     const porMes = meses.map(m => {
-      const totMesSpread = listaFiltrada.reduce((s,e)=>s+(spreadMap[`${e.produto_id}__${m}`]?.total||0),0);
-      const totMesMov    = listaFiltrada.reduce((s,e)=>s+(libMap[`${e.produto_id}__${m}`]||0),0);
+      const totMesBruto   = listaFiltrada.reduce((s,e)=>s+(spreadMap[`${e.produto_id}__${m}`]?.planilha||0)+(spreadMap[`${e.produto_id}__${m}`]?.bandeira||0),0);
+      const totMesNeg     = listaFiltrada.reduce((s,e)=>s+(spreadMap[`${e.produto_id}__${m}`]?.negativo||0),0);
+      const totMesLiquido = totMesBruto - totMesNeg;
+      const totMesMov     = listaFiltrada.reduce((s,e)=>s+(libMap[`${e.produto_id}__${m}`]||0),0);
       return {
-        mes: m,
-        total:    totMesSpread,
+        mes:      m,
+        total:    totMesLiquido,
+        bruto:    totMesBruto,
+        negativo: totMesNeg,
         mov:      totMesMov,
-        pct:      totMesMov > 0 ? (totMesSpread/totMesMov)*100 : 0,
+        pctBruto:   totMesMov > 0 ? (totMesBruto/totMesMov)*100 : 0,
+        pctNeg:     totMesMov > 0 ? (totMesNeg/totMesMov)*100 : 0,
+        pct:        totMesMov > 0 ? (totMesLiquido/totMesMov)*100 : 0,
         empresas: listaFiltrada.filter(e=>(spreadMap[`${e.produto_id}__${m}`]?.total||0)>0).length,
       };
     });
@@ -432,21 +438,37 @@ export default function Rentabilidade() {
             {kpis.porMes.map(m => (
               <div key={m.mes} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'20px 24px', flex:'1 1 200px', minWidth:180 }}>
                 <div style={{ display:'inline-block', background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.3)', color:'#a78bfa', borderRadius:8, padding:'4px 12px', fontSize:'0.85rem', fontWeight:700, marginBottom:12 }}>{fmtMes(m.mes)}</div>
-                <div style={{ fontSize:'1.5rem', fontWeight:700, color:'#a78bfa', marginBottom:4 }}>{fmt(m.total)}</div>
-                <div style={{ color:'#9ca3af', fontSize:'0.8rem' }}>{m.empresas} empresas com spread</div>
-                {m.mov > 0 && (
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
-                    <span style={{ color:'#34d399', fontWeight:700, fontSize:'1rem' }}>{fmtPct(m.pct)}</span>
-                    <span style={{ color:'#4b5563', fontSize:'0.72rem' }}>spread / movimentação</span>
+                {/* Spread Bruto */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <span style={{ color:'#9ca3af', fontSize:'0.75rem' }}>Spread Bruto</span>
+                  <div style={{ textAlign:'right' }}>
+                    <span style={{ color:'#a78bfa', fontWeight:700, fontSize:'1.1rem' }}>{fmt(m.bruto)}</span>
+                    {m.mov > 0 && <span style={{ color:'#a78bfa', fontSize:'0.72rem', marginLeft:6 }}>{fmtPct(m.pctBruto)}</span>}
                   </div>
-                )}
-                {m.mov > 0 && <div style={{ color:'#6b7280', fontSize:'0.7rem', marginTop:2 }}>mov: {fmt(m.mov)}</div>}
-                <div style={{ marginTop:10 }}>
-                  <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:6, overflow:'hidden' }}>
-                    <div style={{ background:'#a78bfa', height:'100%', width:`${kpis.totalSpread>0?(m.total/kpis.totalSpread)*100:0}%` }}></div>
-                  </div>
-                  <div style={{ color:'#6b7280', fontSize:'0.72rem', marginTop:4 }}>{kpis.totalSpread>0?fmtPct((m.total/kpis.totalSpread)*100):'0%'} do spread total</div>
                 </div>
+                {/* Taxa Negativa */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <span style={{ color:'#9ca3af', fontSize:'0.75rem' }}>Taxa Negativa</span>
+                  <div style={{ textAlign:'right' }}>
+                    <span style={{ color:'#f87171', fontWeight:600, fontSize:'1rem' }}>-{fmt(m.negativo)}</span>
+                    {m.mov > 0 && m.negativo > 0 && <span style={{ color:'#f87171', fontSize:'0.72rem', marginLeft:6 }}>-{fmtPct(m.pctNeg)}</span>}
+                  </div>
+                </div>
+                {/* Divisor */}
+                <div style={{ borderTop:'1px solid rgba(255,255,255,0.08)', margin:'8px 0' }}></div>
+                {/* Spread Líquido */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <span style={{ color:'#e8eaf0', fontSize:'0.82rem', fontWeight:600 }}>Spread Líquido</span>
+                  <div style={{ textAlign:'right' }}>
+                    <span style={{ color:'#34d399', fontWeight:700, fontSize:'1.2rem' }}>{fmt(m.total)}</span>
+                    {m.mov > 0 && <span style={{ color:'#34d399', fontSize:'0.75rem', marginLeft:6 }}>{fmtPct(m.pct)}</span>}
+                  </div>
+                </div>
+                <div style={{ color:'#4b5563', fontSize:'0.7rem', marginBottom:8 }}>{m.empresas} empresas · mov: {fmt(m.mov)}</div>
+                <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:5, overflow:'hidden' }}>
+                  <div style={{ background:'#34d399', height:'100%', width:`${kpis.totalSpread>0?(m.total/kpis.totalSpread)*100:0}%` }}></div>
+                </div>
+                <div style={{ color:'#6b7280', fontSize:'0.68rem', marginTop:4 }}>{kpis.totalSpread>0?fmtPct((m.total/kpis.totalSpread)*100):'0%'} do spread líquido total</div>
               </div>
             ))}
           </div>
