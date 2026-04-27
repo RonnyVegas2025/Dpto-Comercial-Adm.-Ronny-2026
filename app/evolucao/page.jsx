@@ -135,7 +135,12 @@ function TabelaEvolucao({ lista, meses, libMap }) {
                   <td style={s.td}><div style={{ fontWeight: 600 }}>{e.nome}</div><div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div></td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
                   <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>
-                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>
+                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                      {e.vendedor}
+                      {e._pct < 100 && <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 6px',fontSize:'0.65rem',fontWeight:700}}>{e._pct}%</span>}
+                    </div>
+                  </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
                   {meses.map(m => {
                     const v = libMap[`${e.produto_id}__${m}`] || 0;
@@ -195,7 +200,12 @@ function TabelaCruzamento({ lista, meses }) {
                 <tr key={e.produto_id} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
                   <td style={s.td}><div style={{ fontWeight: 600 }}>{e.nome}</div><div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div></td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
-                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{e.vendedor}</td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>
+                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                      {e.vendedor}
+                      {e._pct < 100 && <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 6px',fontSize:'0.65rem',fontWeight:700}}>{e._pct}%</span>}
+                    </div>
+                  </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
                   <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.diretor}</td>
                   <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
@@ -261,7 +271,10 @@ export default function Evolucao() {
       supabase
         .from('empresas')
         .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
-          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo)`)
+          pct_principal, pct_agregado_1, pct_agregado_2,
+          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
         .eq('ativo', true)
         .in('categoria', ['Beneficios', 'Benefícios', 'Bonus', 'Bônus', 'Convênio', 'Convenio', 'Mobilidade'])
         .not('produto_contratado', 'ilike', '%desconto condicional%')
@@ -280,26 +293,53 @@ export default function Evolucao() {
     return m;
   }, [libs]);
 
-  const listaCompleta = useMemo(() => empresas
-    .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa')
-    .map(e => {
-    const vals = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
-    const totalCreditado = vals.reduce((s, v) => s + v, 0);
-    const tend = tendencia(vals);
-    return {
-      ...e,
-      vals, totalCreditado, tend,
-      creditou:     totalCreditado > 0,
-      pctPot:       e.potencial_movimentacao > 0 ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria || 1) * meses.length)) * 100 : null,
-      ultimoValor:  vals[vals.length - 1] || 0,
-      // depto vem do campo equipe do consultor (Parcerias, Venda Nova, etc)
-      depto:        e.consultor_principal?.equipe || e.consultor_principal?.setor || '—',
-      gestor:       e.consultor_principal?.gestor || '—',
-      diretor:      e.consultor_principal?.gestor || '—', // será ajustado abaixo
-      vendedor:     e.consultor_principal?.nome   || '—',
-      produto:      e.produto_contratado || '—',
-    };
-  }), [empresas, meses, libMap]);
+  const listaCompleta = useMemo(() => {
+    const baseEmpresas = empresas
+      .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa');
+
+    const expanded = [];
+    for (const e of baseEmpresas) {
+      const valsBase = meses.map(m => libMap[`${e.produto_id}__${m}`] || 0);
+      const totalBase = valsBase.reduce((s, v) => s + v, 0);
+      const tend = tendencia(valsBase);
+
+      // Define consultores e percentuais
+      const pctP  = e.pct_principal  ?? 100;
+      const pctA1 = e.pct_agregado_1 ?? 0;
+      const pctA2 = e.pct_agregado_2 ?? 0;
+
+      const consultores = [
+        e.consultor_principal  ? { cons: e.consultor_principal,  pct: pctP  } : null,
+        e.consultor_agregado   && pctA1 > 0 ? { cons: e.consultor_agregado,   pct: pctA1 } : null,
+        e.consultor_agregado_2 && pctA2 > 0 ? { cons: e.consultor_agregado_2, pct: pctA2 } : null,
+      ].filter(Boolean);
+
+      // Cria uma entrada por consultor com valor proporcional
+      for (const { cons, pct } of consultores) {
+        const fator = pct / 100;
+        const vals = valsBase.map(v => Math.round(v * fator * 100) / 100);
+        const totalCreditado = vals.reduce((s, v) => s + v, 0);
+        expanded.push({
+          ...e,
+          // Chave única por empresa + consultor
+          _key: `${e.id}__${cons.id}`,
+          vals, totalCreditado, tend,
+          creditou:    totalCreditado > 0,
+          pctPot:      e.potencial_movimentacao > 0 ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria||1) * meses.length * fator)) * 100 : null,
+          ultimoValor: vals[vals.length-1] || 0,
+          depto:       cons.equipe || cons.setor || '—',
+          gestor:      cons.gestor || '—',
+          diretor:     cons.gestor || '—',
+          vendedor:    cons.nome   || '—',
+          produto:     e.produto_contratado || '—',
+          _pct:        pct, // percentual deste consultor
+          _valsBase:   valsBase, // valores originais para exibição
+          _totalBase:  totalBase,
+        });
+      }
+    }
+    return expanded;
+  }, [empresas, meses, libMap]);
 
   // Opções de filtro em cascata
   const opcoes = useMemo(() => {
@@ -373,7 +413,7 @@ export default function Evolucao() {
 
     const rows = listaFiltrada.map(e => {
       const row = [
-        e.produto_id, e.nome, e.categoria, e.produto, e.vendedor, e.gestor, e.diretor,
+        e.produto_id, e.nome, e.categoria, e.produto, e._pct < 100 ? `${e.vendedor} (${e._pct}%)` : e.vendedor, e.gestor, e.diretor,
       ];
       let total = 0;
       meses.forEach(m => {
