@@ -218,7 +218,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               const ts   = TEND[e.tend];
               const meta = e._meta;
               // Verifica se tem meta gravada localmente (prioridade sobre _meta calculada)
-              const metaLocal = metasGravadas[`${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`];
+              const _metaChave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
+              const metaLocal = metasGravadas[_metaChave];
               const temMetaGravada = !!metaLocal;
               const isModalAberto  = modalMeta?._key === e._key;
               const rowBg = (meta?.elegivel || temMetaGravada)
@@ -231,10 +232,11 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     {/* Link para gestão + botão de meta lado a lado */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div>
-                        <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
+                        <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
                           onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
                           onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
-                          {e.nome}
+                          {e.nome} ↗
                         </a>
                         <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>ID {e.produto_id}</div>
                       </div>
@@ -585,9 +587,11 @@ export default function Evolucao() {
     if (vmetas) {
       const map = {};
       for (const v of vmetas) {
-        // Chave por empresa_id__competencia_meta (sem depender de consultor_id)
-        const key = `${v.empresa_id}__${v.competencia_meta?.substring(0,10)}`;
-        map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: v.competencia_meta };
+        // Normaliza: pega só os primeiros 10 chars (YYYY-MM-DD) da competencia_meta
+        const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
+        if (!comp) continue;
+        const key = `${v.empresa_id}__${comp}`;
+        map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
       }
       setMetasGravadas(map);
     }
@@ -599,9 +603,10 @@ export default function Evolucao() {
   function abrirModalMeta(empresa) {
     const meta = empresa._meta;
     const valorSugerido = meta?.elegivel ? meta.valorMeta : (meta?.valorConsid || 0);
+    const chave = `${empresa.id}__${meta?.mesAlvo?.substring(0,10)}`;
     setMetaForm({
-      valor: metasGravadas[empresa._key]?.valor_meta ?? valorSugerido,
-      regra: metasGravadas[empresa._key]?.regra ?? meta?.regra ?? 'beneficio',
+      valor: metasGravadas[chave]?.valor_meta ?? valorSugerido,
+      regra: metasGravadas[chave]?.regra ?? meta?.regra ?? 'beneficio',
     });
     setErroMeta('');
     setModalMeta(empresa);
