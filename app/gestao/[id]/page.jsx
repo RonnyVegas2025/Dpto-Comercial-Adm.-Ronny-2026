@@ -161,7 +161,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
       // Busca sem campo observacao para evitar erro de schema
       supabase.from('valor_meta_empresa')
-        .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia,peso_produto')
+        .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
         .eq('empresa_id', id).order('competencia_meta'),
     ]);
 
@@ -305,7 +305,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       return false;
     }
     const { data } = await supabase.from('valor_meta_empresa')
-      .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia,peso_produto')
+      .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
       .eq('empresa_id', id).order('competencia_meta');
     setValorMetas(data||[]);
     return true;
@@ -322,7 +322,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
       valor_considerado: valorConsiderado,
       valor_meta:        valorMeta,
       pct_consultor:     empresa?.pct_principal ?? 100,
-      peso_produto:      empresa?.peso_categoria ?? 1,
       regra,
       mes_sequencia:     mesSeq,
     };
