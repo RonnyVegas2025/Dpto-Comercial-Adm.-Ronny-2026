@@ -179,11 +179,13 @@ const bb = {
 };
 
 function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
-  metasGravadas = {}, modalMeta, setModalMeta,
-  metaForm, setMetaForm, salvandoMeta, erroMeta,
-  salvarMetaInline, removerMetaInline, abrirModalMeta,
+  metasGravadas = {}, onSalvarMeta, onRemoverMeta,
 }) {
-  const [pagina, setPagina] = useState(1);
+  const [pagina,       setPagina]       = useState(1);
+  const [modalMeta,    setModalMeta]    = useState(null);
+  const [metaForm,     setMetaForm]     = useState({ valor: '', regra: 'beneficio' });
+  const [erroMeta,     setErroMeta]     = useState('');
+
   useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
   const totalPaginas = Math.ceil(lista.length / porPagina);
   const listaPagina  = lista.slice((pagina - 1) * porPagina, pagina * porPagina);
@@ -200,7 +202,39 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
     return metasGravadas[chave] || e._meta?.elegivel;
   }).length;
 
-  const col = (k) => !colunas || colunas.has(k); // helper
+  const col = (k) => !colunas || colunas.has(k);
+
+  // Abre o modal para uma empresa
+  function abrirModalMeta(empresa) {
+    const meta = empresa._meta;
+    const chave = `${empresa.id}__${meta?.mesAlvo?.substring(0,10)}`;
+    const gravado = metasGravadas[chave];
+    setMetaForm({
+      valor: gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : '') ,
+      regra:  gravado?.regra    ?? meta?.regra ?? 'beneficio',
+    });
+    setErroMeta('');
+    setModalMeta(empresa);
+  }
+
+  // Salva meta no banco via callback para o pai
+  async function salvarMeta() {
+    if (!modalMeta || !metaForm.valor) return;
+    setSalvandoMeta(true);
+    setErroMeta('');
+    const resultado = await onSalvarMeta(modalMeta, metaForm);
+    if (resultado?.error) {
+      setErroMeta('Erro: ' + resultado.error);
+    } else {
+      setModalMeta(null);
+    }
+    setSalvandoMeta(false);
+  }
+
+  async function removerMeta(empresa) {
+    if (!confirm('Remover da meta?')) return;
+    await onRemoverMeta(empresa);
+  } // helper
 
   return (
     <>
@@ -378,12 +412,12 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             </select>
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <button onClick={salvarMetaInline} disabled={salvandoMeta || !metaForm.valor}
+                            <button onClick={salvarMeta} disabled={salvandoMeta || !metaForm.valor}
                               style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
                               {salvandoMeta ? 'Salvando...' : temMetaGravada ? '💾 Atualizar' : '🎯 Confirmar'}
                             </button>
                             {temMetaGravada && (
-                              <button onClick={() => { removerMetaInline(e); setModalMeta(null); }}
+                              <button onClick={() => removerMeta(e)}
                                 style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, padding: '10px 16px', color: '#f87171', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                                 🗑 Remover
                               </button>
@@ -541,10 +575,6 @@ export default function Evolucao() {
   const [porPagina, setPorPagina]             = useState(12);
 
   // ── Modal de meta inline ──────────────────────────────────────────────────
-  const [modalMeta, setModalMeta]     = useState(null); // { empresa, meta } ou null
-  const [metaForm, setMetaForm]       = useState({ valor: '', regra: 'beneficio' });
-  const [salvandoMeta, setSalvandoMeta] = useState(false);
-  const [erroMeta, setErroMeta]       = useState('');
   // Mapa de metas gravadas: empresa_id__consultor_id → valor_meta
   const [metasGravadas, setMetasGravadas] = useState({}); // NOVO: itens por página
 
@@ -616,108 +646,6 @@ export default function Evolucao() {
     }
 
     setLoading(false);
-  }
-
-  // ── Funções do modal de meta inline ─────────────────────────────────────
-  function abrirModalMeta(empresa) {
-    const meta = empresa._meta;
-    const valorSugerido = meta?.elegivel ? meta.valorMeta : (meta?.valorConsid || 0);
-    const chave = `${empresa.id}__${meta?.mesAlvo?.substring(0,10)}`;
-    setMetaForm({
-      valor: metasGravadas[chave]?.valor_meta ?? valorSugerido,
-      regra: metasGravadas[chave]?.regra ?? meta?.regra ?? 'beneficio',
-    });
-    setErroMeta('');
-    setModalMeta(empresa);
-  }
-
-  async function salvarMetaInline() {
-    if (!modalMeta || !metaForm.valor) return;
-    setSalvandoMeta(true);
-    setErroMeta('');
-    const e    = modalMeta;
-    const comp = e._meta?.mesAlvo ? String(e._meta.mesAlvo).substring(0,10) : null;
-
-    console.log('[META] Salvando:', { empresa: e.nome, id: e.id, comp, valor: metaForm.valor, cons: e._cons?.id });
-
-    if (!comp) {
-      setErroMeta('Mês da meta não identificado. Verifique se a empresa tem liberação registrada.');
-      setSalvandoMeta(false);
-      return;
-    }
-
-    // Delete primeiro
-    const { error: delError } = await supabase.from('valor_meta_empresa')
-      .delete().eq('empresa_id', e.id).eq('competencia_meta', comp);
-    if (delError) console.warn('[META] Delete error (ignorado):', delError.message);
-
-    // Insert
-    const payload = {
-      empresa_id:        e.id,
-      produto_id:        e.produto_id,
-      consultor_id:      e._cons?.id || null,
-      competencia_meta:  comp,
-      valor_bruto:       e._meta?.valorBruto || 0,
-      valor_considerado: e._meta?.valorConsid || 0,
-      valor_meta:        parseFloat(metaForm.valor),
-      pct_consultor:     e._pct ?? 100,
-      regra:             metaForm.regra,
-      mes_sequencia:     metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0,
-    };
-
-    console.log('[META] Payload:', payload);
-
-    const { data: inserted, error } = await supabase
-      .from('valor_meta_empresa')
-      .insert(payload)
-      .select();
-
-    console.log('[META] Resultado:', { inserted, error });
-
-    if (error) {
-      // Tenta de novo sem consultor_id (caso seja campo NOT NULL problemático)
-      console.warn('[META] Tentando sem consultor_id...');
-      const { data: ins2, error: err2 } = await supabase
-        .from('valor_meta_empresa')
-        .insert({ ...payload, consultor_id: null })
-        .select();
-
-      if (err2) {
-        console.error('[META] Erro final:', err2);
-        setErroMeta('Erro ao salvar: ' + err2.message + ' | Original: ' + error.message);
-        setSalvandoMeta(false);
-        return;
-      }
-      console.log('[META] Salvou sem consultor_id:', ins2);
-    }
-
-    // Sucesso — atualiza mapa local imediatamente
-    const metaKey = `${e.id}__${comp}`;
-    console.log('[META] Gravando chave local:', metaKey);
-    setMetasGravadas(prev => ({
-      ...prev,
-      [metaKey]: {
-        valor_meta:       parseFloat(metaForm.valor),
-        regra:            metaForm.regra,
-        competencia_meta: comp,
-      },
-    }));
-    setModalMeta(null);
-    setSalvandoMeta(false);
-  }
-
-  async function removerMetaInline(empresa) {
-    if (!confirm('Remover da meta?')) return;
-    const comp = empresa._meta?.mesAlvo;
-    if (!comp) return;
-    await supabase.from('valor_meta_empresa')
-      .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
-    const delKey = `${empresa.id}__${comp?.substring(0,10)}`;
-    setMetasGravadas(prev => {
-      const next = { ...prev };
-      delete next[delKey];
-      return next;
-    });
   }
 
   const libMap = useMemo(() => {
@@ -1167,11 +1095,61 @@ export default function Evolucao() {
           <TabelaEvolucao
             lista={listaFiltrada} meses={meses} libMap={libMap}
             colunas={colunasVisiveis} porPagina={porPagina}
-            metasGravadas={metasGravadas} modalMeta={modalMeta} setModalMeta={setModalMeta}
-            metaForm={metaForm} setMetaForm={setMetaForm}
-            salvandoMeta={salvandoMeta} erroMeta={erroMeta}
-            salvarMetaInline={salvarMetaInline} removerMetaInline={removerMetaInline}
-            abrirModalMeta={abrirModalMeta}
+            metasGravadas={metasGravadas}
+            onSalvarMeta={async (empresa, form) => {
+              // Executa o save diretamente aqui no pai e retorna resultado
+              const comp = empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
+              if (!comp) return { error: 'Mês da meta não identificado' };
+
+              await supabase.from('valor_meta_empresa')
+                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+
+              const { error } = await supabase.from('valor_meta_empresa').insert({
+                empresa_id:        empresa.id,
+                produto_id:        empresa.produto_id,
+                consultor_id:      empresa._cons?.id || null,
+                competencia_meta:  comp,
+                valor_bruto:       empresa._meta?.valorBruto || 0,
+                valor_considerado: empresa._meta?.valorConsid || 0,
+                valor_meta:        parseFloat(form.valor),
+                pct_consultor:     empresa._pct ?? 100,
+                regra:             form.regra,
+                mes_sequencia:     form.regra === 'beneficio' ? 1 : form.regra === 'convenio' ? 3 : 0,
+              });
+
+              if (error) {
+                // Tenta sem consultor_id
+                const { error: err2 } = await supabase.from('valor_meta_empresa').insert({
+                  empresa_id:        empresa.id,
+                  produto_id:        empresa.produto_id,
+                  consultor_id:      null,
+                  competencia_meta:  comp,
+                  valor_bruto:       empresa._meta?.valorBruto || 0,
+                  valor_considerado: empresa._meta?.valorConsid || 0,
+                  valor_meta:        parseFloat(form.valor),
+                  pct_consultor:     empresa._pct ?? 100,
+                  regra:             form.regra,
+                  mes_sequencia:     form.regra === 'beneficio' ? 1 : form.regra === 'convenio' ? 3 : 0,
+                });
+                if (err2) return { error: err2.message };
+              }
+
+              // Atualiza mapa local
+              const metaKey = `${empresa.id}__${comp}`;
+              setMetasGravadas(prev => ({
+                ...prev,
+                [metaKey]: { valor_meta: parseFloat(form.valor), regra: form.regra, competencia_meta: comp },
+              }));
+              return { ok: true };
+            }}
+            onRemoverMeta={async (empresa) => {
+              const comp = empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
+              if (!comp) return;
+              await supabase.from('valor_meta_empresa')
+                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+              const delKey = `${empresa.id}__${comp}`;
+              setMetasGravadas(prev => { const n={...prev}; delete n[delKey]; return n; });
+            }}
           />
         </div>
       )}
