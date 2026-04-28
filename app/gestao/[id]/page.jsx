@@ -41,18 +41,23 @@ const TIPO_CRM = {
   outro:      { icon:'📌', label:'Outro',        cor:'#6b7280' },
 };
 
-// ─── Calcula meta automática aplicando peso do produto ─────────────────────
-// O valor que entra na meta = valorConsiderado × peso_categoria × (pct_consultor/100)
-// Exemplo: R$10.000 mov × 30% peso × 100% consultor = R$3.000 na meta
+// ─── Calcula meta automática ───────────────────────────────────────────────
+// Regra de peso:
+//   Vegas Benefícios → peso do produto aplica na meta (ex: 30% → R$10k vira R$3k)
+//   Todos os outros  → peso é só para previsão de faturamento; meta usa 100%
 function calcularMetaAutomatica(empresa, movimentos, ajustes) {
-  const cat = (empresa?.categoria || '').toLowerCase();
+  const cat     = (empresa?.categoria        || '').toLowerCase();
+  const produto = (empresa?.produto_contratado || '').toLowerCase().trim();
   const isBenef = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus');
   const isConv  = cat.includes('conv')   || cat.includes('mobil');
   if (!isBenef && !isConv) return null;
 
   const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
-  const peso      = empresa?.peso_categoria ?? 1;  // ex: 0.30 para 30%
-  const pct       = empresa?.pct_principal  ?? 100; // % do consultor principal
+
+  // Peso só entra na meta se for especificamente "Vegas Benefícios"
+  const isVegasBeneficios = produto === 'vegas benefícios' || produto === 'vegas beneficios';
+  const peso = isVegasBeneficios ? (empresa?.peso_categoria ?? 1) : 1;
+  const pct  = empresa?.pct_principal ?? 100;
 
   const comValor = movimentos
     .filter(m => m.total_liberado > 0)
@@ -676,7 +681,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       </div>
                       <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:2}}>
                         <strong style={{color:'#16a34a'}}>{fmt(metaAuto.valorMeta)}</strong>
-                        {' '}= {fmt(metaAuto.valorConsiderado)} × {fmtPct(peso*100)} peso × {fmtPct(pctCons)}% consultor
+                        {' '}= {fmt(metaAuto.valorConsiderado)}
+                        {metaAuto.peso < 1 && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(metaAuto.peso*100)}% peso VB</span></>}
+                        {' '}× {fmtPct(pctCons)} consultor
                         {metaAuto.temAjuste&&<span style={{color:'#f0b429'}}> (valor ajustado)</span>}
                       </div>
                     </div>
@@ -695,11 +702,15 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem'}}>
                         Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
                       </div>
-                      {/* Mostra o detalhamento do cálculo com peso */}
+                      {/* Detalhamento do cálculo — peso só aparece se for Vegas Benefícios */}
                       <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                         <span>{fmt(metaAuto.valorConsiderado)}</span>
-                        <span style={{color:'#d1d5db'}}>×</span>
-                        <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(peso*100)} peso</span>
+                        {metaAuto.peso < 1 && (
+                          <>
+                            <span style={{color:'#d1d5db'}}>×</span>
+                            <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
+                          </>
+                        )}
                         <span style={{color:'#d1d5db'}}>×</span>
                         <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
                         <span style={{color:'#d1d5db'}}>=</span>
@@ -755,13 +766,18 @@ export default function GestaoEmpresaDetalhe({ params }) {
             </div>
           ):(
             <>
+              {/* Verifica se é Vegas Benefícios para aplicar peso na meta */}
+              {(() => {
+              const isVegasBeneficios = ((empresa?.produto_contratado||'').toLowerCase().trim()==='vegas benefícios'||
+                                        (empresa?.produto_contratado||'').toLowerCase().trim()==='vegas beneficios');
+              return (
               <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
                 {[
                   {label:'Total Bruto',      val:fmt(totalMovimentado),bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
                   {label:'Total Considerado',val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
                   {label:'Ajustes Ativos',   val:ajustes.length,bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
                   {label:'Meses Ativos',     val:`${mesesAtivos} de ${movimentos.length}`,bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
-                  {label:`🎯 Meta (${fmtPct(peso*100)} peso)`,val:totalMetaApurado>0?fmt(totalMetaApurado):'—',bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
+                  {label:isVegasBeneficios?`🎯 Meta (${fmtPct(peso*100)}% peso)`:'🎯 Apurado Meta',val:totalMetaApurado>0?fmt(totalMetaApurado):'—',bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
                 ].map(({label,val,bg,border,cor})=>(
                   <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
                     <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
@@ -769,6 +785,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </div>
                 ))}
               </div>
+              );})()}
 
               <div style={{border:'1px solid #e4e7ef',borderRadius:10,overflow:'hidden'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
@@ -790,8 +807,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       const metaGravada    = metaMap[comp];
                       const temMeta        = !!metaGravada;
                       const ehMesMetaAuto  = metaAuto&&!metaAuto.pendente&&metaAuto.comp===comp;
-                      // Valor que entraria na meta para este mês (com peso)
-                      const valorMetaCalc  = Math.round(valConsiderado*peso*(pctCons/100)*100)/100;
+                      // Peso só aplica na meta para Vegas Benefícios; demais produtos usam 100%
+                      const _prodNorm  = (empresa?.produto_contratado||'').toLowerCase().trim();
+                      const _isVB      = _prodNorm==='vegas benefícios'||_prodNorm==='vegas beneficios';
+                      const _pesoMeta  = _isVB ? peso : 1;
+                      const valorMetaCalc = Math.round(valConsiderado*_pesoMeta*(pctCons/100)*100)/100;
 
                       return(
                         <>
@@ -894,7 +914,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <div style={{fontSize:'0.72rem',color:'#6b7280'}}>
                                         Mov.: <strong>{fmt(valConsiderado)}</strong>
                                         {temAjuste&&<span style={{color:'#f0b429'}}> (ajustado)</span>}
-                                        {' · '}Peso: <strong style={{color:'#f0b429'}}>{fmtPct(peso*100)}</strong>
+                                        {_isVB && <>{' · '}Peso VB: <strong style={{color:'#f0b429'}}>{fmtPct(peso*100)}</strong></>}
                                         {' · '}Consultor: <strong>{empresa.consultor_principal?.nome||'—'}</strong> ({fmtPct(pctCons)})
                                         {' · '}Sugerido: <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
                                       </div>
@@ -909,12 +929,13 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <label style={sp.labelSm}>Valor que entra na meta *</label>
                                       <input type="number" step="0.01" value={metaForm.valor} onChange={e=>setMetaForm(f=>({...f,valor:e.target.value}))}
                                         style={{...sp.inputInline,border:'1px solid rgba(52,211,153,0.4)',fontWeight:700}} placeholder="Ex: 3000.00" />
-                                      {/* Atalhos de cálculo com peso */}
+                                      {/* Atalhos de cálculo */}
                                       <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
                                         {[
-                                          {label:`${fmtPct(peso*100)} peso`,   val: valorMetaCalc},
-                                          {label:'Bruto total',                 val: m.total_liberado},
-                                          {label:'Considerado',                 val: valConsiderado},
+                                          // Só mostra atalho de peso se for Vegas Benefícios
+                                          ...(_isVB ? [{label:`${fmtPct(peso*100)}% peso`, val: valorMetaCalc}] : []),
+                                          {label:'Movimentação', val: valConsiderado},
+                                          {label:'Bruto',        val: m.total_liberado},
                                         ].filter((v,i,a)=>a.findIndex(x=>x.val===v.val)===i).map(opt=>(
                                           <button key={opt.label} onClick={()=>setMetaForm(f=>({...f,valor:opt.val}))}
                                             style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'#16a34a',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
@@ -936,7 +957,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <div style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8,padding:'10px 14px'}}>
                                         <div style={{fontSize:'0.65rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Fórmula aplicada</div>
                                         <div style={{fontSize:'0.78rem',color:'#4b5563'}}>
-                                          {fmt(valConsiderado)} × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(peso*100)}</span> × <span style={{color:'#2563eb',fontWeight:700}}>{fmtPct(pctCons)}</span> = <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
+                                          {fmt(valConsiderado)}
+                                          {_isVB && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(peso*100)} peso</span></>}
+                                          {' '}× <span style={{color:'#2563eb',fontWeight:700}}>{fmtPct(pctCons)} cons.</span> = <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
                                         </div>
                                       </div>
                                     </div>
