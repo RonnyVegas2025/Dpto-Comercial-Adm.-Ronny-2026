@@ -168,7 +168,11 @@ const bb = {
   limpar: { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '4px 12px', color: '#f87171', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
 
-function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
+function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
+  metasGravadas = {}, modalMeta, setModalMeta,
+  metaForm, setMetaForm, salvandoMeta, erroMeta,
+  salvarMetaInline, removerMetaInline, abrirModalMeta,
+}) {
   const [pagina, setPagina] = useState(1);
   useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
   const totalPaginas = Math.ceil(lista.length / porPagina);
@@ -1091,7 +1095,15 @@ export default function Evolucao() {
             </div> {/* fecha: div flex do wrapper colunas+paginacao */}
           </div> {/* fecha: div justify-content:space-between linha 3 */}
 
-          <TabelaEvolucao lista={listaFiltrada} meses={meses} libMap={libMap} colunas={colunasVisiveis} porPagina={porPagina} />
+          <TabelaEvolucao
+            lista={listaFiltrada} meses={meses} libMap={libMap}
+            colunas={colunasVisiveis} porPagina={porPagina}
+            metasGravadas={metasGravadas} modalMeta={modalMeta} setModalMeta={setModalMeta}
+            metaForm={metaForm} setMetaForm={setMetaForm}
+            salvandoMeta={salvandoMeta} erroMeta={erroMeta}
+            salvarMetaInline={salvarMetaInline} removerMetaInline={removerMetaInline}
+            abrirModalMeta={abrirModalMeta}
+          />
         </div>
       )}
 
