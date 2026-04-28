@@ -272,17 +272,28 @@ function TabelaEvolucao({ lista, meses, libMap, colunas }) {
           </tbody>
           <tfoot>
             <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
-              <td colSpan={5} style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>TOTAL ({lista.length} empresas)</td>
-              {totaisMes.map((t, i) => (
+              <td colSpan={
+                1 +
+                (col('categoria')?1:0) +
+                (col('produto')?1:0) +
+                (col('vendedor')?1:0) +
+                (col('gestor')?1:0) +
+                (col('diretor')?1:0)
+              } style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
+                TOTAL ({lista.length} empresas)
+              </td>
+              {col('meses') && totaisMes.map((t, i) => (
                 <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
                   {t > 0 ? fmt(t) : <span style={{ color: '#374151' }}>—</span>}
                 </td>
               ))}
-              <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totalGeral)}</td>
-              <td colSpan={2} style={{ ...s.td, paddingTop: 14 }} />
-              {col('meta') && <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: '#34d399', paddingTop: 14, borderLeft: '2px solid rgba(52,211,153,0.1)' }}>}          <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: '#34d399', paddingTop: 14, borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
-                {totalMetaApurado > 0 ? fmt(totalMetaApurado) : '—'}
-              </td>
+              {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totalGeral)}</td>}
+              {(col('status') || col('tendencia')) && <td colSpan={(col('status')?1:0)+(col('tendencia')?1:0)} style={{ ...s.td, paddingTop: 14 }} />}
+              {col('meta') && (
+                <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: '#34d399', paddingTop: 14, borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
+                  {totalMetaApurado > 0 ? fmt(totalMetaApurado) : '—'}
+                </td>
+              )}
             </tr>
           </tfoot>
         </table>
