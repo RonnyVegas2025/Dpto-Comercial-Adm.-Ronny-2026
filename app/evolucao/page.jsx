@@ -168,11 +168,11 @@ const bb = {
   limpar: { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '4px 12px', color: '#f87171', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
 
-function TabelaEvolucao({ lista, meses, libMap, colunas }) {
+function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
   const [pagina, setPagina] = useState(1);
-  useEffect(() => { setPagina(1); }, [lista.length]);
-  const totalPaginas = Math.ceil(lista.length / POR_PAGINA);
-  const listaPagina  = lista.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
+  const totalPaginas = Math.ceil(lista.length / porPagina);
+  const listaPagina  = lista.slice((pagina - 1) * porPagina, pagina * porPagina);
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + (e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.filter(e => e._meta?.elegivel).reduce((s, e) => s + (e._meta?.valorMeta || 0), 0);
@@ -404,6 +404,7 @@ export default function Evolucao() {
   const [filtroMeta, setFiltroMeta]           = useState('todos'); // filtro por status de meta
   const [filtroMesMeta, setFiltroMesMeta]     = useState('todos'); // NOVO: filtro por mês da meta
   const [ordenar, setOrdenar]                 = useState('ultimo');
+  const [porPagina, setPorPagina]             = useState(12); // NOVO: itens por página
 
   // ── Configuração de colunas ──────────────────────────────────────────────
   const COLUNAS_DEF = [
@@ -575,7 +576,7 @@ export default function Evolucao() {
     if (ordenar === 'sem')       arr.sort((a, b) => Number(a.creditou) - Number(b.creditou));
     if (ordenar === 'meta')      arr.sort((a, b) => (b._meta?.valorMeta || 0) - (a._meta?.valorMeta || 0));
     return arr;
-  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta, ordenar]);
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta, filtroMesMeta, ordenar]);
 
   const kpis = useMemo(() => {
     const total       = listaFiltrada.length;
@@ -823,8 +824,22 @@ export default function Evolucao() {
               })}
             </div>
 
-            {/* Seletor de colunas */}
-            <div style={{ position: 'relative' }}>
+            {/* Seletor de colunas + por página */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+
+              {/* Por página */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#6b7280', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Por página:</span>
+                {[12, 24, 50, 100].map(n => (
+                  <button key={n} onClick={() => setPorPagina(n)}
+                    style={{ background: porPagina === n ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${porPagina === n ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '5px 10px', color: porPagina === n ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: porPagina === n ? 700 : 400 }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+
+              {/* Seletor de colunas */}
+              <div style={{ position: 'relative' }}>
               <button onClick={() => setPainelColunas(p => !p)}
                 style={{ background: painelColunas ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${painelColunas ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '7px 14px', color: painelColunas ? '#f0b429' : '#9ca3af', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 ⚙️ Colunas selecionadas: {colunasVisiveis.size} de {COLUNAS_DEF.length}
@@ -874,10 +889,11 @@ export default function Evolucao() {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
+              </div> {/* fecha: div position:relative do seletor colunas */}
+            </div> {/* fecha: div flex do wrapper colunas+paginacao */}
+          </div> {/* fecha: div justify-content:space-between linha 3 */}
 
-          <TabelaEvolucao lista={listaFiltrada} meses={meses} libMap={libMap} colunas={colunasVisiveis} />
+          <TabelaEvolucao lista={listaFiltrada} meses={meses} libMap={libMap} colunas={colunasVisiveis} porPagina={porPagina} />
         </div>
       )}
 
