@@ -635,15 +635,24 @@ export default function Evolucao() {
     if (!modalMeta || !metaForm.valor) return;
     setSalvandoMeta(true);
     setErroMeta('');
-    const e   = modalMeta;
-    const comp = e._meta?.mesAlvo || null;
-    if (!comp) { setErroMeta('Mês da meta não identificado'); setSalvandoMeta(false); return; }
+    const e    = modalMeta;
+    const comp = e._meta?.mesAlvo ? String(e._meta.mesAlvo).substring(0,10) : null;
 
-    // Delete → Insert para garantir funcionamento sem constraint única
-    await supabase.from('valor_meta_empresa')
+    console.log('[META] Salvando:', { empresa: e.nome, id: e.id, comp, valor: metaForm.valor, cons: e._cons?.id });
+
+    if (!comp) {
+      setErroMeta('Mês da meta não identificado. Verifique se a empresa tem liberação registrada.');
+      setSalvandoMeta(false);
+      return;
+    }
+
+    // Delete primeiro
+    const { error: delError } = await supabase.from('valor_meta_empresa')
       .delete().eq('empresa_id', e.id).eq('competencia_meta', comp);
+    if (delError) console.warn('[META] Delete error (ignorado):', delError.message);
 
-    const { error } = await supabase.from('valor_meta_empresa').insert({
+    // Insert
+    const payload = {
       empresa_id:        e.id,
       produto_id:        e.produto_id,
       consultor_id:      e._cons?.id || null,
@@ -654,19 +663,46 @@ export default function Evolucao() {
       pct_consultor:     e._pct ?? 100,
       regra:             metaForm.regra,
       mes_sequencia:     metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0,
-    });
+    };
+
+    console.log('[META] Payload:', payload);
+
+    const { data: inserted, error } = await supabase
+      .from('valor_meta_empresa')
+      .insert(payload)
+      .select();
+
+    console.log('[META] Resultado:', { inserted, error });
 
     if (error) {
-      setErroMeta('Erro: ' + error.message);
-    } else {
-      // Atualiza o mapa local de metas gravadas sem recarregar a página
-      const metaKey = `${e.id}__${comp}`;
-      setMetasGravadas(prev => ({
-        ...prev,
-        [metaKey]: { valor_meta: parseFloat(metaForm.valor), regra: metaForm.regra, competencia_meta: comp },
-      }));
-      setModalMeta(null);
+      // Tenta de novo sem consultor_id (caso seja campo NOT NULL problemático)
+      console.warn('[META] Tentando sem consultor_id...');
+      const { data: ins2, error: err2 } = await supabase
+        .from('valor_meta_empresa')
+        .insert({ ...payload, consultor_id: null })
+        .select();
+
+      if (err2) {
+        console.error('[META] Erro final:', err2);
+        setErroMeta('Erro ao salvar: ' + err2.message + ' | Original: ' + error.message);
+        setSalvandoMeta(false);
+        return;
+      }
+      console.log('[META] Salvou sem consultor_id:', ins2);
     }
+
+    // Sucesso — atualiza mapa local imediatamente
+    const metaKey = `${e.id}__${comp}`;
+    console.log('[META] Gravando chave local:', metaKey);
+    setMetasGravadas(prev => ({
+      ...prev,
+      [metaKey]: {
+        valor_meta:       parseFloat(metaForm.valor),
+        regra:            metaForm.regra,
+        competencia_meta: comp,
+      },
+    }));
+    setModalMeta(null);
     setSalvandoMeta(false);
   }
 
