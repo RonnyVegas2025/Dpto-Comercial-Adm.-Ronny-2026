@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -214,15 +214,15 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
               const ts   = TEND[e.tend];
               const meta = e._meta;
               // Verifica se tem meta gravada localmente (prioridade sobre _meta calculada)
-              const metaLocal = metasGravadas[e._key];
+              const metaLocal = metasGravadas[`${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`];
               const temMetaGravada = !!metaLocal;
               const isModalAberto  = modalMeta?._key === e._key;
               const rowBg = (meta?.elegivel || temMetaGravada)
                 ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
                 : (i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent');
               return (
-                <>
-                <tr key={e._key} style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
+                <React.Fragment key={e._key}>
+                <tr style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
                   <td style={s.td}>
                     {/* Link para gestão + botão de meta lado a lado */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -375,7 +375,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
                     </td>
                   </tr>
                 )}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -581,8 +581,8 @@ export default function Evolucao() {
     if (vmetas) {
       const map = {};
       for (const v of vmetas) {
-        // Busca empresa para montar a chave empresa_id__consultor_id
-        const key = `${v.empresa_id}__${v.consultor_id}`;
+        // Chave por empresa_id__competencia_meta (sem depender de consultor_id)
+        const key = `${v.empresa_id}__${v.competencia_meta?.substring(0,10)}`;
         map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: v.competencia_meta };
       }
       setMetasGravadas(map);
@@ -632,9 +632,10 @@ export default function Evolucao() {
       setErroMeta('Erro: ' + error.message);
     } else {
       // Atualiza o mapa local de metas gravadas sem recarregar a página
+      const metaKey = `${e.id}__${comp}`;
       setMetasGravadas(prev => ({
         ...prev,
-        [e._key]: { valor_meta: parseFloat(metaForm.valor), regra: metaForm.regra, competencia_meta: comp },
+        [metaKey]: { valor_meta: parseFloat(metaForm.valor), regra: metaForm.regra, competencia_meta: comp },
       }));
       setModalMeta(null);
     }
@@ -647,9 +648,10 @@ export default function Evolucao() {
     if (!comp) return;
     await supabase.from('valor_meta_empresa')
       .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+    const delKey = `${empresa.id}__${comp?.substring(0,10)}`;
     setMetasGravadas(prev => {
       const next = { ...prev };
-      delete next[empresa._key];
+      delete next[delKey];
       return next;
     });
   }
