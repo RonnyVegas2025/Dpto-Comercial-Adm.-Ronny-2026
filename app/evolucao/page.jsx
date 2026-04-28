@@ -213,18 +213,28 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
             {listaPagina.map((e, i) => {
               const ts   = TEND[e.tend];
               const meta = e._meta;
-              const rowBg = meta?.elegivel
+              // Verifica se tem meta gravada localmente (prioridade sobre _meta calculada)
+              const metaLocal = metasGravadas[e._key];
+              const temMetaGravada = !!metaLocal;
+              const isModalAberto  = modalMeta?._key === e._key;
+              const rowBg = (meta?.elegivel || temMetaGravada)
                 ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
                 : (i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent');
               return (
+                <>
                 <tr key={e._key} style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
                   <td style={s.td}>
-                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer' }}
-                      onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
-                      onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
-                      {e.nome}
-                    </a>
-                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                    {/* Link para gestão + botão de meta lado a lado */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
+                          onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                          onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                          {e.nome}
+                        </a>
+                        <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>ID {e.produto_id}</div>
+                      </div>
+                    </div>
                   </td>
                   {col('categoria') && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>}
                   {col('produto')   && <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>}
@@ -262,11 +272,110 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12 }) {
                   {col('tendencia') && <td style={{ ...s.td, textAlign: 'center' }}>
                     <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
                   </td>}
-                  {/* ── COLUNA META ── */}
-                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
-                    <BadgeMeta meta={meta} pct={e._pct} />
+                  {/* ── COLUNA META — clicável ── */}
+                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)', cursor: meta?.elegivel || meta?.regra ? 'pointer' : 'default' }}
+                    onClick={() => (meta?.elegivel || meta?.regra) && abrirModalMeta(e)}>
+                    {temMetaGravada ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                        <span style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.4)', color: '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
+                          ✅ Gravado · {fmtMes(metaLocal.competencia_meta)}
+                        </span>
+                        <span style={{ color: '#34d399', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(metaLocal.valor_meta)}</span>
+                        <span style={{ color: '#4b5563', fontSize: '0.6rem' }}>clique para editar</span>
+                      </div>
+                    ) : (
+                      <BadgeMeta meta={meta} pct={e._pct} onClick={() => meta?.elegivel && abrirModalMeta(e)} />
+                    )}
+                    {(meta?.elegivel && !temMetaGravada) && (
+                      <button onClick={(ev) => { ev.stopPropagation(); abrirModalMeta(e); }}
+                        style={{ marginTop: 4, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 5, padding: '2px 10px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700, display: 'block', width: '100%' }}>
+                        + Marcar meta
+                      </button>
+                    )}
                   </td>}
                 </tr>
+
+                {/* ── LINHA EXPANDIDA: Modal de meta inline ── */}
+                {isModalAberto && col('meta') && (
+                  <tr key={e._key + '-modal'} style={{ background: 'rgba(52,211,153,0.03)' }}>
+                    <td colSpan={99} style={{ padding: '0 12px 12px' }}>
+                      <div style={{ background: '#0f1923', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 12, padding: '16px 20px', animation: 'fadeIn 0.2s ease' }}>
+                        {/* Cabeçalho do modal */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.88rem', marginBottom: 3 }}>
+                              🎯 {temMetaGravada ? 'Editar meta' : 'Marcar na meta'} — {e.nome}
+                            </div>
+                            <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
+                              {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes(meta?.mesAlvo)}
+                              {' '}· Valor bruto: <strong style={{ color: '#e8eaf0' }}>{fmt(meta?.valorBruto)}</strong>
+                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor}</strong> ({e._pct}%)
+                              {' '}· Sugerido: <strong style={{ color: '#34d399' }}>{fmt(meta?.valorMeta)}</strong>
+                            </div>
+                          </div>
+                          <button onClick={() => setModalMeta(null)}
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', color: '#6b7280', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                            ✕ Fechar
+                          </button>
+                        </div>
+
+                        {erroMeta && <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: '#f87171', fontSize: '0.78rem' }}>{erroMeta}</div>}
+
+                        {/* Campos */}
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <div style={{ minWidth: 200 }}>
+                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Valor que entra na meta *</label>
+                            <input type="number" step="0.01" value={metaForm.valor}
+                              onChange={ev => setMetaForm(f => ({ ...f, valor: ev.target.value }))}
+                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
+                              placeholder="Ex: 4398.00" autoFocus />
+                            {/* Atalhos */}
+                            <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                              {[
+                                { label: 'Sugerido', val: meta?.valorMeta },
+                                { label: 'Bruto',    val: meta?.valorBruto },
+                                { label: 'Consid.',  val: meta?.valorConsid },
+                              ].filter(o => o.val > 0).filter((o,i,a) => a.findIndex(x=>x.val===o.val)===i).map(o => (
+                                <button key={o.label} onClick={() => setMetaForm(f => ({ ...f, valor: o.val }))}
+                                  style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 5, padding: '2px 8px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 600 }}>
+                                  {o.label}: {fmt(o.val)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{ minWidth: 200 }}>
+                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Regra</label>
+                            <select value={metaForm.regra} onChange={ev => setMetaForm(f => ({ ...f, regra: ev.target.value }))}
+                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }}>
+                              <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
+                              <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
+                              <option value="manual">✏️ Inclusão Manual</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <button onClick={salvarMetaInline} disabled={salvandoMeta || !metaForm.valor}
+                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                              {salvandoMeta ? 'Salvando...' : temMetaGravada ? '💾 Atualizar' : '🎯 Confirmar'}
+                            </button>
+                            {temMetaGravada && (
+                              <button onClick={() => { removerMetaInline(e); setModalMeta(null); }}
+                                style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, padding: '10px 16px', color: '#f87171', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                🗑 Remover
+                              </button>
+                            )}
+                            <a href={`/gestao/${e.id}`} target="_blank"
+                              style={{ color: '#6b7280', fontSize: '0.72rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                              onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                              onMouseLeave={ev => ev.currentTarget.style.color='#6b7280'}>
+                              ↗ Abrir ficha completa
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </>
               );
             })}
           </tbody>
@@ -404,7 +513,15 @@ export default function Evolucao() {
   const [filtroMeta, setFiltroMeta]           = useState('todos'); // filtro por status de meta
   const [filtroMesMeta, setFiltroMesMeta]     = useState('todos'); // NOVO: filtro por mês da meta
   const [ordenar, setOrdenar]                 = useState('ultimo');
-  const [porPagina, setPorPagina]             = useState(12); // NOVO: itens por página
+  const [porPagina, setPorPagina]             = useState(12);
+
+  // ── Modal de meta inline ──────────────────────────────────────────────────
+  const [modalMeta, setModalMeta]     = useState(null); // { empresa, meta } ou null
+  const [metaForm, setMetaForm]       = useState({ valor: '', regra: 'beneficio' });
+  const [salvandoMeta, setSalvandoMeta] = useState(false);
+  const [erroMeta, setErroMeta]       = useState('');
+  // Mapa de metas gravadas: empresa_id__consultor_id → valor_meta
+  const [metasGravadas, setMetasGravadas] = useState({}); // NOVO: itens por página
 
   // ── Configuração de colunas ──────────────────────────────────────────────
   const COLUNAS_DEF = [
@@ -456,7 +573,85 @@ export default function Evolucao() {
     setLibs(libsData || []);
     setAjustes(ajustesData || []);
     setLibsTodas(libsTodasData || []);
+
+    // Carrega metas gravadas para o mapa local
+    const { data: vmetas } = await supabase
+      .from('valor_meta_empresa')
+      .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra');
+    if (vmetas) {
+      const map = {};
+      for (const v of vmetas) {
+        // Busca empresa para montar a chave empresa_id__consultor_id
+        const key = `${v.empresa_id}__${v.consultor_id}`;
+        map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: v.competencia_meta };
+      }
+      setMetasGravadas(map);
+    }
+
     setLoading(false);
+  }
+
+  // ── Funções do modal de meta inline ─────────────────────────────────────
+  function abrirModalMeta(empresa) {
+    const meta = empresa._meta;
+    const valorSugerido = meta?.elegivel ? meta.valorMeta : (meta?.valorConsid || 0);
+    setMetaForm({
+      valor: metasGravadas[empresa._key]?.valor_meta ?? valorSugerido,
+      regra: metasGravadas[empresa._key]?.regra ?? meta?.regra ?? 'beneficio',
+    });
+    setErroMeta('');
+    setModalMeta(empresa);
+  }
+
+  async function salvarMetaInline() {
+    if (!modalMeta || !metaForm.valor) return;
+    setSalvandoMeta(true);
+    setErroMeta('');
+    const e   = modalMeta;
+    const comp = e._meta?.mesAlvo || null;
+    if (!comp) { setErroMeta('Mês da meta não identificado'); setSalvandoMeta(false); return; }
+
+    // Delete → Insert para garantir funcionamento sem constraint única
+    await supabase.from('valor_meta_empresa')
+      .delete().eq('empresa_id', e.id).eq('competencia_meta', comp);
+
+    const { error } = await supabase.from('valor_meta_empresa').insert({
+      empresa_id:        e.id,
+      produto_id:        e.produto_id,
+      consultor_id:      e._cons?.id || null,
+      competencia_meta:  comp,
+      valor_bruto:       e._meta?.valorBruto || 0,
+      valor_considerado: e._meta?.valorConsid || 0,
+      valor_meta:        parseFloat(metaForm.valor),
+      pct_consultor:     e._pct ?? 100,
+      regra:             metaForm.regra,
+      mes_sequencia:     metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0,
+    });
+
+    if (error) {
+      setErroMeta('Erro: ' + error.message);
+    } else {
+      // Atualiza o mapa local de metas gravadas sem recarregar a página
+      setMetasGravadas(prev => ({
+        ...prev,
+        [e._key]: { valor_meta: parseFloat(metaForm.valor), regra: metaForm.regra, competencia_meta: comp },
+      }));
+      setModalMeta(null);
+    }
+    setSalvandoMeta(false);
+  }
+
+  async function removerMetaInline(empresa) {
+    if (!confirm('Remover da meta?')) return;
+    const comp = empresa._meta?.mesAlvo;
+    if (!comp) return;
+    await supabase.from('valor_meta_empresa')
+      .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+    setMetasGravadas(prev => {
+      const next = { ...prev };
+      delete next[empresa._key];
+      return next;
+    });
   }
 
   const libMap = useMemo(() => {
@@ -666,6 +861,7 @@ export default function Evolucao() {
     <div style={s.page}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         select option { background: #1e2435 !important; color: #e8eaf0 !important; }
       `}</style>
 
