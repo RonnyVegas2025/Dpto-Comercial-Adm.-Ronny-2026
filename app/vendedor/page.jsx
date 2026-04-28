@@ -63,40 +63,73 @@ function KPI({label, val, sub, cor='#e8eaf0', destaque=false, onClick}) {
   );
 }
 
-// Gráfico de barras simples SVG
-function GraficoBarras({dados, altura=140, mostrarMeta=false}) {
+// Gráfico de barras SVG — 3 barras por grupo: Esperado · Mov. Real · Meta
+function GraficoBarras({dados, altura=160}) {
   if(!dados||dados.length===0) return null;
-  const maxVal = Math.max(...dados.map(d=>Math.max(d.mov||0,d.meta||0,d.esperado||0)),1);
-  const W=56, GAP=8;
-  const totalW = dados.length*(W+GAP);
+
+  // Cada grupo tem 3 barras de 18px + 4px gap entre elas + 20px gap entre grupos
+  const BAR_W = 18;
+  const BAR_GAP = 4;        // gap entre barras do mesmo grupo
+  const GROUP_W = BAR_W*3 + BAR_GAP*2;  // largura do grupo = 62px
+  const GROUP_GAP = 22;     // gap entre grupos
+  const STEP = GROUP_W + GROUP_GAP;     // passo por mês = 84px
+
+  const maxVal = Math.max(...dados.map(d=>Math.max(d.mov||0,d.meta||0.1,d.esperado||0.1)),1);
+  const svgW = Math.max(dados.length * STEP + GROUP_GAP, 400);
+  const BOTTOM = altura + 24; // espaço para labels
+
+  function barH(v) { return Math.max(Math.round((v||0)/maxVal*(altura-8)),0); }
 
   return (
-    <div style={{overflowX:'auto'}}>
-      <svg width={Math.max(totalW,400)} height={altura+40} style={{display:'block'}}>
+    <div style={{overflowX:'auto',marginBottom:4}}>
+      <svg width={svgW} height={BOTTOM+10} style={{display:'block'}}>
+        {/* Linhas de grade */}
+        {[0.25,0.5,0.75,1].map(p=>{
+          const y = altura - Math.round(p*( altura-8));
+          return <line key={p} x1={0} y1={y} x2={svgW} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1}/>;
+        })}
+
         {dados.map((d,i)=>{
-          const x = i*(W+GAP);
-          const barW = mostrarMeta ? 16 : 24;
-          const movH  = Math.round((d.mov||0)/maxVal*(altura-10));
-          const metaH = Math.round((d.meta||0)/maxVal*(altura-10));
-          const espH  = Math.round((d.esperado||0)/maxVal*(altura-10));
-          const cor   = corPct(d.esperado>0?(d.mov/d.esperado)*100:0);
+          const gx = GROUP_GAP/2 + i*STEP;   // x inicial do grupo
+          const corMov = corPct(d.esperado>0?(d.mov/d.esperado)*100:0);
+
+          const hEsp  = barH(d.esperado);
+          const hMov  = barH(d.mov);
+          const hMeta = barH(d.meta);
+
+          // Posição x de cada barra dentro do grupo
+          const xEsp  = gx;
+          const xMov  = gx + BAR_W + BAR_GAP;
+          const xMeta = gx + (BAR_W + BAR_GAP)*2;
+
+          // Centro do grupo para o label
+          const cx = gx + GROUP_W/2;
 
           return (
             <g key={i}>
-              {/* Esperado (fundo) */}
-              {mostrarMeta && <rect x={x} y={altura-espH} width={barW} height={espH} fill="rgba(167,139,250,0.2)" rx={3}/>}
-              {/* Movimentação real */}
-              <rect x={x+(mostrarMeta?barW+2:0)} y={altura-movH} width={barW} height={movH} fill={cor} rx={3} opacity={0.85}/>
-              {/* Meta considerada */}
-              {mostrarMeta && d.meta>0 && <rect x={x+(barW+2)*2} y={altura-metaH} width={barW} height={metaH} fill={COR.ok} rx={3} opacity={0.7}/>}
-              {/* Label mês */}
-              <text x={x+(mostrarMeta?barW*1.5+2:barW/2)} y={altura+14} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="DM Sans">
-                {fmtMes(d.mes+'-01').replace('/20','/').replace('/','/')}
-              </text>
-              {/* Valor em cima */}
-              {movH>20&&<text x={x+(mostrarMeta?barW+barW/2+2:barW/2)} y={altura-movH-4} textAnchor="middle" fill={cor} fontSize={9} fontWeight={700} fontFamily="DM Sans">
+              {/* Barra Esperado (roxa) */}
+              {hEsp>0&&<rect x={xEsp} y={altura-hEsp} width={BAR_W} height={hEsp} fill="rgba(167,139,250,0.35)" rx={3}/>}
+              {hEsp===0&&<rect x={xEsp} y={altura-2} width={BAR_W} height={2} fill="rgba(167,139,250,0.15)" rx={1}/>}
+
+              {/* Barra Movimentação Real */}
+              {hMov>0&&<rect x={xMov} y={altura-hMov} width={BAR_W} height={hMov} fill={corMov} rx={3} opacity={0.9}/>}
+              {hMov===0&&<rect x={xMov} y={altura-2} width={BAR_W} height={2} fill="rgba(255,255,255,0.1)" rx={1}/>}
+              {/* Valor em cima da barra de mov */}
+              {hMov>16&&<text x={xMov+BAR_W/2} y={altura-hMov-5} textAnchor="middle" fill={corMov} fontSize={9} fontWeight={700} fontFamily="DM Sans,sans-serif">
                 {fmtK(d.mov)}
               </text>}
+
+              {/* Barra Meta (verde) */}
+              {hMeta>0&&<rect x={xMeta} y={altura-hMeta} width={BAR_W} height={hMeta} fill={COR.ok} rx={3} opacity={0.75}/>}
+              {hMeta===0&&d.meta===0&&<rect x={xMeta} y={altura-2} width={BAR_W} height={2} fill="rgba(52,211,153,0.1)" rx={1}/>}
+              {hMeta>16&&<text x={xMeta+BAR_W/2} y={altura-hMeta-5} textAnchor="middle" fill={COR.ok} fontSize={9} fontWeight={700} fontFamily="DM Sans,sans-serif">
+                {fmtK(d.meta)}
+              </text>}
+
+              {/* Label do mês centralizado no grupo */}
+              <text x={cx} y={altura+16} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="DM Sans,sans-serif">
+                {fmtMes(d.mes+'-01')}
+              </text>
             </g>
           );
         })}
@@ -105,13 +138,22 @@ function GraficoBarras({dados, altura=140, mostrarMeta=false}) {
   );
 }
 
-// Legenda do gráfico
-function Legenda({mostrarMeta}) {
+// Legenda
+function Legenda() {
   return (
-    <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:8}}>
-      {mostrarMeta&&<div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:'rgba(167,139,250,0.3)'}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Esperado</span></div>}
-      <div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:'#f0b429'}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Movimentação Real</span></div>
-      {mostrarMeta&&<div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:COR.ok}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Meta Considerada</span></div>}
+    <div style={{display:'flex',gap:16,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{display:'flex',alignItems:'center',gap:5}}>
+        <div style={{width:12,height:10,borderRadius:2,background:'rgba(167,139,250,0.45)'}}/>
+        <span style={{fontSize:'0.72rem',color:'#6b7280'}}>Esperado</span>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:5}}>
+        <div style={{width:12,height:10,borderRadius:2,background:'#f0b429'}}/>
+        <span style={{fontSize:'0.72rem',color:'#6b7280'}}>Movimentação Real</span>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:5}}>
+        <div style={{width:12,height:10,borderRadius:2,background:COR.ok}}/>
+        <span style={{fontSize:'0.72rem',color:'#6b7280'}}>Meta Considerada</span>
+      </div>
     </div>
   );
 }
@@ -192,6 +234,47 @@ export default function DashboardVendedor() {
       const vmetaMap={};
       for(const v of vmetas){vmetaMap[`${v.empresa_id}__${v.consultor_id}`]=v;}
 
+      // libsTodasMap: produto_id → [{comp,val}] ordenado — para cálculo automático de meta
+      const libsTodasMap={};
+      for(const l of libsTodas){
+        const pid=l.produto_id;
+        if(!libsTodasMap[pid]) libsTodasMap[pid]=[];
+        libsTodasMap[pid].push({comp:l.competencia?.substring(0,10),val:l.total_liberado||0});
+      }
+
+      // Calcula meta inline (igual à gestão) — usa gravado se existir, senão calcula
+      function calcMetaInline(emp, consId, pct) {
+        // Primeiro tenta usar o valor gravado na tabela
+        const gravado = vmetaMap[`${emp.id}__${consId}`];
+        if(gravado) return {valorMeta:gravado.valor_meta||0, metaComp:gravado.competencia_meta, metaRegra:gravado.regra};
+
+        // Senão calcula automaticamente
+        const cat=(emp.categoria||'').toLowerCase();
+        const isBenef=cat.includes('benefi')||cat.includes('bonus')||cat.includes('bônus');
+        const isConv=cat.includes('conv')||cat.includes('mobil');
+        if(!isBenef&&!isConv) return {valorMeta:0,metaComp:null,metaRegra:null};
+
+        const prodNorm=(emp.produto_contratado||'').toLowerCase().trim();
+        const isVB=prodNorm==='vegas benefícios'||prodNorm==='vegas beneficios';
+        const peso=isVB?(emp.peso_categoria??1):1;
+
+        const libs=(libsTodasMap[emp.produto_id]||[])
+          .filter(l=>l.val>0)
+          .sort((a,b)=>a.comp.localeCompare(b.comp));
+
+        if(libs.length===0) return {valorMeta:0,metaComp:null,metaRegra:null};
+
+        let mesAlvo=null, regra=null;
+        if(isBenef){ mesAlvo=libs[0]; regra='beneficio'; }
+        else { if(libs.length<3) return {valorMeta:0,metaComp:null,metaRegra:null}; mesAlvo=libs[2]; regra='convenio'; }
+
+        const comp=mesAlvo.comp;
+        const aj=ajusteMap[`${emp.id}__${comp}`];
+        const valorBase=aj!==undefined?aj:mesAlvo.val;
+        const valorMeta=Math.round(valorBase*peso*(pct/100)*100)/100;
+        return {valorMeta,metaComp:comp,metaRegra:regra};
+      }
+
       const mesesDisp=[...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
       const consultor=consultorId?consultores.find(c=>c.id===consultorId):null;
       const consultoresDaVisao=consultorId?[consultor].filter(Boolean):gestorFiltro==='Geral'?consultores:consultores.filter(c=>c.gestor===gestorFiltro);
@@ -228,11 +311,8 @@ export default function DashboardVendedor() {
           const esperadoMes=(e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
           const aderencia=esperadoMes>0?(mediaMovMes/esperadoMes)*100:0;
 
-          // Meta gravada
-          const vmEntry=vmetaMap[`${e.id}__${cons.id}`];
-          const valorMeta=vmEntry?.valor_meta||0;
-          const metaComp=vmEntry?.competencia_meta||null;
-          const metaRegra=vmEntry?.regra||null;
+          // Meta: usa gravado ou calcula inline
+          const {valorMeta,metaComp,metaRegra} = calcMetaInline(e, cons.id, pct);
 
           // Ano de cadastro (para segmentar carteira)
           const anoCadastro=e.data_cadastro?new Date(e.data_cadastro).getFullYear():null;
@@ -275,7 +355,7 @@ export default function DashboardVendedor() {
         mes:m,
         mov:lista.reduce((s,e)=>s+(e.movPorMes[m]||0),0),
         esperado:lista.reduce((s,e)=>s+e.esperadoMes,0),
-        // Meta considerada no mês: soma das metas cujo competencia_meta é esse mês
+        // Meta: soma das empresas cujo mês de meta (gravado ou calculado) é este mês
         meta:lista.filter(e=>e.metaComp?.substring(0,7)===m).reduce((s,e)=>s+e.valorMeta,0),
         empresas:lista.filter(e=>(e.movPorMes[m]||0)>0).length,
       }));
@@ -506,13 +586,13 @@ export default function DashboardVendedor() {
               <div style={{...s.card,animation:'fadeUp 0.3s ease'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:8}}>
                   <div style={s.cardTitle}>📈 Evolução da Movimentação por Mês</div>
-                  <Legenda mostrarMeta={true}/>
+                  <Legenda/>
                 </div>
                 {mesesDisp.length===0?(
                   <div style={s.semDados}>Nenhuma liberação importada</div>
                 ):(
                   <>
-                    <GraficoBarras dados={porMes} mostrarMeta={true} altura={160}/>
+                    <GraficoBarras dados={porMes} altura={160}/>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginTop:20}}>
                       {porMes.map(m=>{
                         const pctM=m.esperado>0?(m.mov/m.esperado)*100:0;
