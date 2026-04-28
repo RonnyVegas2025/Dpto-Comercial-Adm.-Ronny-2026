@@ -10,6 +10,7 @@ const supabase = createClient(
 );
 
 const fmt     = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtPct  = (v) => `${Number(v||0).toFixed(0)}%`;
 const fmtDate = (d) => { if(!d) return '—'; const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
 const fmtDT   = (d) => {
   if(!d) return '—';
@@ -40,7 +41,9 @@ const TIPO_CRM = {
   outro:      { icon:'📌', label:'Outro',        cor:'#6b7280' },
 };
 
-// ─── Calcula automaticamente qual mês/valor deveria entrar na meta ───────────
+// ─── Calcula meta automática aplicando peso do produto ─────────────────────
+// O valor que entra na meta = valorConsiderado × peso_categoria × (pct_consultor/100)
+// Exemplo: R$10.000 mov × 30% peso × 100% consultor = R$3.000 na meta
 function calcularMetaAutomatica(empresa, movimentos, ajustes) {
   const cat = (empresa?.categoria || '').toLowerCase();
   const isBenef = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus');
@@ -48,8 +51,9 @@ function calcularMetaAutomatica(empresa, movimentos, ajustes) {
   if (!isBenef && !isConv) return null;
 
   const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
+  const peso      = empresa?.peso_categoria ?? 1;  // ex: 0.30 para 30%
+  const pct       = empresa?.pct_principal  ?? 100; // % do consultor principal
 
-  // Meses com valor > 0, ordenados
   const comValor = movimentos
     .filter(m => m.total_liberado > 0)
     .sort((a, b) => a.competencia.localeCompare(b.competencia));
@@ -58,32 +62,31 @@ function calcularMetaAutomatica(empresa, movimentos, ajustes) {
 
   let mesAlvo = null;
   if (isBenef) {
-    // 1ª liberação com valor > 0
-    if (comValor.length < 1) return null;
-    mesAlvo = comValor[0];
+    mesAlvo = comValor[0]; // 1ª recarga
   } else {
-    // 3ª liberação com valor > 0
-    if (comValor.length < 3) return { pendente: true, progresso: comValor.length, precisam: 3 };
-    mesAlvo = comValor[2];
+    if (comValor.length < 3) return { pendente: true, progresso: comValor.length, precisam: 3, regra: 'convenio' };
+    mesAlvo = comValor[2]; // 3ª liberação
   }
 
-  const comp   = mesAlvo.competencia?.substring(0, 10);
-  const aj     = ajusteMap[comp];
-  const bruto  = mesAlvo.total_liberado;
-  const consid = aj ? aj.valor_considerado : bruto;
-  const pct    = empresa?.pct_principal ?? 100;
-  const valorMeta = Math.round(consid * (pct / 100) * 100) / 100;
+  const comp            = mesAlvo.competencia?.substring(0, 10);
+  const aj              = ajusteMap[comp];
+  const valorBruto      = mesAlvo.total_liberado;
+  const valorConsiderado = aj ? aj.valor_considerado : valorBruto;
+
+  // Valor meta = movimentação × peso do produto × % do consultor
+  const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
 
   return {
-    pendente:         false,
+    pendente:          false,
     comp,
-    mesLabel:         fmtMes(comp),
-    valorBruto:       bruto,
-    valorConsiderado: consid,
+    mesLabel:          fmtMes(comp),
+    valorBruto,
+    valorConsiderado,
     valorMeta,
+    peso,
     pct,
-    regra:            isBenef ? 'beneficio' : 'convenio',
-    temAjuste:        !!aj,
+    regra:             isBenef ? 'beneficio' : 'convenio',
+    temAjuste:         !!aj,
   };
 }
 
@@ -98,18 +101,15 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [ajustes,      setAjustes]      = useState([]);
   const [valorMetas,   setValorMetas]   = useState([]);
 
-  // Ajuste de valor por mês
   const [editandoMes,    setEditandoMes]    = useState(null);
   const [ajusteForm,     setAjusteForm]     = useState({ valor:'', motivo:'upsell', observacao:'' });
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
-  // Meta manual por mês
   const [metaMes,      setMetaMes]      = useState(null);
-  const [metaForm,     setMetaForm]     = useState({ valor:'', regra:'beneficio', observacao:'' });
+  const [metaForm,     setMetaForm]     = useState({ valor:'', regra:'beneficio' });
   const [salvandoMeta, setSalvandoMeta] = useState(false);
   const [erroMeta,     setErroMeta]     = useState('');
 
-  // Auto-meta
   const [aplicandoAuto, setAplicandoAuto] = useState(false);
   const [removendoMeta, setRemovendoMeta] = useState(false);
 
@@ -154,7 +154,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
       supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id||0).order('competencia'),
       supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
-      supabase.from('valor_meta_empresa').select('*').eq('empresa_id', id).order('competencia_meta'),
+      // Busca sem campo observacao para evitar erro de schema
+      supabase.from('valor_meta_empresa')
+        .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia,peso_produto')
+        .eq('empresa_id', id).order('competencia_meta'),
     ]);
 
     setEmpresa(emp);
@@ -194,13 +197,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
     }
   }, [empresa?.produto_id]);
 
-  // Calcula a meta automática com base nos dados carregados
   const metaAuto = useMemo(
     () => calcularMetaAutomatica(empresa, movimentos, ajustes),
     [empresa, movimentos, ajustes]
   );
 
-  // Verifica se a meta automática já está gravada
   const metaAutoGravada = useMemo(() => {
     if (!metaAuto || metaAuto.pendente) return false;
     return valorMetas.some(v => v.competencia_meta?.substring(0,10) === metaAuto.comp);
@@ -282,72 +283,74 @@ export default function GestaoEmpresaDetalhe({ params }) {
   }
 
   async function removerAjuste(competencia) {
-    if (!confirm('Remover ajuste? O valor original será considerado novamente.')) return;
+    if (!confirm('Remover ajuste?')) return;
     const comp = competencia?.substring(0,10);
     await supabase.from('ajustes_movimentacao').delete().eq('empresa_id', id).eq('competencia', comp);
     setAjustes(a => a.filter(x => x.competencia?.substring(0,10) !== comp));
   }
 
-  // ── Salvar meta (insert com delete prévio para evitar problema de constraint) ──
+  // ── Salvar meta: delete → insert (sem campo observacao) ──────────────────
   async function salvarMetaComp(comp, payload) {
     setErroMeta('');
-    // Primeiro deleta qualquer registro existente para esse mês
     await supabase.from('valor_meta_empresa')
       .delete().eq('empresa_id', id).eq('competencia_meta', comp);
-    // Depois insere o novo
     const { error } = await supabase.from('valor_meta_empresa').insert(payload);
     if (error) {
       setErroMeta('Erro ao salvar: ' + error.message);
       return false;
     }
-    // Recarrega lista de metas
-    const { data } = await supabase.from('valor_meta_empresa').select('*').eq('empresa_id', id).order('competencia_meta');
+    const { data } = await supabase.from('valor_meta_empresa')
+      .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia,peso_produto')
+      .eq('empresa_id', id).order('competencia_meta');
     setValorMetas(data||[]);
     return true;
   }
 
-  // Aplica a meta automática calculada
+  // Payload base — apenas colunas que existem na tabela (sem observacao)
+  function montarPayload(comp, valorBruto, valorConsiderado, valorMeta, regra, mesSeq) {
+    return {
+      empresa_id:        id,
+      produto_id:        empresa?.produto_id,
+      consultor_id:      empresa?.consultor_principal_id || null,
+      competencia_meta:  comp,
+      valor_bruto:       valorBruto,
+      valor_considerado: valorConsiderado,
+      valor_meta:        valorMeta,
+      pct_consultor:     empresa?.pct_principal ?? 100,
+      peso_produto:      empresa?.peso_categoria ?? 1,
+      regra,
+      mes_sequencia:     mesSeq,
+    };
+  }
+
   async function aplicarMetaAuto() {
     if (!metaAuto || metaAuto.pendente) return;
     setAplicandoAuto(true);
-    const consId = empresa?.consultor_principal_id;
-    const payload = {
-      empresa_id:        id,
-      produto_id:        empresa?.produto_id,
-      consultor_id:      consId || null,
-      competencia_meta:  metaAuto.comp,
-      valor_bruto:       metaAuto.valorBruto,
-      valor_considerado: metaAuto.valorConsiderado,
-      valor_meta:        metaAuto.valorMeta,
-      pct_consultor:     metaAuto.pct,
-      regra:             metaAuto.regra,
-      mes_sequencia:     metaAuto.regra === 'beneficio' ? 1 : 3,
-      observacao:        `Aplicado automaticamente — ${metaAuto.regra === 'beneficio' ? '1ª recarga' : '3º mês'}`,
-    };
+    const payload = montarPayload(
+      metaAuto.comp,
+      metaAuto.valorBruto,
+      metaAuto.valorConsiderado,
+      metaAuto.valorMeta,
+      metaAuto.regra,
+      metaAuto.regra === 'beneficio' ? 1 : 3
+    );
     await salvarMetaComp(metaAuto.comp, payload);
     setAplicandoAuto(false);
   }
 
-  // Salva meta manual de um mês específico
   async function salvarMetaManual(comp, valorBruto) {
     if (!metaForm.valor) return;
     setSalvandoMeta(true);
-    const consId = empresa?.consultor_principal_id;
-    const payload = {
-      empresa_id:        id,
-      produto_id:        empresa?.produto_id,
-      consultor_id:      consId || null,
-      competencia_meta:  comp,
-      valor_bruto:       valorBruto,
-      valor_considerado: valorBruto,
-      valor_meta:        parseFloat(metaForm.valor),
-      pct_consultor:     empresa?.pct_principal ?? 100,
-      regra:             metaForm.regra,
-      mes_sequencia:     metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0,
-      observacao:        metaForm.observacao || null,
-    };
+    const payload = montarPayload(
+      comp,
+      valorBruto,
+      valorBruto,
+      parseFloat(metaForm.valor),
+      metaForm.regra,
+      metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0
+    );
     const ok = await salvarMetaComp(comp, payload);
-    if (ok) { setMetaMes(null); setMetaForm({ valor:'', regra:'beneficio', observacao:'' }); }
+    if (ok) { setMetaMes(null); setMetaForm({ valor:'', regra:'beneficio' }); }
     setSalvandoMeta(false);
   }
 
@@ -359,15 +362,14 @@ export default function GestaoEmpresaDetalhe({ params }) {
     setRemovendoMeta(false);
   }
 
-  function abrirMetaManual(comp, valConsiderado, temAjuste) {
-    const pct = empresa?.pct_principal ?? 100;
-    const valMeta = Math.round(valConsiderado * (pct/100) * 100) / 100;
+  function abrirMetaManual(comp, valConsiderado) {
+    const peso     = empresa?.peso_categoria ?? 1;
+    const pct      = empresa?.pct_principal  ?? 100;
+    const valMeta  = Math.round(valConsiderado * peso * (pct/100) * 100) / 100;
     const existente = metaMap[comp];
     setMetaForm({
-      valor:       existente ? existente.valor_meta : valMeta,
-      valorBruto:  valConsiderado,
-      regra:       existente?.regra || detectarRegra(),
-      observacao:  existente?.observacao || '',
+      valor: existente ? existente.valor_meta : valMeta,
+      regra: existente?.regra || detectarRegra(),
     });
     setMetaMes(metaMes === comp ? null : comp);
     setEditandoMes(null);
@@ -375,8 +377,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   function detectarRegra() {
     const cat = (empresa?.categoria||'').toLowerCase();
-    if (cat.includes('conv') || cat.includes('mobil')) return 'convenio';
-    return 'beneficio';
+    return (cat.includes('conv') || cat.includes('mobil')) ? 'convenio' : 'beneficio';
   }
 
   if(loading) return (
@@ -399,16 +400,16 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const mesesAtivos = movimentos.filter(m=>m.total_liberado>0).length;
   const produtos_list = ['Benefícios','Bônus','Convênio','Mobilidade','Taxa Negativa'];
   const MOTIVOS_LABEL = {upsell:'📈 Up-sell',ajuste:'✏️ Ajuste',negociacao:'🤝 Negociação',correcao:'🔧 Correção',outro:'📌 Outro'};
+  const peso      = empresa.peso_categoria ?? 1;
+  const pctCons   = empresa.pct_principal  ?? 100;
+  const cat       = (empresa.categoria||'').toLowerCase();
+  const elegivel  = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
 
   const abas = [
     { key:'crm',        label:'📝 CRM',              badge: historico.length },
     { key:'dados',      label:'✏️ Dados Cadastrais' },
     { key:'movimentos', label:'📊 Movimentação' },
   ];
-
-  // Categorias elegíveis para meta automática
-  const cat = (empresa.categoria||'').toLowerCase();
-  const elegivel = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
 
   return (
     <div style={sp.page}>
@@ -428,27 +429,31 @@ export default function GestaoEmpresaDetalhe({ params }) {
             <h1 style={sp.title}>{empresa.nome}</h1>
             <div style={{display:'flex',gap:8,alignItems:'center',marginTop:6,flexWrap:'wrap'}}>
               <span style={{color:'#8b92b0',fontSize:'0.8rem'}}>ID {empresa.produto_id}</span>
-              {empresa.cnpj && <><span style={{color:'#d1d5e8'}}>·</span><span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
+              {empresa.cnpj&&<><span style={{color:'#d1d5e8'}}>·</span><span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
               <span style={{background:cor.bg,color:cor.text,border:`1px solid ${cor.border}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>{empresa.categoria}</span>
+              {/* Badge do peso do produto */}
+              <span style={{background:'rgba(240,180,41,0.1)',color:'#b45309',border:'1px solid rgba(240,180,41,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
+                ⚖️ Peso: {fmtPct(peso*100)}
+              </span>
               <span style={{background:empresa.ativo?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',color:empresa.ativo?'#16a34a':'#dc2626',border:`1px solid ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
-                {empresa.ativo ? '● Ativa' : '● Inativa'}
+                {empresa.ativo?'● Ativa':'● Inativa'}
               </span>
             </div>
           </div>
         </div>
         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-          {sucesso && <span style={{color:'#16a34a',fontSize:'0.85rem',fontWeight:600}}>✅ Salvo!</span>}
-          {abaAtiva==='dados' && !editando && <button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
-          {abaAtiva==='dados' && editando && <>
+          {sucesso&&<span style={{color:'#16a34a',fontSize:'0.85rem',fontWeight:600}}>✅ Salvo!</span>}
+          {abaAtiva==='dados'&&!editando&&<button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
+          {abaAtiva==='dados'&&editando&&<>
             <button style={sp.btnSec} onClick={()=>{setEditando(false);setErro('');}}>Cancelar</button>
             <button style={sp.btnPri} onClick={salvar} disabled={salvando}>{salvando?'Salvando...':'💾 Salvar'}</button>
           </>}
         </div>
       </div>
 
-      {erro && <div style={sp.erroBox}>❌ {erro}</div>}
+      {erro&&<div style={sp.erroBox}>❌ {erro}</div>}
 
-      {/* Cards de resumo */}
+      {/* Cards resumo */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:24}}>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Potencial Mensal</span>
@@ -456,28 +461,27 @@ export default function GestaoEmpresaDetalhe({ params }) {
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Resultado Esperado</span>
-          <span style={{...sp.resumoV,color:'#f0b429'}}>{fmt((empresa.potencial_movimentacao||0)*(empresa.peso_categoria||1))}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>potencial × {((empresa.peso_categoria||1)*100).toFixed(0)}%</span>
+          <span style={{...sp.resumoV,color:'#f0b429'}}>{fmt((empresa.potencial_movimentacao||0)*peso)}</span>
+          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>potencial × {fmtPct(peso*100)}</span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Total Movimentado</span>
           <span style={{...sp.resumoV,color:'#2563eb'}}>{fmt(totalMovimentado)}</span>
           <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{mesesAtivos} meses ativos</span>
         </div>
-        {/* Card meta */}
-        <div style={{...sp.resumoCard, border: totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef', background: totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff' }}>
+        <div style={{...sp.resumoCard, border: totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef', background: totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff'}}>
           <span style={sp.resumoL}>🎯 Apurado na Meta</span>
           <span style={{...sp.resumoV, color: totalMetaApurado>0?'#16a34a':'#d1d5e8'}}>
-            {totalMetaApurado>0 ? fmt(totalMetaApurado) : '—'}
+            {totalMetaApurado>0?fmt(totalMetaApurado):'—'}
           </span>
           <span style={{color:totalMetaApurado>0?'#6b7280':'#b0b7cc',fontSize:'0.68rem'}}>
-            {valorMetas.length>0 ? `${valorMetas.length} entrada${valorMetas.length>1?'s':''}` : 'sem entradas na meta'}
+            {valorMetas.length>0?`${valorMetas.length} entrada${valorMetas.length>1?'s':''}`:elegivel?'clique Movimentação':'não elegível'}
           </span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Consultor</span>
           <span style={{...sp.resumoV,fontSize:'0.9rem'}}>{empresa.consultor_principal?.nome||'—'}</span>
-          {empresa.consultor_principal?.gestor && <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.consultor_principal.gestor}</span>}
+          {empresa.consultor_principal?.gestor&&<span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.consultor_principal.gestor}</span>}
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Ocorrências CRM</span>
@@ -493,50 +497,41 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
       {/* Abas */}
       <div style={{display:'flex',gap:6,marginBottom:20,borderBottom:'2px solid #e4e7ef'}}>
-        {abas.map(a => (
+        {abas.map(a=>(
           <button key={a.key}
             style={{background:'none',border:'none',borderBottom:`3px solid ${abaAtiva===a.key?'#f0b429':'transparent'}`,padding:'10px 18px',color:abaAtiva===a.key?'#b45309':'#8b92b0',fontWeight:abaAtiva===a.key?700:500,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,marginBottom:'-2px'}}
             onClick={()=>setAbaAtiva(a.key)}>
             {a.label}
-            {a.badge > 0 && <span style={{background:'#eff6ff',color:'#2563eb',borderRadius:10,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>{a.badge}</span>}
+            {a.badge>0&&<span style={{background:'#eff6ff',color:'#2563eb',borderRadius:10,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>{a.badge}</span>}
           </button>
         ))}
       </div>
 
       {/* ── ABA: CRM ── */}
-      {abaAtiva==='crm' && (
+      {abaAtiva==='crm'&&(
         <div style={sp.card}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-            <div>
-              <div style={sp.cardTitle}>📝 Histórico CRM</div>
-              <div style={{color:'#8b92b0',fontSize:'0.78rem',marginTop:2}}>{historico.length} ocorrência{historico.length!==1?'s':''}</div>
-            </div>
+            <div><div style={sp.cardTitle}>📝 Histórico CRM</div><div style={{color:'#8b92b0',fontSize:'0.78rem',marginTop:2}}>{historico.length} ocorrência{historico.length!==1?'s':''}</div></div>
             <button style={sp.btnPri} onClick={()=>setAddCRM(a=>!a)}>{addCRM?'✕ Cancelar':'+ Nova Ocorrência'}</button>
           </div>
-          {addCRM && (
+          {addCRM&&(
             <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:12,padding:20,marginBottom:24}}>
               <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:12,marginBottom:12}}>
-                <div>
-                  <label style={sp.label}>Tipo</label>
+                <div><label style={sp.label}>Tipo</label>
                   <select style={sp.select} value={novaOco.tipo} onChange={e=>setNovaOco(n=>({...n,tipo:e.target.value}))}>
-                    <option value="contato">📞 Contato</option>
-                    <option value="upsell">📈 Up-sell</option>
-                    <option value="negociacao">🤝 Negociação</option>
-                    <option value="prazo">⏳ Prazo Extra</option>
-                    <option value="juros">💸 Juros / Boleto</option>
-                    <option value="reclamacao">⚠️ Reclamação</option>
+                    <option value="contato">📞 Contato</option><option value="upsell">📈 Up-sell</option>
+                    <option value="negociacao">🤝 Negociação</option><option value="prazo">⏳ Prazo Extra</option>
+                    <option value="juros">💸 Juros / Boleto</option><option value="reclamacao">⚠️ Reclamação</option>
                     <option value="outro">📌 Outro</option>
                   </select>
                 </div>
-                <div>
-                  <label style={sp.label}>Título *</label>
+                <div><label style={sp.label}>Título *</label>
                   <input style={sp.input} placeholder="Ex: Identificado oportunidade de up-sell"
                     value={novaOco.titulo} onChange={e=>setNovaOco(n=>({...n,titulo:e.target.value}))}
                     onKeyDown={e=>e.key==='Enter'&&salvarCRM()} />
                 </div>
               </div>
-              <div style={{marginBottom:14}}>
-                <label style={sp.label}>Detalhes / Observações</label>
+              <div style={{marginBottom:14}}><label style={sp.label}>Detalhes / Observações</label>
                 <textarea style={{...sp.input,height:80,resize:'vertical'}}
                   placeholder="Descreva detalhes, valores, próximos passos..."
                   value={novaOco.descricao} onChange={e=>setNovaOco(n=>({...n,descricao:e.target.value}))} />
@@ -547,19 +542,19 @@ export default function GestaoEmpresaDetalhe({ params }) {
               </button>
             </div>
           )}
-          {historico.length===0 ? (
+          {historico.length===0?(
             <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
               <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
               <div style={{fontWeight:600,marginBottom:4}}>Nenhuma ocorrência ainda</div>
               <div style={{fontSize:'0.82rem'}}>Clique em "+ Nova Ocorrência" para começar</div>
             </div>
-          ) : (
+          ):(
             <div style={{position:'relative',paddingLeft:32}}>
               <div style={{position:'absolute',left:11,top:0,bottom:0,width:2,background:'#e4e7ef',borderRadius:2}}></div>
               <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                {historico.map((h) => {
-                  const cfg = TIPO_CRM[h.tipo]||TIPO_CRM.outro;
-                  return (
+                {historico.map((h)=>{
+                  const cfg=TIPO_CRM[h.tipo]||TIPO_CRM.outro;
+                  return(
                     <div key={h.id} className="crm-item" style={{position:'relative',background:'#ffffff',border:'1px solid #e4e7ef',borderLeft:`3px solid ${cfg.cor}`,borderRadius:10,padding:'14px 18px',transition:'background 0.15s'}}>
                       <div style={{position:'absolute',left:-27,top:16,width:12,height:12,borderRadius:'50%',background:cfg.cor,border:'2px solid #ffffff',boxShadow:`0 0 0 2px ${cfg.cor}40`}}></div>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
@@ -570,11 +565,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
                         </div>
                         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
                           <span style={{color:'#8b92b0',fontSize:'0.72rem',whiteSpace:'nowrap'}}>{fmtDT(h.criado_em)}</span>
-                          <button onClick={()=>deletarCRM(h.id)}
-                            style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}>✕</button>
+                          <button onClick={()=>deletarCRM(h.id)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}>✕</button>
                         </div>
                       </div>
-                      {h.descricao && <p style={{color:'#4a5068',fontSize:'0.83rem',margin:0,lineHeight:1.6,paddingLeft:4}}>{h.descricao}</p>}
+                      {h.descricao&&<p style={{color:'#4a5068',fontSize:'0.83rem',margin:0,lineHeight:1.6,paddingLeft:4}}>{h.descricao}</p>}
                     </div>
                   );
                 })}
@@ -584,8 +578,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
         </div>
       )}
 
-      {/* ── ABA: DADOS CADASTRAIS ── */}
-      {abaAtiva==='dados' && (
+      {/* ── ABA: DADOS ── */}
+      {abaAtiva==='dados'&&(
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
           <div style={sp.card}>
             <div style={sp.cardTitle}>📋 Informações Cadastrais</div>
@@ -599,12 +593,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
             <div style={sp.cardTitle}>💰 Produto & Financeiro</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginTop:16}}>
               {[
-                ['Categoria',     editando?<select style={sp.select} value={form.categoria} onChange={e=>set('categoria',e.target.value)}>{produtos_list.map(c=><option key={c} value={c}>{c}</option>)}</select>:<span style={{color:cor.text,fontWeight:600}}>{empresa.categoria}</span>],
-                ['Produto',       editando?<select style={sp.select} value={form.produto_contratado} onChange={e=>set('produto_contratado',e.target.value)}><option value="">— Selecione —</option>{produtos.map(p=><option key={p.id} value={p.nome}>{p.nome}</option>)}</select>:empresa.produto_contratado||'—'],
-                ['Peso (%)',      editando?<input style={sp.input} type="number" step="0.01" value={form.peso_categoria} onChange={e=>set('peso_categoria',e.target.value)}/>:<span style={{color:'#f0b429',fontWeight:600}}>{((empresa.peso_categoria||1)*100).toFixed(0)}%</span>],
-                ['Potencial',    editando?<input style={sp.input} type="number" value={form.potencial_movimentacao} onChange={e=>set('potencial_movimentacao',e.target.value)}/>:<span style={{color:'#16a34a',fontWeight:700}}>{fmt(empresa.potencial_movimentacao)}</span>],
-                ['Taxa Positiva', editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_positiva} onChange={e=>set('taxa_positiva',e.target.value)}/>:<span style={{color:'#16a34a'}}>{empresa.taxa_positiva>0?`${(empresa.taxa_positiva*100).toFixed(2)}%`:'—'}</span>],
-                ['Taxa Negativa', editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_negativa} onChange={e=>set('taxa_negativa',e.target.value)}/>:<span style={{color:empresa.taxa_negativa>0?'#dc2626':'#b0b7cc'}}>{empresa.taxa_negativa>0?`${(empresa.taxa_negativa*100).toFixed(2)}%`:'—'}</span>],
+                ['Categoria',    editando?<select style={sp.select} value={form.categoria} onChange={e=>set('categoria',e.target.value)}>{produtos_list.map(c=><option key={c} value={c}>{c}</option>)}</select>:<span style={{color:cor.text,fontWeight:600}}>{empresa.categoria}</span>],
+                ['Produto',      editando?<select style={sp.select} value={form.produto_contratado} onChange={e=>set('produto_contratado',e.target.value)}><option value="">— Selecione —</option>{produtos.map(p=><option key={p.id} value={p.nome}>{p.nome}</option>)}</select>:empresa.produto_contratado||'—'],
+                ['Peso meta (%)', editando?<input style={sp.input} type="number" step="0.01" min="0" max="1" value={form.peso_categoria} onChange={e=>set('peso_categoria',e.target.value)}/>:<span style={{color:'#f0b429',fontWeight:700}}>{fmtPct((empresa.peso_categoria||1)*100)} <span style={{color:'#8b92b0',fontWeight:400,fontSize:'0.78rem'}}>(da mov. vai para meta)</span></span>],
+                ['Potencial',   editando?<input style={sp.input} type="number" value={form.potencial_movimentacao} onChange={e=>set('potencial_movimentacao',e.target.value)}/>:<span style={{color:'#16a34a',fontWeight:700}}>{fmt(empresa.potencial_movimentacao)}</span>],
+                ['Taxa Positiva',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_positiva} onChange={e=>set('taxa_positiva',e.target.value)}/>:<span style={{color:'#16a34a'}}>{empresa.taxa_positiva>0?`${(empresa.taxa_positiva*100).toFixed(2)}%`:'—'}</span>],
+                ['Taxa Negativa',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_negativa} onChange={e=>set('taxa_negativa',e.target.value)}/>:<span style={{color:empresa.taxa_negativa>0?'#dc2626':'#b0b7cc'}}>{empresa.taxa_negativa>0?`${(empresa.taxa_negativa*100).toFixed(2)}%`:'—'}</span>],
               ].map(([l,v])=>(
                 <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div><div style={{fontSize:'0.9rem'}}>{v}</div></div>
               ))}
@@ -614,36 +608,29 @@ export default function GestaoEmpresaDetalhe({ params }) {
             <div style={sp.cardTitle}>👥 Equipe Comercial</div>
             <div style={{display:'flex',flexDirection:'column',gap:16,marginTop:16}}>
               {[['Consultor Principal','consultor_principal_id',empresa.consultor_principal?.nome],['Consultor Agregado 1','consultor_agregado_id',empresa.consultor_agregado?.nome],['Consultor Agregado 2','consultor_agregado_2_id',empresa.consultor_agregado_2?.nome]].map(([l,k,nome])=>(
-                <div key={l}>
-                  <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div>
+                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div>
                   {editando?<select style={sp.select} value={form[k]} onChange={e=>set(k,e.target.value)}><option value="">— Nenhum —</option>{consultores.map(c=><option key={c.id} value={c.id}>{c.nome}{c.gestor?` (${c.gestor})`:''}</option>)}</select>:<span style={{fontWeight:k==='consultor_principal_id'?600:400}}>{nome||'—'}</span>}
                 </div>
               ))}
-              <div>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Parceiro Comercial</div>
+              <div><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Parceiro Comercial</div>
                 {editando?<select style={sp.select} value={form.parceiro_id} onChange={e=>set('parceiro_id',e.target.value)}><option value="">— Nenhum —</option>{parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select>:<span>{empresa.parceiro?.nome||'—'}</span>}
               </div>
               <div style={{borderTop:'1px solid #e4e7ef',paddingTop:16,marginTop:4}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                  <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1}}>Divisão de Resultado</div>
-                  {empresa.divisao_manual&&<span style={{background:'rgba(240,180,41,0.1)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600}}>Personalizada</span>}
-                </div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Divisão de Resultado</div>
                 {editando?(
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {[{label:'100% Principal',p:100,a1:0,a2:0},{label:'50% / 50%',p:50,a1:50,a2:0},{label:'34% / 33% / 33%',p:34,a1:33,a2:33}].map(opt=>{
                       const ativo=form.pct_principal===opt.p&&form.pct_agregado_1===opt.a1&&form.pct_agregado_2===opt.a2;
-                      const temAgr2=!!empresa.consultor_agregado_2_id||!!form.consultor_agregado_2_id;
-                      const temAgr1=!!empresa.consultor_agregado_id||!!form.consultor_agregado_id;
-                      if(opt.a2>0&&!temAgr2)return null;
-                      if(opt.a1>0&&!temAgr1)return null;
+                      if(opt.a2>0&&!form.consultor_agregado_2_id)return null;
+                      if(opt.a1>0&&!form.consultor_agregado_id)return null;
                       return(<button key={opt.label} onClick={()=>{set('pct_principal',opt.p);set('pct_agregado_1',opt.a1);set('pct_agregado_2',opt.a2);set('divisao_manual',true);}} style={{background:ativo?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${ativo?'rgba(240,180,41,0.4)':'#e4e7ef'}`,borderRadius:8,padding:'8px 16px',color:ativo?'#f0b429':'#4a5068',cursor:'pointer',fontWeight:ativo?700:500,fontSize:'0.82rem',fontFamily:'inherit'}}>{opt.label}</button>);
                     })}
                   </div>
                 ):(
                   <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-                    {[{nome:empresa.consultor_principal?.nome,pct:empresa.pct_principal??100,label:'Principal'},empresa.consultor_agregado?.nome&&{nome:empresa.consultor_agregado?.nome,pct:empresa.pct_agregado_1??0,label:'Agregado 1'},empresa.consultor_agregado_2?.nome&&{nome:empresa.consultor_agregado_2?.nome,pct:empresa.pct_agregado_2??0,label:'Agregado 2'}].filter(Boolean).map((item,i)=>(
+                    {[{nome:empresa.consultor_principal?.nome,pct:empresa.pct_principal??100,label:'Principal'},empresa.consultor_agregado?.nome&&{nome:empresa.consultor_agregado.nome,pct:empresa.pct_agregado_1??0,label:'Agr. 1'},empresa.consultor_agregado_2?.nome&&{nome:empresa.consultor_agregado_2.nome,pct:empresa.pct_agregado_2??0,label:'Agr. 2'}].filter(Boolean).map((item,i)=>(
                       <div key={i} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',display:'flex',alignItems:'center',gap:8}}>
-                        <span style={{background:item.pct>0?'rgba(240,180,41,0.1)':'#f0f2f8',color:item.pct>0?'#f0b429':'#9ca3af',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
+                        <span style={{background:'rgba(240,180,41,0.1)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
                         <span style={{fontSize:'0.82rem',fontWeight:500}}>{item.nome}</span>
                         <span style={{fontSize:'0.68rem',color:'#8b92b0'}}>{item.label}</span>
                       </div>
@@ -673,14 +660,13 @@ export default function GestaoEmpresaDetalhe({ params }) {
       )}
 
       {/* ── ABA: MOVIMENTAÇÃO ── */}
-      {abaAtiva==='movimentos' && (
+      {abaAtiva==='movimentos'&&(
         <div style={sp.card}>
 
-          {/* ── BANNER DE META AUTOMÁTICA ─────────────────────────────────── */}
-          {elegivel && (
+          {/* Banner de meta automática */}
+          {elegivel&&(
             <div style={{marginBottom:20,animation:'fadeIn 0.3s ease'}}>
-              {/* Caso: já tem meta gravada automaticamente */}
-              {metaAutoGravada && metaAuto && !metaAuto.pendente && (
+              {metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
                 <div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
                   <div style={{display:'flex',alignItems:'center',gap:12}}>
                     <span style={{fontSize:'1.4rem'}}>✅</span>
@@ -689,8 +675,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                         Meta aplicada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
                       </div>
                       <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:2}}>
-                        {fmt(metaAuto.valorMeta)} ({metaAuto.pct}% de {fmt(metaAuto.valorConsiderado)}{metaAuto.temAjuste?' — valor ajustado':''})
-                        {' '}· Consultor: {empresa.consultor_principal?.nome||'—'}
+                        <strong style={{color:'#16a34a'}}>{fmt(metaAuto.valorMeta)}</strong>
+                        {' '}= {fmt(metaAuto.valorConsiderado)} × {fmtPct(peso*100)} peso × {fmtPct(pctCons)}% consultor
+                        {metaAuto.temAjuste&&<span style={{color:'#f0b429'}}> (valor ajustado)</span>}
                       </div>
                     </div>
                   </div>
@@ -700,9 +687,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </button>
                 </div>
               )}
-
-              {/* Caso: elegível mas meta ainda não aplicada */}
-              {!metaAutoGravada && metaAuto && !metaAuto.pendente && (
+              {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
                 <div style={{background:'rgba(240,180,41,0.05)',border:'1px solid rgba(240,180,41,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12,animation:'fadeIn 0.3s ease'}}>
                   <div style={{display:'flex',alignItems:'center',gap:12}}>
                     <span style={{fontSize:'1.4rem'}}>🎯</span>
@@ -710,33 +695,32 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem'}}>
                         Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
                       </div>
-                      <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:2}}>
-                        Valor sugerido: <strong style={{color:'#f0b429'}}>{fmt(metaAuto.valorMeta)}</strong>
-                        {' '}({metaAuto.pct}% de {fmt(metaAuto.valorConsiderado)}{metaAuto.temAjuste?' — valor ajustado':''})
-                        {' '}· Consultor: {empresa.consultor_principal?.nome||'—'}
+                      {/* Mostra o detalhamento do cálculo com peso */}
+                      <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                        <span>{fmt(metaAuto.valorConsiderado)}</span>
+                        <span style={{color:'#d1d5db'}}>×</span>
+                        <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(peso*100)} peso</span>
+                        <span style={{color:'#d1d5db'}}>×</span>
+                        <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
+                        <span style={{color:'#d1d5db'}}>=</span>
+                        <strong style={{color:'#f0b429',fontSize:'0.85rem'}}>{fmt(metaAuto.valorMeta)}</strong>
                       </div>
                     </div>
                   </div>
-                  <div style={{display:'flex',gap:8}}>
-                    <button onClick={aplicarMetaAuto} disabled={aplicandoAuto}
-                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 18px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                      {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
-                    </button>
-                  </div>
+                  <button onClick={aplicarMetaAuto} disabled={aplicandoAuto}
+                    style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                    {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
+                  </button>
                 </div>
               )}
-
-              {/* Caso: convênio/mobilidade com menos de 3 meses */}
-              {metaAuto?.pendente && (
+              {metaAuto?.pendente&&(
                 <div style={{background:'rgba(107,114,128,0.06)',border:'1px solid rgba(107,114,128,0.15)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:12}}>
                   <span style={{fontSize:'1.2rem'}}>⏳</span>
                   <div>
-                    <div style={{fontWeight:600,color:'#4b5563',fontSize:'0.85rem'}}>
-                      {metaAuto.regra==='convenio'?'Convênio/Mobilidade':'Empresa'} — aguardando {metaAuto.precisam}º mês
-                    </div>
-                    <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:3}}>
-                      {metaAuto.progresso} de {metaAuto.precisam} meses com movimentação
-                      <span style={{marginLeft:10,display:'inline-flex',gap:3}}>
+                    <div style={{fontWeight:600,color:'#4b5563',fontSize:'0.85rem'}}>Aguardando {metaAuto.precisam}º mês com movimentação</div>
+                    <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:3,display:'flex',alignItems:'center',gap:6}}>
+                      {metaAuto.progresso} de {metaAuto.precisam} meses
+                      <span style={{display:'inline-flex',gap:3,marginLeft:4}}>
                         {Array.from({length:metaAuto.precisam}).map((_,i)=>(
                           <span key={i} style={{width:10,height:10,borderRadius:'50%',background:i<metaAuto.progresso?'#16a34a':'#e4e7ef',display:'inline-block'}}></span>
                         ))}
@@ -745,50 +729,39 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </div>
                 </div>
               )}
-
-              {/* Caso: sem movimentação ainda */}
-              {!metaAuto && (
+              {!metaAuto&&(
                 <div style={{background:'rgba(107,114,128,0.04)',border:'1px solid rgba(107,114,128,0.12)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:10}}>
-                  <span style={{fontSize:'1.1rem'}}>📭</span>
+                  <span>📭</span>
                   <div style={{color:'#6b7280',fontSize:'0.82rem'}}>
-                    Nenhuma movimentação registrada ainda — a meta será calculada automaticamente após a {detectarRegra()==='beneficio'?'1ª recarga':'3ª liberação'}.
+                    Nenhuma movimentação ainda — meta calculada automaticamente após a {detectarRegra()==='beneficio'?'1ª recarga':'3ª liberação'}.
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Erro de meta */}
-          {erroMeta && (
-            <div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'#dc2626',fontSize:'0.82rem'}}>
-              ❌ {erroMeta}
-            </div>
-          )}
+          {erroMeta&&<div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'#dc2626',fontSize:'0.82rem'}}>❌ {erroMeta}</div>}
 
           {/* Header */}
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
             <div style={sp.cardTitle}>📊 HISTÓRICO DE MOVIMENTAÇÃO</div>
-            <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>
-              Clique em ✏️ para ajustar · Clique em 🎯 para entrada manual na meta
-            </div>
+            <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>✏️ ajustar valor · 🎯 entrada manual na meta</div>
           </div>
 
-          {movimentos.length===0 ? (
+          {movimentos.length===0?(
             <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
               <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
               <div style={{fontWeight:600}}>Nenhuma movimentação registrada</div>
-              <div style={{fontSize:'0.82rem',marginTop:4}}>Importe dados via Liberações</div>
             </div>
-          ) : (
+          ):(
             <>
-              {/* Cards de resumo */}
               <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
                 {[
-                  {label:'Total Bruto',       val:fmt(totalMovimentado),                                                                              bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
-                  {label:'Total Considerado', val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)), bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
-                  {label:'Ajustes Ativos',    val:ajustes.length,                                                                                     bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
-                  {label:'Meses Ativos',      val:`${mesesAtivos} de ${movimentos.length}`,                                                           bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
-                  {label:'🎯 Apurado Meta',   val:totalMetaApurado>0?fmt(totalMetaApurado):'—',                                                       bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
+                  {label:'Total Bruto',      val:fmt(totalMovimentado),bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
+                  {label:'Total Considerado',val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
+                  {label:'Ajustes Ativos',   val:ajustes.length,bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
+                  {label:'Meses Ativos',     val:`${mesesAtivos} de ${movimentos.length}`,bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
+                  {label:`🎯 Meta (${fmtPct(peso*100)} peso)`,val:totalMetaApurado>0?fmt(totalMetaApurado):'—',bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
                 ].map(({label,val,bg,border,cor})=>(
                   <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
                     <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
@@ -797,7 +770,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 ))}
               </div>
 
-              {/* Tabela */}
               <div style={{border:'1px solid #e4e7ef',borderRadius:10,overflow:'hidden'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
                   <thead>
@@ -808,31 +780,32 @@ export default function GestaoEmpresaDetalhe({ params }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {movimentos.map((m, i) => {
+                    {movimentos.map((m,i)=>{
                       const comp           = m.competencia?.substring(0,10);
                       const ajuste         = ajusteMap[comp];
-                      const valConsiderado = ajuste ? ajuste.valor_considerado : m.total_liberado;
+                      const valConsiderado = ajuste?ajuste.valor_considerado:m.total_liberado;
                       const temAjuste      = !!ajuste;
-                      const eEditando      = editandoMes === comp;
-                      const eMetaAberta    = metaMes === comp;
+                      const eEditando      = editandoMes===comp;
+                      const eMetaAberta    = metaMes===comp;
                       const metaGravada    = metaMap[comp];
                       const temMeta        = !!metaGravada;
-                      // Destaca o mês que é o alvo da meta automática
-                      const ehMesMetaAuto  = metaAuto && !metaAuto.pendente && metaAuto.comp === comp;
+                      const ehMesMetaAuto  = metaAuto&&!metaAuto.pendente&&metaAuto.comp===comp;
+                      // Valor que entraria na meta para este mês (com peso)
+                      const valorMetaCalc  = Math.round(valConsiderado*peso*(pctCons/100)*100)/100;
 
-                      return (
+                      return(
                         <>
                           <tr key={comp} style={{borderTop:'1px solid #f0f2f8',
-                            background: temMeta ? 'rgba(52,211,153,0.05)' : ehMesMetaAuto ? 'rgba(240,180,41,0.04)' : temAjuste ? '#fffbeb' : i%2===0?'#ffffff':'#fafafa'}}>
+                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(240,180,41,0.04)':temAjuste?'#fffbeb':i%2===0?'#ffffff':'#fafafa'}}>
                             <td style={{padding:'12px 16px',fontWeight:600}}>
                               <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                                 {fmtMes(m.competencia)}
-                                {temMeta && (
+                                {temMeta&&(
                                   <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,whiteSpace:'nowrap'}}>
                                     ✅ {fmt(metaGravada.valor_meta)}
                                   </span>
                                 )}
-                                {ehMesMetaAuto && !temMeta && (
+                                {ehMesMetaAuto&&!temMeta&&(
                                   <span style={{background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.25)',color:'#b45309',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
                                     🎯 elegível
                                   </span>
@@ -856,59 +829,43 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             </td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                {/* Ajustar */}
                                 <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:m.total_liberado,motivo:ajuste?.motivo||'upsell',observacao:ajuste?.observacao||''});setMetaMes(null);}}
                                   style={{background:eEditando?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${eEditando?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'#f0b429':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
                                   {eEditando?'✕':'✏️ Ajustar'}
                                 </button>
-                                {/* Meta manual (apenas para meses com valor) */}
-                                {m.total_liberado>0 && (
-                                  <button onClick={()=>{abrirMetaManual(comp,valConsiderado,temAjuste);}}
+                                {m.total_liberado>0&&(
+                                  <button onClick={()=>abrirMetaManual(comp,valConsiderado)}
                                     style={{background:eMetaAberta?'rgba(52,211,153,0.15)':temMeta?'rgba(52,211,153,0.08)':'#f5f6fa',border:`1px solid ${eMetaAberta?'rgba(52,211,153,0.4)':temMeta?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eMetaAberta?'#16a34a':temMeta?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
                                     {eMetaAberta?'✕':temMeta?'✅ Meta':'🎯 Meta'}
                                   </button>
                                 )}
-                                {/* Remover ajuste */}
                                 {temAjuste&&!eEditando&&(
-                                  <button onClick={()=>removerAjuste(comp)}
-                                    style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Aj.</button>
+                                  <button onClick={()=>removerAjuste(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Aj.</button>
                                 )}
-                                {/* Desmarcar meta */}
                                 {temMeta&&!eMetaAberta&&(
-                                  <button onClick={()=>removerMeta(comp)}
-                                    style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
+                                  <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
                                 )}
                               </div>
                             </td>
                           </tr>
 
                           {/* Painel: Ajuste */}
-                          {eEditando && (
+                          {eEditando&&(
                             <tr key={comp+'-adj'} style={{background:'#fffbeb'}}>
                               <td colSpan={5} style={{padding:'16px 20px'}}>
                                 <div style={{background:'#ffffff',border:'1px solid #fde68a',borderRadius:10,padding:16}}>
-                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>
-                                    ✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}
-                                  </div>
+                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</div>
                                   <div style={{display:'grid',gridTemplateColumns:'180px 200px 1fr',gap:12,alignItems:'end'}}>
-                                    <div>
-                                      <label style={sp.labelSm}>Valor Considerado *</label>
-                                      <input type="number" step="0.01" value={ajusteForm.valor}
-                                        onChange={e=>setAjusteForm(f=>({...f,valor:e.target.value}))}
-                                        style={sp.inputInline} placeholder="Ex: 5000.00" />
+                                    <div><label style={sp.labelSm}>Valor Considerado *</label>
+                                      <input type="number" step="0.01" value={ajusteForm.valor} onChange={e=>setAjusteForm(f=>({...f,valor:e.target.value}))} style={sp.inputInline} placeholder="Ex: 5000.00" />
                                     </div>
-                                    <div>
-                                      <label style={sp.labelSm}>Motivo *</label>
+                                    <div><label style={sp.labelSm}>Motivo *</label>
                                       <select value={ajusteForm.motivo} onChange={e=>setAjusteForm(f=>({...f,motivo:e.target.value}))} style={sp.selectInline}>
-                                        <option value="upsell">📈 Up-sell</option>
-                                        <option value="ajuste">✏️ Ajuste de valor</option>
-                                        <option value="negociacao">🤝 Negociação</option>
-                                        <option value="correcao">🔧 Correção</option>
-                                        <option value="outro">📌 Outro</option>
+                                        <option value="upsell">📈 Up-sell</option><option value="ajuste">✏️ Ajuste de valor</option>
+                                        <option value="negociacao">🤝 Negociação</option><option value="correcao">🔧 Correção</option><option value="outro">📌 Outro</option>
                                       </select>
                                     </div>
-                                    <div>
-                                      <label style={sp.labelSm}>Observação</label>
+                                    <div><label style={sp.labelSm}>Observação</label>
                                       <input value={ajusteForm.observacao} onChange={e=>setAjusteForm(f=>({...f,observacao:e.target.value}))} style={sp.inputInline} placeholder="Ex: Valor negociado em reunião" />
                                     </div>
                                   </div>
@@ -925,43 +882,39 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           )}
 
                           {/* Painel: Meta manual */}
-                          {eMetaAberta && (
-                            <tr key={comp+'-meta'} style={{background:'rgba(52,211,153,0.02)',animation:'fadeIn 0.2s ease'}}>
+                          {eMetaAberta&&(
+                            <tr key={comp+'-meta'} style={{background:'rgba(52,211,153,0.02)'}}>
                               <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{background:'#ffffff',border:'1px solid rgba(52,211,153,0.3)',borderRadius:10,padding:20}}>
+                                <div style={{background:'#ffffff',border:'1px solid rgba(52,211,153,0.3)',borderRadius:10,padding:20,animation:'fadeIn 0.2s ease'}}>
                                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                                     <div>
                                       <div style={{fontSize:'0.82rem',fontWeight:700,color:'#16a34a',marginBottom:3}}>
                                         🎯 {temMeta?'Editar entrada na meta':'Marcar na meta'} — {fmtMes(m.competencia)}
                                       </div>
                                       <div style={{fontSize:'0.72rem',color:'#6b7280'}}>
-                                        Valor: <strong>{fmt(m.total_liberado)}</strong>
-                                        {temAjuste&&<> · Ajustado: <strong style={{color:'#f0b429'}}>{fmt(valConsiderado)}</strong></>}
-                                        {' '}· Consultor: <strong>{empresa.consultor_principal?.nome||'—'}</strong> ({empresa.pct_principal??100}%)
+                                        Mov.: <strong>{fmt(valConsiderado)}</strong>
+                                        {temAjuste&&<span style={{color:'#f0b429'}}> (ajustado)</span>}
+                                        {' · '}Peso: <strong style={{color:'#f0b429'}}>{fmtPct(peso*100)}</strong>
+                                        {' · '}Consultor: <strong>{empresa.consultor_principal?.nome||'—'}</strong> ({fmtPct(pctCons)})
+                                        {' · '}Sugerido: <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
                                       </div>
                                     </div>
-                                    {temMeta&&(
-                                      <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'6px 14px',textAlign:'right'}}>
-                                        <div style={{fontSize:'0.6rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Meta atual</div>
-                                        <div style={{fontWeight:700,color:'#16a34a'}}>{fmt(metaGravada.valor_meta)}</div>
-                                      </div>
-                                    )}
+                                    {temMeta&&<div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'6px 14px',textAlign:'right'}}>
+                                      <div style={{fontSize:'0.6rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Meta atual</div>
+                                      <div style={{fontWeight:700,color:'#16a34a'}}>{fmt(metaGravada.valor_meta)}</div>
+                                    </div>}
                                   </div>
-
                                   <div style={{display:'grid',gridTemplateColumns:'220px 220px 1fr',gap:12,alignItems:'end',marginBottom:14}}>
                                     <div>
                                       <label style={sp.labelSm}>Valor que entra na meta *</label>
-                                      <input type="number" step="0.01" value={metaForm.valor}
-                                        onChange={e=>setMetaForm(f=>({...f,valor:e.target.value}))}
-                                        style={{...sp.inputInline,border:'1px solid rgba(52,211,153,0.4)',fontWeight:700}}
-                                        placeholder="Ex: 134485.72" />
-                                      {/* Atalhos */}
+                                      <input type="number" step="0.01" value={metaForm.valor} onChange={e=>setMetaForm(f=>({...f,valor:e.target.value}))}
+                                        style={{...sp.inputInline,border:'1px solid rgba(52,211,153,0.4)',fontWeight:700}} placeholder="Ex: 3000.00" />
+                                      {/* Atalhos de cálculo com peso */}
                                       <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
                                         {[
-                                          {label:'Bruto',       val: m.total_liberado},
-                                          {label:'Considerado', val: valConsiderado},
-                                          ...(empresa.pct_principal < 100 ? [{label:`${empresa.pct_principal??100}% bruto`, val: Math.round(m.total_liberado*(empresa.pct_principal??100)/100*100)/100}] : []),
-                                          ...(temAjuste && empresa.pct_principal < 100 ? [{label:`${empresa.pct_principal??100}% ajustado`, val: Math.round(valConsiderado*(empresa.pct_principal??100)/100*100)/100}] : []),
+                                          {label:`${fmtPct(peso*100)} peso`,   val: valorMetaCalc},
+                                          {label:'Bruto total',                 val: m.total_liberado},
+                                          {label:'Considerado',                 val: valConsiderado},
                                         ].filter((v,i,a)=>a.findIndex(x=>x.val===v.val)===i).map(opt=>(
                                           <button key={opt.label} onClick={()=>setMetaForm(f=>({...f,valor:opt.val}))}
                                             style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'#16a34a',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
@@ -979,25 +932,22 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                         <option value="manual">✏️ Inclusão Manual</option>
                                       </select>
                                     </div>
-                                    <div>
-                                      <label style={sp.labelSm}>Observação</label>
-                                      <input value={metaForm.observacao} onChange={e=>setMetaForm(f=>({...f,observacao:e.target.value}))}
-                                        style={sp.inputInline} placeholder="Ex: Incluído manualmente por validação do gestor" />
+                                    <div style={{display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+                                      <div style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8,padding:'10px 14px'}}>
+                                        <div style={{fontSize:'0.65rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Fórmula aplicada</div>
+                                        <div style={{fontSize:'0.78rem',color:'#4b5563'}}>
+                                          {fmt(valConsiderado)} × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(peso*100)}</span> × <span style={{color:'#2563eb',fontWeight:700}}>{fmtPct(pctCons)}</span> = <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
-
                                   <div style={{display:'flex',gap:10,alignItems:'center'}}>
                                     <button onClick={()=>salvarMetaManual(comp,valConsiderado)} disabled={salvandoMeta||!metaForm.valor}
                                       style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!metaForm.valor?0.5:1}}>
                                       {salvandoMeta?'Salvando...':temMeta?'💾 Atualizar':'🎯 Confirmar na Meta'}
                                     </button>
-                                    <button onClick={()=>setMetaMes(null)}
-                                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'10px 18px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>
-                                      Cancelar
-                                    </button>
-                                    <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>
-                                      Aparecerá no dashboard do vendedor como "Apurado na Meta"
-                                    </span>
+                                    <button onClick={()=>setMetaMes(null)} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'10px 18px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
+                                    <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>Aparecerá no dashboard como "Apurado na Meta"</span>
                                   </div>
                                 </div>
                               </td>
