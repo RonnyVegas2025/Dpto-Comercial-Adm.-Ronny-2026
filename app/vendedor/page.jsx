@@ -9,80 +9,111 @@ const supabase = createClient(
 );
 
 const fmt    = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtK   = (v) => { const n=Number(v||0); return n>=1000?`R$${(n/1000).toFixed(1)}k`:fmt(n); };
 const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
 const fmtMes = (d) => { if(!d) return '—'; const [y,m]=String(d).substring(0,7).split('-'); return `${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m)-1]}/${y}`; };
 const norm   = (s) => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 
-const ABAS = [
-  { key:'resumo',   label:'📊 Resumo'   },
-  { key:'carteira', label:'📋 Carteira' },
-  { key:'produtos', label:'🎯 Produtos' },
-  { key:'ranking',  label:'🏆 Ranking'  },
-];
-
 async function fetchAll(query) {
-  let all = [], from = 0;
-  while (true) {
-    const { data, error } = await query.range(from, from+999);
-    if (error || !data || !data.length) break;
-    all = [...all, ...data];
-    if (data.length < 1000) break;
-    from += 1000;
+  let all=[],from=0;
+  while(true){
+    const {data,error}=await query.range(from,from+999);
+    if(error||!data||!data.length) break;
+    all=[...all,...data];
+    if(data.length<1000) break;
+    from+=1000;
   }
   return all;
 }
 
-// ─── LÓGICA CENTRAL: calcula o valor que entra para a meta ───────────────────
-// Recebe o histórico COMPLETO de liberações da empresa (todas as competências)
-// e o map de ajustes, e retorna o objeto de meta ou null se ainda não elegível.
-function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct) {
-  const catLower = (empresa.categoria || '').toLowerCase();
-  const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
-  const isConv   = catLower.includes('conv')   || catLower.includes('mobil');
+// Cores por status
+const COR = {
+  ok:      '#16a34a',
+  warn:    '#f0b429',
+  bad:     '#f87171',
+  neutral: '#6b7280',
+  blue:    '#3b82f6',
+  purple:  '#a78bfa',
+};
 
-  if (!isBenef && !isConv) return null;
+function corPct(p) { return p>=100?COR.ok:p>=70?COR.warn:COR.bad; }
 
-  // Pega todas as liberações da empresa ordenadas por competência
-  const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0)
-    .sort((a, b) => a.comp.localeCompare(b.comp));
+// Mini barra horizontal
+function Barra({pct, cor, height=8}) {
+  return (
+    <div style={{background:'rgba(255,255,255,0.07)',borderRadius:4,height,overflow:'hidden',flex:1}}>
+      <div style={{height:'100%',width:`${Math.min(pct||0,100)}%`,background:cor,borderRadius:4,transition:'width 0.6s ease'}}/>
+    </div>
+  );
+}
 
-  if (libsOrdenadas.length === 0) return null;
+// Card KPI compacto
+function KPI({label, val, sub, cor='#e8eaf0', destaque=false, onClick}) {
+  return (
+    <div onClick={onClick} style={{
+      background: destaque?`${cor}12`:'#161a26',
+      border:`1px solid ${destaque?cor+'40':'rgba(255,255,255,0.07)'}`,
+      borderRadius:14, padding:'18px 20px', display:'flex', flexDirection:'column', gap:6,
+      cursor:onClick?'pointer':'default', transition:'all 0.2s',
+    }}>
+      <span style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1}}>{label}</span>
+      <span style={{fontSize:'1.3rem',fontWeight:800,color:cor,lineHeight:1}}>{val}</span>
+      {sub&&<span style={{color:'#4b5563',fontSize:'0.7rem'}}>{sub}</span>}
+    </div>
+  );
+}
 
-  let mesAlvo = null, mesSeq = 0, valorBruto = 0;
+// Gráfico de barras simples SVG
+function GraficoBarras({dados, altura=140, mostrarMeta=false}) {
+  if(!dados||dados.length===0) return null;
+  const maxVal = Math.max(...dados.map(d=>Math.max(d.mov||0,d.meta||0,d.esperado||0)),1);
+  const W=56, GAP=8;
+  const totalW = dados.length*(W+GAP);
 
-  if (isBenef) {
-    // Benefícios/Bônus: 1ª recarga com valor > 0
-    mesAlvo    = libsOrdenadas[0].comp;
-    mesSeq     = 1;
-    valorBruto = libsOrdenadas[0].val;
-  } else if (isConv) {
-    // Convênio/Mobilidade: 3º mês com valor > 0
-    if (libsOrdenadas.length < 3) return null;
-    mesAlvo    = libsOrdenadas[2].comp;
-    mesSeq     = 3;
-    valorBruto = libsOrdenadas[2].val;
-  }
+  return (
+    <div style={{overflowX:'auto'}}>
+      <svg width={Math.max(totalW,400)} height={altura+40} style={{display:'block'}}>
+        {dados.map((d,i)=>{
+          const x = i*(W+GAP);
+          const barW = mostrarMeta ? 16 : 24;
+          const movH  = Math.round((d.mov||0)/maxVal*(altura-10));
+          const metaH = Math.round((d.meta||0)/maxVal*(altura-10));
+          const espH  = Math.round((d.esperado||0)/maxVal*(altura-10));
+          const cor   = corPct(d.esperado>0?(d.mov/d.esperado)*100:0);
 
-  if (!mesAlvo) return null;
+          return (
+            <g key={i}>
+              {/* Esperado (fundo) */}
+              {mostrarMeta && <rect x={x} y={altura-espH} width={barW} height={espH} fill="rgba(167,139,250,0.2)" rx={3}/>}
+              {/* Movimentação real */}
+              <rect x={x+(mostrarMeta?barW+2:0)} y={altura-movH} width={barW} height={movH} fill={cor} rx={3} opacity={0.85}/>
+              {/* Meta considerada */}
+              {mostrarMeta && d.meta>0 && <rect x={x+(barW+2)*2} y={altura-metaH} width={barW} height={metaH} fill={COR.ok} rx={3} opacity={0.7}/>}
+              {/* Label mês */}
+              <text x={x+(mostrarMeta?barW*1.5+2:barW/2)} y={altura+14} textAnchor="middle" fill="#6b7280" fontSize={10} fontFamily="DM Sans">
+                {fmtMes(d.mes+'-01').replace('/20','/').replace('/','/')}
+              </text>
+              {/* Valor em cima */}
+              {movH>20&&<text x={x+(mostrarMeta?barW+barW/2+2:barW/2)} y={altura-movH-4} textAnchor="middle" fill={cor} fontSize={9} fontWeight={700} fontFamily="DM Sans">
+                {fmtK(d.mov)}
+              </text>}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
 
-  // Verifica ajuste manual para esse mês
-  const compKey  = `${empresa.id}__${mesAlvo}`;
-  const ajuste   = ajusteMap[compKey];
-  const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
-  const valorMeta = Math.round(valorConsiderado * (pct / 100) * 100) / 100;
-
-  return {
-    empresa_id:        empresa.id,
-    produto_id:        empresa.produto_id,
-    competencia_meta:  mesAlvo,
-    valor_bruto:       valorBruto,
-    valor_considerado: valorConsiderado,
-    valor_meta:        valorMeta,
-    pct_consultor:     pct,
-    regra:             isBenef ? 'beneficio' : 'convenio',
-    mes_sequencia:     mesSeq,
-  };
+// Legenda do gráfico
+function Legenda({mostrarMeta}) {
+  return (
+    <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:8}}>
+      {mostrarMeta&&<div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:'rgba(167,139,250,0.3)'}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Esperado</span></div>}
+      <div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:'#f0b429'}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Movimentação Real</span></div>
+      {mostrarMeta&&<div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:10,height:10,borderRadius:2,background:COR.ok}}></div><span style={{fontSize:'0.7rem',color:'#6b7280'}}>Meta Considerada</span></div>}
+    </div>
+  );
 }
 
 export default function DashboardVendedor() {
@@ -98,610 +129,751 @@ export default function DashboardVendedor() {
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
+  const [paginaCarteira, setPaginaCarteira] = useState(1);
+  const POR_PAG = 15;
 
-  useEffect(() => { carregarBase(); }, []);
-  useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
+  useEffect(()=>{ carregarBase(); },[]);
+  useEffect(()=>{ if(consultores.length) carregarDados(); },[consultorId,gestorFiltro,mesSelecionado,consultores]);
+  useEffect(()=>{ setPaginaCarteira(1); },[busca,filtroProduto,filtroStatus,consultorId,gestorFiltro]);
 
   async function carregarBase() {
-    const [{ data: cons }, { data: libs }] = await Promise.all([
+    const [{data:cons},{data:libs}] = await Promise.all([
       supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
     ]);
-    setConsultores(cons || []);
-    const gs = ['Geral', ...new Set((cons||[]).map(c=>c.gestor).filter(Boolean))];
+    setConsultores(cons||[]);
+    const gs=['Geral',...new Set((cons||[]).map(c=>c.gestor).filter(Boolean))];
     setGestores(gs);
-    const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
+    const ms=[...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
     setMeses(ms);
   }
 
   async function carregarDados() {
     setLoading(true); setDados(null);
     try {
-      // ── 1. Busca empresas ─────────────────────────────────────────────
       let empQuery = supabase.from('empresas').select(`
-        id, produto_id, nome, cnpj, categoria, produto_contratado,
-        potencial_movimentacao, peso_categoria, cartoes_emitidos, data_cadastro,
-        taxa_positiva, taxa_negativa, pct_principal, pct_agregado_1, pct_agregado_2,
-        consultor_principal:consultor_principal_id (id, nome, gestor, equipe, meta_mensal),
-        consultor_agregado:consultor_agregado_id (id, nome),
-        consultor_agregado_2:consultor_agregado_2_id (id, nome),
-        parceiro:parceiro_id (nome)
+        id, produto_id, nome, categoria, produto_contratado,
+        potencial_movimentacao, peso_categoria, data_cadastro,
+        pct_principal, pct_agregado_1, pct_agregado_2,
+        consultor_principal:consultor_principal_id(id,nome,gestor,equipe,meta_mensal),
+        consultor_agregado:consultor_agregado_id(id,nome),
+        consultor_agregado_2:consultor_agregado_2_id(id,nome)
       `).eq('ativo',true)
         .not('produto_contratado','ilike','%desconto condicional%')
         .not('categoria','eq','Taxa Negativa')
         .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
 
-      if (consultorId) {
-        empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
-      } else if (gestorFiltro !== 'Geral') {
-        const ids = consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id);
-        if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        empQuery = empQuery.in('consultor_principal_id', ids);
+      if(consultorId) {
+        empQuery=empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
+      } else if(gestorFiltro!=='Geral') {
+        const ids=consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id);
+        if(!ids.length){setLoading(false);return;}
+        empQuery=empQuery.in('consultor_principal_id',ids);
       }
 
       const empresas = await fetchAll(empQuery);
+      const prodIds  = empresas.map(e=>e.produto_id);
+      const empIds   = empresas.map(e=>e.id);
 
-      // ── 2. Busca liberações e ajustes ─────────────────────────────────
-      const prodIds  = empresas.map(e => e.produto_id);
-      const empIds   = empresas.map(e => e.id);
+      const mesInicio = mesSelecionado?mesSelecionado+'-01':'2000-01-01';
+      const mesFim    = mesSelecionado?mesSelecionado+'-28':'2099-12-31';
 
-      const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
-      const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
-
-      const [libsFiltradas, ajustes, libsTodas] = await Promise.all([
-        prodIds.length ? fetchAll(
-          supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds).gte('competencia', mesInicio).lte('competencia', mesFim)
-        ) : Promise.resolve([]),
-        empIds.length ? fetchAll(
-          supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado')
-            .in('empresa_id', empIds)
-        ) : Promise.resolve([]),
-        // TODAS as liberações (sem filtro de mês) para calcular sequência 1ª/3ª
-        prodIds.length ? fetchAll(
-          supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds).order('competencia')
-        ) : Promise.resolve([]),
+      const [libsFiltradas,ajustes,vmetas,libsTodas] = await Promise.all([
+        prodIds.length ? fetchAll(supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).gte('competencia',mesInicio).lte('competencia',mesFim)) : Promise.resolve([]),
+        empIds.length  ? fetchAll(supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado').in('empresa_id',empIds)) : Promise.resolve([]),
+        empIds.length  ? fetchAll(supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra,mes_sequencia').in('empresa_id',empIds)) : Promise.resolve([]),
+        prodIds.length ? fetchAll(supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).order('competencia')) : Promise.resolve([]),
       ]);
 
-      // ── 3. Mapas de lookup ────────────────────────────────────────────
-      const libMap = {}; // produto_id__comp → valor (mês filtrado)
-      for (const l of libsFiltradas) {
-        const k = `${l.produto_id}__${l.competencia?.substring(0,10)}`;
-        libMap[k] = (libMap[k] || 0) + l.total_liberado;
-      }
+      const libMap={};
+      for(const l of libsFiltradas){const k=`${l.produto_id}__${l.competencia?.substring(0,10)}`;libMap[k]=(libMap[k]||0)+l.total_liberado;}
+      const ajusteMap={};
+      for(const a of ajustes){ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`]=a.valor_considerado;}
+      const vmetaMap={};
+      for(const v of vmetas){vmetaMap[`${v.empresa_id}__${v.consultor_id}`]=v;}
 
-      const ajusteMap = {}; // empresa_id__comp → valor_considerado
-      for (const a of ajustes) {
-        ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`] = a.valor_considerado;
-      }
+      const mesesDisp=[...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
+      const consultor=consultorId?consultores.find(c=>c.id===consultorId):null;
+      const consultoresDaVisao=consultorId?[consultor].filter(Boolean):gestorFiltro==='Geral'?consultores:consultores.filter(c=>c.gestor===gestorFiltro);
 
-      // libsTodasMap: produto_id → [{comp, val}] — TODAS as competências, ordenadas
-      const libsTodasMap = {};
-      for (const l of libsTodas) {
-        const pid = l.produto_id;
-        if (!libsTodasMap[pid]) libsTodasMap[pid] = [];
-        libsTodasMap[pid].push({ comp: l.competencia?.substring(0,10), val: l.total_liberado || 0 });
-      }
-
-      const mesesDisp = [...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
-
-      // ── 4. Consultor / gestores da visão ─────────────────────────────
-      const consultor = consultorId ? consultores.find(c=>c.id===consultorId) : null;
-      const consultoresDaVisao = consultorId ? [consultor].filter(Boolean)
-        : gestorFiltro === 'Geral' ? consultores
-        : consultores.filter(c=>c.gestor===gestorFiltro);
-
-      // ── 5. Processa cada empresa ──────────────────────────────────────
-      const listaProcessada = [];
-
-      for (const e of empresas) {
-        const pctP  = e.pct_principal  ?? 100;
-        const pctA1 = e.pct_agregado_1 ?? 0;
-        const pctA2 = e.pct_agregado_2 ?? 0;
-
-        const consultoresEmpresa = [
-          e.consultor_principal  ? { cons: e.consultor_principal,  pct: pctP  } : null,
-          e.consultor_agregado   && pctA1 > 0 ? { cons: e.consultor_agregado,   pct: pctA1 } : null,
-          e.consultor_agregado_2 && pctA2 > 0 ? { cons: e.consultor_agregado_2, pct: pctA2 } : null,
+      // ── Processa empresas ──────────────────────────────────────────────
+      const lista=[];
+      for(const e of empresas){
+        const pctP=e.pct_principal??100, pctA1=e.pct_agregado_1??0, pctA2=e.pct_agregado_2??0;
+        const consultoresEmp=[
+          e.consultor_principal?{cons:e.consultor_principal,pct:pctP}:null,
+          e.consultor_agregado&&pctA1>0?{cons:e.consultor_agregado,pct:pctA1}:null,
+          e.consultor_agregado_2&&pctA2>0?{cons:e.consultor_agregado_2,pct:pctA2}:null,
         ].filter(Boolean);
 
-        for (const { cons, pct } of consultoresEmpresa) {
-          if (consultorId && cons.id !== consultorId) continue;
-          if (gestorFiltro !== 'Geral' && !consultorId) {
-            const consCompleto = consultores.find(c=>c.id===cons.id);
-            if (!consCompleto || consCompleto.gestor !== gestorFiltro) continue;
+        for(const {cons,pct} of consultoresEmp){
+          if(consultorId&&cons.id!==consultorId) continue;
+          if(gestorFiltro!=='Geral'&&!consultorId){
+            const cc=consultores.find(c=>c.id===cons.id);
+            if(!cc||cc.gestor!==gestorFiltro) continue;
           }
-
-          const fator = pct / 100;
-
-          // Movimentação por mês (período selecionado)
-          const movPorMes = {};
-          let totalMov = 0;
-          for (const m of mesesDisp) {
-            const comp   = m + '-01';
-            const aj     = ajusteMap[`${e.id}__${comp}`];
-            const bruto  = libMap[`${e.produto_id}__${comp}`] || 0;
-            const val    = aj !== undefined ? aj : bruto;
-            const valFat = Math.round(val * fator * 100) / 100;
-            movPorMes[m] = valFat;
-            totalMov    += valFat;
+          const fator=pct/100;
+          const movPorMes={};
+          let totalMov=0;
+          for(const m of mesesDisp){
+            const comp=m+'-01';
+            const aj=ajusteMap[`${e.id}__${comp}`];
+            const bruto=libMap[`${e.produto_id}__${comp}`]||0;
+            const val=aj!==undefined?aj:bruto;
+            const vf=Math.round(val*fator*100)/100;
+            movPorMes[m]=vf; totalMov+=vf;
           }
+          const mesesAtivos=Object.values(movPorMes).filter(v=>v>0).length;
+          const mediaMovMes=mesesAtivos>0?totalMov/mesesAtivos:0;
+          const esperadoMes=(e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
+          const aderencia=esperadoMes>0?(mediaMovMes/esperadoMes)*100:0;
 
-          const mesesAtivos = Object.values(movPorMes).filter(v=>v>0).length;
-          const mediaMovMes = mesesAtivos > 0 ? totalMov / mesesAtivos : 0;
-          const esperadoMes = (e.potencial_movimentacao||0) * (e.peso_categoria||1) * fator;
-          const aderencia   = esperadoMes > 0 ? (mediaMovMes / esperadoMes) * 100 : 0;
+          // Meta gravada
+          const vmEntry=vmetaMap[`${e.id}__${cons.id}`];
+          const valorMeta=vmEntry?.valor_meta||0;
+          const metaComp=vmEntry?.competencia_meta||null;
+          const metaRegra=vmEntry?.regra||null;
 
-          let situacao = 'sem movimentação';
-          if (totalMov > 0 && aderencia < 50)   situacao = 'abaixo do esperado';
-          if (aderencia >= 50 && aderencia < 90) situacao = 'dentro do esperado';
-          if (aderencia >= 90)                   situacao = 'acima do esperado';
+          // Ano de cadastro (para segmentar carteira)
+          const anoCadastro=e.data_cadastro?new Date(e.data_cadastro).getFullYear():null;
 
-          // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct);
+          let situacao='sem movimentação';
+          if(totalMov>0&&aderencia<50) situacao='abaixo do esperado';
+          if(aderencia>=50&&aderencia<90) situacao='dentro do esperado';
+          if(aderencia>=90) situacao='acima do esperado';
 
-          listaProcessada.push({
+          lista.push({
             ...e,
-            _key:        `${e.id}__${cons.id}`,
-            _cons:       cons,
-            _pct:        pct,
-            vendedor:    cons.nome,
-            gestor:      cons.gestor || '—',
-            movPorMes,
-            totalMov,
-            mediaMovMes,
-            mesesAtivos,
-            esperadoMes,
-            aderencia,
-            situacao,
-            // Valores de meta calculados diretamente das liberações
-            valorMeta:   metaCalc?.valor_meta        || 0,
-            metaComp:    metaCalc?.competencia_meta   || null,
-            metaRegra:   metaCalc?.regra              || null,
-            metaSeq:     metaCalc?.mes_sequencia      || null,
-            metaBruto:   metaCalc?.valor_bruto        || 0,
-            metaConsiderado: metaCalc?.valor_considerado || 0,
+            _key:`${e.id}__${cons.id}`,_cons:cons,_pct:pct,
+            vendedor:cons.nome,gestor:cons.gestor||'—',
+            movPorMes,totalMov,mediaMovMes,mesesAtivos,esperadoMes,aderencia,situacao,
+            creditou:totalMov>0,
+            ultimoValor:movPorMes[mesesDisp[mesesDisp.length-1]]||0,
+            valorMeta,metaComp,metaRegra,
+            anoCadastro,
+            produto:e.produto_contratado||'—',
           });
         }
       }
 
-      // ── 6. KPIs ───────────────────────────────────────────────────────
-      const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
-      const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      const totalValorMeta = listaProcessada.reduce((s,e) => s + (e.valorMeta || 0), 0);
-      const meta           = consultoresDaVisao.reduce((s,c) => s + (c.meta_mensal || 0), 0);
-      const metaTotal      = meta; // meta é mensal — comparamos com total apurado (não por meses)
-      const comMov         = listaProcessada.filter(e => e.totalMov > 0).length;
-      const semMov         = listaProcessada.filter(e => e.totalMov === 0).length;
-      const crescendo      = listaProcessada.filter(e => {
-        const vals = mesesDisp.map(m => e.movPorMes[m] || 0);
-        if (vals.length < 2) return false;
-        const ultimo = vals[vals.length - 1];
-        const penult = [...vals].reverse().slice(1).find(v => v > 0) || 0;
-        return ultimo > penult * 1.05;
+      // ── KPIs ──────────────────────────────────────────────────────────
+      const totalMovReal=lista.reduce((s,e)=>s+e.totalMov,0);
+      const totalEsperado=lista.reduce((s,e)=>s+e.esperadoMes*(mesesDisp.length||1),0);
+      const totalValorMeta=lista.reduce((s,e)=>s+(e.valorMeta||0),0);
+      const meta=consultoresDaVisao.reduce((s,c)=>s+(c.meta_mensal||0),0);
+      const comMov=lista.filter(e=>e.totalMov>0).length;
+      const crescendo=lista.filter(e=>{
+        const vals=mesesDisp.map(m=>e.movPorMes[m]||0);
+        if(vals.length<2) return false;
+        const u=vals[vals.length-1],p=[...vals].reverse().slice(1).find(v=>v>0)||0;
+        return u>p*1.05;
       }).length;
+      const naMeta=lista.filter(e=>e.valorMeta>0).length;
 
-      // Por produto
-      const porProduto = {};
-      listaProcessada.forEach(e => {
-        const p = e.produto_contratado || 'Outros';
-        if (!porProduto[p]) porProduto[p] = { contratos:0, esperado:0, movReal:0 };
-        porProduto[p].contratos++;
-        porProduto[p].esperado += e.esperadoMes;
-        porProduto[p].movReal  += e.mediaMovMes;
+      // ── Por mês (para gráfico) ─────────────────────────────────────────
+      const porMes=mesesDisp.map(m=>({
+        mes:m,
+        mov:lista.reduce((s,e)=>s+(e.movPorMes[m]||0),0),
+        esperado:lista.reduce((s,e)=>s+e.esperadoMes,0),
+        // Meta considerada no mês: soma das metas cujo competencia_meta é esse mês
+        meta:lista.filter(e=>e.metaComp?.substring(0,7)===m).reduce((s,e)=>s+e.valorMeta,0),
+        empresas:lista.filter(e=>(e.movPorMes[m]||0)>0).length,
+      }));
+
+      // ── Por produto ────────────────────────────────────────────────────
+      const prodMap={};
+      lista.forEach(e=>{
+        const p=e.produto||'Outros';
+        if(!prodMap[p]) prodMap[p]={contratos:0,esperado:0,movReal:0,naMeta:0,totalMeta:0};
+        prodMap[p].contratos++;
+        prodMap[p].esperado+=e.esperadoMes;
+        prodMap[p].movReal+=e.mediaMovMes;
+        if(e.valorMeta>0){prodMap[p].naMeta++;prodMap[p].totalMeta+=e.valorMeta;}
       });
 
-      // Ranking por consultor
-      const rankingMap = {};
-      listaProcessada.forEach(e => {
-        const cid = e._cons.id;
-        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0 };
-        rankingMap[cid].movReal   += e.mediaMovMes;
-        rankingMap[cid].esperado  += e.esperadoMes;
-        rankingMap[cid].empresas  += 1;
-        rankingMap[cid].valorMeta += e.valorMeta || 0;
+      // ── Ranking consultores ────────────────────────────────────────────
+      const rankMap={};
+      lista.forEach(e=>{
+        const cid=e._cons.id;
+        if(!rankMap[cid]) rankMap[cid]={id:cid,nome:e.vendedor,gestor:e.gestor,movReal:0,esperado:0,empresas:0,valorMeta:0,naMeta:0,comMov:0};
+        rankMap[cid].movReal+=e.mediaMovMes;
+        rankMap[cid].esperado+=e.esperadoMes;
+        rankMap[cid].empresas++;
+        if(e.valorMeta>0){rankMap[cid].valorMeta+=e.valorMeta;rankMap[cid].naMeta++;}
+        if(e.totalMov>0) rankMap[cid].comMov++;
       });
-      const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
+      const ranking=Object.values(rankMap).sort((a,b)=>b.movReal-a.movReal);
+
+      // ── Carteira por ano ───────────────────────────────────────────────
+      const carteiraPorAno={};
+      lista.forEach(e=>{
+        const ano=e.anoCadastro||'Indefinido';
+        if(!carteiraPorAno[ano]) carteiraPorAno[ano]={empresas:[],totalMov:0,comMov:0,naMeta:0,totalMeta:0};
+        carteiraPorAno[ano].empresas.push(e);
+        carteiraPorAno[ano].totalMov+=e.totalMov;
+        if(e.totalMov>0) carteiraPorAno[ano].comMov++;
+        if(e.valorMeta>0){carteiraPorAno[ano].naMeta++;carteiraPorAno[ano].totalMeta+=e.valorMeta;}
+      });
+
+      // ── Análise por mês selecionado ────────────────────────────────────
+      // Empresas agrupadas por "status no mês": novas, ativas, inativas
+      const analise=mesSelecionado?{
+        novas: lista.filter(e=>e.anoCadastro===parseInt(mesSelecionado.split('-')[0])&&e.movPorMes[mesSelecionado]>0),
+        ativas: lista.filter(e=>(e.movPorMes[mesSelecionado]||0)>0),
+        semMov: lista.filter(e=>(e.movPorMes[mesSelecionado]||0)===0),
+      }:null;
 
       setDados({
-        consultor, consultoresDaVisao, mesesDisp,
-        lista: listaProcessada,
-        kpis: {
-          totalMovReal, totalEsperado, meta, metaTotal,
-          totalValorMeta,
-          comMov, semMov, crescendo,
-          empresas: listaProcessada.length,
-        },
-        porProduto: Object.entries(porProduto).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.movReal - a.movReal),
+        consultor,consultoresDaVisao,mesesDisp,lista,
+        kpis:{totalMovReal,totalEsperado,meta,totalValorMeta,comMov,crescendo,naMeta,empresas:lista.length},
+        porMes,
+        porProduto:Object.entries(prodMap).map(([nome,v])=>({nome,...v})).sort((a,b)=>b.movReal-a.movReal),
         ranking,
+        carteiraPorAno,
+        analise,
       });
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err);
-    }
+    } catch(err){console.error(err);}
     setLoading(false);
   }
 
-  function buildEmpty() {
-    return { consultor:null, consultoresDaVisao:[], mesesDisp:[], lista:[], kpis:{}, porProduto:[], ranking:[] };
-  }
+  const consultsFiltrados=gestorFiltro==='Geral'?consultores:consultores.filter(c=>c.gestor===gestorFiltro);
 
-  const consultsFiltrados = gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
+  const listaFiltrada=useMemo(()=>{
+    if(!dados) return [];
+    let arr=[...dados.lista];
+    if(busca.trim()){const b=norm(busca);arr=arr.filter(e=>norm(e.nome).includes(b)||String(e.produto_id).includes(b));}
+    if(filtroProduto) arr=arr.filter(e=>e.produto_contratado===filtroProduto);
+    if(filtroStatus) arr=arr.filter(e=>e.situacao===filtroStatus);
+    return arr.sort((a,b)=>b.mediaMovMes-a.mediaMovMes);
+  },[dados,busca,filtroProduto,filtroStatus]);
 
-  const listaFiltrada = useMemo(() => {
-    if (!dados) return [];
-    let arr = [...dados.lista];
-    if (busca.trim()) { const b=norm(busca); arr=arr.filter(e=>norm(e.nome).includes(b)||String(e.produto_id).includes(b)); }
-    if (filtroProduto) arr = arr.filter(e => e.produto_contratado === filtroProduto);
-    if (filtroStatus)  arr = arr.filter(e => e.situacao === filtroStatus);
-    return arr.sort((a,b) => b.mediaMovMes - a.mediaMovMes);
-  }, [dados, busca, filtroProduto, filtroStatus]);
+  const paginasCarteira=Math.ceil(listaFiltrada.length/POR_PAG);
+  const listaPage=listaFiltrada.slice((paginaCarteira-1)*POR_PAG,paginaCarteira*POR_PAG);
+
+  const ABAS=[
+    {key:'resumo',   label:'📊 Resumo'},
+    {key:'analise',  label:'🔬 Análise Mensal'},
+    {key:'carteira', label:'📋 Carteira'},
+    {key:'produtos', label:'🎯 Produtos'},
+    {key:'ranking',  label:'🏆 Ranking'},
+  ];
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} select option{background:#fff;color:#1a1d2e;}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        select option{background:#1e2435;color:#e8eaf0;}
+        .row-hover:hover{background:rgba(255,255,255,0.04)!important;}
+      `}</style>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={s.header}>
         <div>
           <div style={s.tag}>♠ Vegas Card</div>
           <h1 style={s.title}>Dashboard do Vendedor</h1>
-          <p style={s.sub}>Resultado individual — movimentação real vs esperada</p>
+          <p style={s.sub}>Análise de desempenho — movimentação · meta · carteira</p>
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* ── Filtros ── */}
       <div style={s.filtrosCard}>
         <div style={s.filtroGrupo}>
-          <label style={s.filtroLabel}>GESTOR</label>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {gestores.map(g => (
+          <label style={s.filtroLabel}>GESTÃO</label>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {gestores.map(g=>(
               <button key={g} style={{...s.gestorBtn,...(gestorFiltro===g?s.gestorBtnAtivo:{})}}
-                onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
-                {g==='Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
+                onClick={()=>{setGestorFiltro(g);setConsultorId('');}}>
+                {g==='Geral'?'🌐 Geral':`👔 ${g.split(' ')[0]}`}
               </button>
             ))}
           </div>
         </div>
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>VENDEDOR</label>
-          <select style={s.select} value={consultorId} onChange={e => setConsultorId(e.target.value)}>
+          <select style={s.select} value={consultorId} onChange={e=>setConsultorId(e.target.value)}>
             <option value="">— Ver equipe consolidada —</option>
-            {consultsFiltrados.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {consultsFiltrados.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>MÊS</label>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            <button style={{...s.gestorBtn,...(mesSelecionado===''?s.gestorBtnAtivo:{})}} onClick={() => setMesSelecionado('')}>🌐 Todos</button>
-            {meses.map(m => (
-              <button key={m} style={{...s.gestorBtn,...(mesSelecionado===m?s.gestorBtnAtivo:{})}} onClick={() => setMesSelecionado(m)}>
-                📅 {fmtMes(m+'-01')}
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            <button style={{...s.gestorBtn,...(mesSelecionado===''?s.gestorBtnAtivo:{})}} onClick={()=>setMesSelecionado('')}>Todos</button>
+            {meses.map(m=>(
+              <button key={m} style={{...s.gestorBtn,...(mesSelecionado===m?s.gestorBtnAtivo:{})}} onClick={()=>setMesSelecionado(m)}>
+                {fmtMes(m+'-01')}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {loading && (
-        <div style={s.vazio}>
-          <div style={{width:40,height:40,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 20px',animation:'spin 0.8s linear infinite'}}></div>
-          <div style={{color:'#8b92b0'}}>Carregando dados...</div>
+      {loading&&(
+        <div style={{...s.card,textAlign:'center',padding:64}}>
+          <div style={s.spin}/>
+          <div style={{color:'#6b7280',marginTop:16}}>Carregando dados...</div>
         </div>
       )}
 
-      {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao } = dados;
-        const apurado    = kpis.totalValorMeta || 0;
-        const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
-        const corApurado = pctApurado >= 100 ? '#34d399' : pctApurado >= 70 ? '#f0b429' : '#f87171';
-        const badgeApurado = pctApurado >= 100 ? '✅ Meta atingida' : pctApurado >= 70 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
+      {dados&&!loading&&(()=>{
+        const {kpis,mesesDisp,porMes,porProduto,ranking,carteiraPorAno,analise,consultor,consultoresDaVisao} = dados;
+        const apurado=kpis.totalValorMeta||0;
+        const pctApurado=kpis.meta>0?(apurado/kpis.meta)*100:0;
+        const corAp=corPct(pctApurado);
+        const pctMov=kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0;
 
         return (
           <>
-            {/* Nome do vendedor */}
-            <div style={{marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
-              <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(240,180,41,0.15)',border:'2px solid rgba(240,180,41,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',fontWeight:700,color:'#f0b429'}}>
-                {consultorId ? consultor?.nome?.[0] : gestorFiltro==='Geral' ? '🌐' : '👔'}
+            {/* ── Identidade do vendedor ── */}
+            <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:20,animation:'fadeUp 0.4s ease'}}>
+              <div style={{width:52,height:52,borderRadius:'50%',background:'rgba(240,180,41,0.15)',border:'2px solid rgba(240,180,41,0.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem',fontWeight:800,color:'#f0b429',flexShrink:0}}>
+                {consultorId?consultor?.nome?.[0]:'🌐'}
               </div>
               <div>
-                <div style={{fontWeight:700,fontSize:'1.2rem'}}>
-                  {consultorId ? consultor?.nome : gestorFiltro==='Geral' ? 'Visão Geral — Todas as Equipes' : `Equipe ${gestorFiltro}`}
+                <div style={{fontWeight:800,fontSize:'1.25rem',color:'#e8eaf0'}}>
+                  {consultorId?consultor?.nome:gestorFiltro==='Geral'?'Visão Geral — Todas as Equipes':`Equipe ${gestorFiltro}`}
                 </div>
-                <div style={{color:'#8b92b0',fontSize:'0.8rem'}}>
-                  {consultorId
-                    ? `${consultor?.equipe||consultor?.setor||'—'} · ${consultor?.gestor||'—'}`
-                    : `${consultoresDaVisao.length} consultores · ${lista.length} empresas`}
+                <div style={{color:'#4b5563',fontSize:'0.8rem',marginTop:2}}>
+                  {consultorId?`${consultor?.equipe||consultor?.setor||'—'} · ${consultor?.gestor||'—'}`:`${consultoresDaVisao.length} vendedores · ${kpis.empresas} empresas`}
                 </div>
               </div>
             </div>
 
-            {/* KPIs */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
-              {[
-                { label:'Empresas',            val: kpis.empresas,                                                                    cor:'#1a1d2e',   sub:`${kpis.comMov} movimentando` },
-                { label:'Mov. Real Acumulada', val: fmt(kpis.totalMovReal),                                                            cor:'#f0b429',   sub:`${mesesDisp.length||0} meses` },
-                { label:'Valor Apurado Meta',  val: fmt(apurado),                                                                      cor:'#34d399',   sub:'1ª rec. / 3º mês convênio' },
-                { label:'Meta Total Vendedor', val: kpis.metaTotal > 0 ? fmt(kpis.metaTotal) : '—',                                    cor:'#1a1d2e',   sub:`${fmt(kpis.meta||0)}/mês` },
-                { label:'% Meta Atingida',     val: kpis.metaTotal > 0 ? fmtPct(pctApurado) : '—',                                     cor: kpis.metaTotal>0 ? corApurado : '#8b92b0', sub:'apurado / meta' },
-                { label:'Crescendo',           val: kpis.crescendo,                                                                    cor:'#34d399',   sub:'empresas em alta' },
-              ].map(k => (
-                <div key={k.label} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                  <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{k.label}</div>
-                  <div style={{fontSize:'1.2rem',fontWeight:700,color:k.cor}}>{k.val}</div>
-                  {k.sub && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{k.sub}</div>}
-                </div>
-              ))}
+            {/* ── KPIs ── */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(165px,1fr))',gap:12,marginBottom:16,animation:'fadeUp 0.5s ease'}}>
+              <KPI label="Empresas" val={kpis.empresas} sub={`${kpis.comMov} movimentando`}/>
+              <KPI label="Mov. Real Acumulada" val={fmtK(kpis.totalMovReal)} sub={`${mesesDisp.length} meses`} cor="#f0b429" destaque/>
+              <KPI label="Valor Apurado Meta" val={fmtK(apurado)} sub={`${kpis.naMeta} empresas na meta`} cor={COR.ok} destaque/>
+              <KPI label="Meta Mensal" val={kpis.meta>0?fmtK(kpis.meta):'—'} sub="total da equipe"/>
+              <KPI label="% Meta Atingida" val={kpis.meta>0?fmtPct(pctApurado):'—'} sub="apurado / meta" cor={corAp} destaque/>
+              <KPI label="↑ Crescendo" val={kpis.crescendo} sub="empresas em alta" cor={COR.blue}/>
             </div>
 
-            {/* Barras de progresso */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-              {/* Barra 1: Real vs Esperado */}
-              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 Mov. Real vs Esperada</span>
-                  <span style={{fontSize:'0.72rem',color:'#8b92b0'}}>{fmtPct(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0)}</span>
+            {/* ── Barras de progresso ── */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16,animation:'fadeUp 0.55s ease'}}>
+              {/* Mov Real vs Esperada */}
+              <div style={s.barCard}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+                  <span style={{fontWeight:600,fontSize:'0.82rem',color:'#9ca3af'}}>📊 Mov. Real vs Esperada</span>
+                  <span style={{fontWeight:700,color:corPct(pctMov),fontSize:'0.82rem'}}>{fmtPct(pctMov)}</span>
                 </div>
-                <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
-                  <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
-                    width:`${Math.min(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0,100)}%`,
-                    background:'linear-gradient(90deg,#34d399,#059669)'}}></div>
+                <div style={{background:'rgba(255,255,255,0.06)',borderRadius:6,height:10,overflow:'hidden',marginBottom:8}}>
+                  <div style={{height:'100%',width:`${Math.min(pctMov,100)}%`,background:`linear-gradient(90deg,${corPct(pctMov)},${corPct(pctMov)}bb)`,borderRadius:6,transition:'width 0.8s'}}/>
                 </div>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
-                  <span style={{color:'#34d399',fontWeight:600}}>{fmt(kpis.totalMovReal)} realizados</span>
-                  <span>meta: {fmt(kpis.totalEsperado)}</span>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',color:'#4b5563'}}>
+                  <span style={{color:corPct(pctMov),fontWeight:600}}>{fmt(kpis.totalMovReal)} realizados</span>
+                  <span>esperado: {fmt(kpis.totalEsperado)}</span>
                 </div>
               </div>
 
-              {/* Barra 2: Apurado na Meta vs Meta do Vendedor */}
-              {kpis.metaTotal > 0 ? (
-                <div style={{background:'#ffffff',border:`1px solid ${corApurado}33`,borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                    <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>🎯 Apurado na Meta vs Meta</span>
-                    <span style={{background:`${corApurado}15`,color:corApurado,border:`1px solid ${corApurado}30`,borderRadius:6,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>{badgeApurado}</span>
+              {/* Apurado vs Meta */}
+              {kpis.meta>0?(
+                <div style={{...s.barCard,borderColor:`${corAp}30`}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                    <span style={{fontWeight:600,fontSize:'0.82rem',color:'#9ca3af'}}>🎯 Apurado na Meta</span>
+                    <span style={{background:`${corAp}15`,color:corAp,border:`1px solid ${corAp}30`,borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>
+                      {pctApurado>=100?'✅ Meta atingida':pctApurado>=70?'⚡ Quase lá':'⚠️ Abaixo'}
+                    </span>
                   </div>
-                  <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
-                    <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
-                      width:`${Math.min(pctApurado,100)}%`,
-                      background:`linear-gradient(90deg,${corApurado},${corApurado}cc)`}}></div>
+                  <div style={{background:'rgba(255,255,255,0.06)',borderRadius:6,height:10,overflow:'hidden',marginBottom:8}}>
+                    <div style={{height:'100%',width:`${Math.min(pctApurado,100)}%`,background:`linear-gradient(90deg,${corAp},${corAp}bb)`,borderRadius:6,transition:'width 0.8s'}}/>
                   </div>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
-                    <span style={{color:corApurado,fontWeight:700}}>{fmt(apurado)} apurado · {fmtPct(pctApurado)}</span>
-                    <span>meta: {fmt(kpis.metaTotal)}/mês</span>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',color:'#4b5563'}}>
+                    <span style={{color:corAp,fontWeight:700}}>{fmt(apurado)} · {fmtPct(pctApurado)}</span>
+                    <span>meta: {fmt(kpis.meta)}/mês</span>
                   </div>
-                  <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>
+                  <div style={{marginTop:6,fontSize:'0.65rem',color:'#374151'}}>
                     Benefícios/Bônus: 1ª recarga · Convênio/Mobilidade: 3º mês
                   </div>
                 </div>
-              ) : (
-                <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+              ):(
+                <div style={{...s.barCard,display:'flex',alignItems:'center',justifyContent:'center',color:'#4b5563',fontSize:'0.82rem'}}>
                   🎯 Meta não cadastrada para este vendedor
                 </div>
               )}
             </div>
 
-            {/* Abas */}
+            {/* ── Abas ── */}
             <div style={s.tabs}>
-              {ABAS.map(a => (
-                <button key={a.key} style={{...s.tab,...(aba===a.key?s.tabAtiva:{})}} onClick={() => setAba(a.key)}>{a.label}</button>
+              {ABAS.map(a=>(
+                <button key={a.key} style={{...s.tab,...(aba===a.key?s.tabAtiva:{})}} onClick={()=>setAba(a.key)}>{a.label}</button>
               ))}
             </div>
 
-            {/* ── RESUMO ── */}
-            {aba === 'resumo' && (
-              <div style={s.card}>
-                <div style={s.cardTitle}>📊 Movimentação por Mês</div>
-                {mesesDisp.length === 0 ? (
-                  <div style={s.semDados}>Nenhuma liberação importada ainda. Importe via Liberações.</div>
-                ) : (
-                  <div style={{display:'flex',gap:14,marginTop:20,flexWrap:'wrap'}}>
-                    {mesesDisp.map(m => {
-                      const totalMes   = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
-                      const esperMes   = lista.reduce((s,e) => s+e.esperadoMes, 0);
-                      const pctMes     = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
-                      const corMes     = pctMes >= 90 ? '#34d399' : pctMes >= 50 ? '#f0b429' : '#f87171';
-                      const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
-                      return (
-                        <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 180px',minWidth:180}}>
-                          <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
-                          <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:4}}>{fmt(totalMes)}</div>
-                          <div style={{color:'#8b92b0',fontSize:'0.75rem',marginBottom:10}}>{empresasMes} empresas movimentando</div>
-                          <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:4}}>
-                            <span style={{color:'#8b92b0'}}>vs esperado</span>
-                            <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
+            {/* ══════════════ ABA: RESUMO ══════════════ */}
+            {aba==='resumo'&&(
+              <div style={{...s.card,animation:'fadeUp 0.3s ease'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:8}}>
+                  <div style={s.cardTitle}>📈 Evolução da Movimentação por Mês</div>
+                  <Legenda mostrarMeta={true}/>
+                </div>
+                {mesesDisp.length===0?(
+                  <div style={s.semDados}>Nenhuma liberação importada</div>
+                ):(
+                  <>
+                    <GraficoBarras dados={porMes} mostrarMeta={true} altura={160}/>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginTop:20}}>
+                      {porMes.map(m=>{
+                        const pctM=m.esperado>0?(m.mov/m.esperado)*100:0;
+                        const corM=corPct(pctM);
+                        return(
+                          <div key={m.mes} style={{background:'rgba(255,255,255,0.03)',border:`1px solid rgba(255,255,255,0.07)`,borderRadius:12,padding:'14px 18px',cursor:'pointer',transition:'all 0.15s'}}
+                            onClick={()=>setMesSelecionado(mesSelecionado===m.mes?'':m.mes)}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                              <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:6,padding:'3px 10px',fontSize:'0.78rem',fontWeight:700}}>{fmtMes(m.mes+'-01')}</span>
+                              <span style={{color:corM,fontWeight:700,fontSize:'0.82rem'}}>{fmtPct(pctM)}</span>
+                            </div>
+                            <div style={{fontSize:'1.2rem',fontWeight:800,color:'#f0b429',marginBottom:4}}>{fmt(m.mov)}</div>
+                            <div style={{color:'#6b7280',fontSize:'0.72rem',marginBottom:8}}>{m.empresas} empresas · esperado: {fmt(m.esperado)}</div>
+                            {m.meta>0&&<div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:6,padding:'4px 10px',fontSize:'0.72rem',color:'#34d399',fontWeight:600}}>
+                              🎯 Meta considerada: {fmt(m.meta)}
+                            </div>}
+                            <Barra pct={pctM} cor={corM}/>
                           </div>
-                          <div style={{background:'#e4e7ef',borderRadius:4,height:6,overflow:'hidden'}}>
-                            <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
-                          </div>
-                          <div style={{marginTop:8,fontSize:'0.68rem',color:'#8b92b0'}}>esperado: {fmt(esperMes)}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
             )}
 
-            {/* ── CARTEIRA ── */}
-            {aba === 'carteira' && (
-              <div style={s.card}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
-                  <div style={s.cardTitle}>📋 Carteira de Empresas</div>
-                  <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>{listaFiltrada.length} de {lista.length} empresas</span>
-                </div>
-                <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
-                  <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e=>setBusca(e.target.value)} />
-                  <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
-                    <option value="">Todos os produtos</option>
-                    {[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
-                  </select>
-                  <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-                    <option value="">Todos os status</option>
-                    <option value="acima do esperado">✅ Acima do esperado</option>
-                    <option value="dentro do esperado">⚡ Dentro do esperado</option>
-                    <option value="abaixo do esperado">⚠️ Abaixo do esperado</option>
-                    <option value="sem movimentação">❌ Sem movimentação</option>
-                  </select>
-                </div>
-                <div style={{overflowX:'auto',borderRadius:8,border:'1px solid #f0f2f8'}}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr style={{background:'#f9fafb'}}>
-                        {['Empresa','Produto','Vendedor','Esperado/mês',...mesesDisp.map(m=>fmtMes(m+'-01')),'Média Real','% Adere','Apurado Meta','Status'].map(h=>
-                          <th key={h} style={s.th}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listaFiltrada.map((e,i) => {
-                        const corSit = e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
-                        return (
-                          <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
-                            <td style={s.td}>
-                              <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}
-                                onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
-                                onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
-                                {e.nome}
+            {/* ══════════════ ABA: ANÁLISE MENSAL ══════════════ */}
+            {aba==='analise'&&(
+              <div style={{display:'flex',flexDirection:'column',gap:16,animation:'fadeUp 0.3s ease'}}>
+                {!mesSelecionado?(
+                  <div style={{...s.card,textAlign:'center',padding:48}}>
+                    <div style={{fontSize:'2rem',marginBottom:12}}>📅</div>
+                    <div style={{fontWeight:600,color:'#9ca3af',marginBottom:8}}>Selecione um mês acima para ver a análise detalhada</div>
+                    <div style={{color:'#4b5563',fontSize:'0.82rem'}}>Você verá: empresas que movimentaram, meta considerada e distribuição por produto</div>
+                  </div>
+                ):(()=>{
+                  const mesData=porMes.find(m=>m.mes===mesSelecionado)||{mov:0,esperado:0,meta:0,empresas:0};
+                  const empresasMes=dados.lista.filter(e=>(e.movPorMes[mesSelecionado]||0)>0).sort((a,b)=>b.movPorMes[mesSelecionado]-a.movPorMes[mesSelecionado]);
+                  const semMovMes=dados.lista.filter(e=>(e.movPorMes[mesSelecionado]||0)===0);
+                  const metaMes=dados.lista.filter(e=>e.metaComp?.substring(0,7)===mesSelecionado);
+                  const pctMes=mesData.esperado>0?(mesData.mov/mesData.esperado)*100:0;
+
+                  return(
+                    <>
+                      {/* KPIs do mês */}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+                        <KPI label={`Movimentação ${fmtMes(mesSelecionado+'-01')}`} val={fmt(mesData.mov)} sub={`${mesData.empresas} empresas`} cor="#f0b429" destaque/>
+                        <KPI label="Esperado" val={fmt(mesData.esperado)} sub="potencial × peso"/>
+                        <KPI label="% Realizado" val={fmtPct(pctMes)} sub="mov / esperado" cor={corPct(pctMes)} destaque/>
+                        <KPI label="🎯 Meta Considerada" val={mesData.meta>0?fmt(mesData.meta):'—'} sub={`${metaMes.length} empresa${metaMes.length!==1?'s':''}`} cor={COR.ok} destaque={mesData.meta>0}/>
+                        <KPI label="Sem Movimentação" val={semMovMes.length} sub="empresas paradas" cor={COR.bad}/>
+                        <KPI label="Taxa de Ativação" val={fmtPct(dados.lista.length>0?(empresasMes.length/dados.lista.length)*100:0)} sub={`${empresasMes.length} / ${dados.lista.length}`}/>
+                      </div>
+
+                      {/* Empresas que movimentaram no mês */}
+                      <div style={s.card}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+                          <div style={s.cardTitle}>✅ Movimentaram em {fmtMes(mesSelecionado+'-01')} ({empresasMes.length})</div>
+                        </div>
+                        {empresasMes.length===0?<div style={s.semDados}>Nenhuma empresa movimentou neste mês</div>:(
+                          <div style={{overflowX:'auto'}}>
+                            <table style={s.table}>
+                              <thead><tr>
+                                {['Empresa','Produto','Vendedor','Movimentação','vs Esperado','Meta (mês)'].map(h=><th key={h} style={s.th}>{h}</th>)}
+                              </tr></thead>
+                              <tbody>
+                                {empresasMes.map((e,i)=>{
+                                  const movMes=e.movPorMes[mesSelecionado]||0;
+                                  const pctAd=e.esperadoMes>0?(movMes/e.esperadoMes)*100:0;
+                                  const corAd=corPct(pctAd);
+                                  const ehMetaMes=e.metaComp?.substring(0,7)===mesSelecionado;
+                                  return(
+                                    <tr key={e._key} className="row-hover" style={{background:i%2===0?'rgba(255,255,255,0.02)':'transparent'}}>
+                                      <td style={s.td}>
+                                        <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#e8eaf0',textDecoration:'none'}}
+                                          onMouseEnter={ev=>ev.currentTarget.style.color='#34d399'}
+                                          onMouseLeave={ev=>ev.currentTarget.style.color='#e8eaf0'}>
+                                          {e.nome}
+                                        </a>
+                                        <div style={{color:'#374151',fontSize:'0.68rem'}}>ID {e.produto_id}</div>
+                                      </td>
+                                      <td style={{...s.td,color:'#a78bfa',fontSize:'0.78rem'}}>{e.produto}</td>
+                                      <td style={{...s.td,fontSize:'0.78rem'}}>
+                                        {e.vendedor}
+                                        {e._pct<100&&<span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 6px',fontSize:'0.62rem',fontWeight:700,marginLeft:4}}>{e._pct}%</span>}
+                                      </td>
+                                      <td style={{...s.td,color:'#f0b429',fontWeight:700}}>{fmt(movMes)}</td>
+                                      <td style={s.td}>
+                                        <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                          <div style={{background:'rgba(255,255,255,0.07)',borderRadius:3,height:5,width:50,overflow:'hidden'}}>
+                                            <div style={{height:'100%',width:`${Math.min(pctAd,100)}%`,background:corAd}}/>
+                                          </div>
+                                          <span style={{color:corAd,fontWeight:600,fontSize:'0.75rem'}}>{fmtPct(pctAd)}</span>
+                                        </div>
+                                      </td>
+                                      <td style={s.td}>
+                                        {ehMetaMes?(
+                                          <div>
+                                            <span style={{background:'rgba(52,211,153,0.1)',color:'#34d399',border:'1px solid rgba(52,211,153,0.25)',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>
+                                              ✅ {fmt(e.valorMeta)}
+                                            </span>
+                                            <div style={{color:'#374151',fontSize:'0.62rem',marginTop:2}}>
+                                              {e.metaRegra==='beneficio'?'1ª recarga':'3º mês'}
+                                            </div>
+                                          </div>
+                                        ):<span style={{color:'#374151',fontSize:'0.75rem'}}>—</span>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sem movimentação no mês */}
+                      {semMovMes.length>0&&(
+                        <div style={s.card}>
+                          <div style={{...s.cardTitle,marginBottom:16,color:'#f87171'}}>❌ Sem Movimentação em {fmtMes(mesSelecionado+'-01')} ({semMovMes.length})</div>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:8}}>
+                            {semMovMes.slice(0,12).map(e=>(
+                              <a key={e._key} href={`/gestao/${e.id}`} style={{display:'flex',alignItems:'center',gap:10,background:'rgba(248,113,113,0.04)',border:'1px solid rgba(248,113,113,0.1)',borderRadius:8,padding:'10px 14px',textDecoration:'none',transition:'all 0.15s'}}
+                                onMouseEnter={ev=>ev.currentTarget.style.background='rgba(248,113,113,0.08)'}
+                                onMouseLeave={ev=>ev.currentTarget.style.background='rgba(248,113,113,0.04)'}>
+                                <div style={{flex:1}}>
+                                  <div style={{fontWeight:600,fontSize:'0.82rem',color:'#e8eaf0'}}>{e.nome}</div>
+                                  <div style={{color:'#4b5563',fontSize:'0.68rem',marginTop:2}}>{e.produto} · {e.vendedor}</div>
+                                </div>
+                                <span style={{color:'#f87171',fontSize:'0.75rem',fontWeight:700}}>→</span>
                               </a>
-                              <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>ID {e.produto_id}</div>
-                            </td>
-                            <td style={s.td}>{e.produto_contratado||'—'}</td>
-                            <td style={s.td}>
-                              <div style={{fontSize:'0.78rem'}}>{e.vendedor}</div>
-                              {e._pct < 100 && <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 6px',fontSize:'0.65rem',fontWeight:700}}>{e._pct}%</span>}
-                            </td>
-                            <td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>
-                            {mesesDisp.map(m => {
-                              const v    = e.movPorMes[m] || 0;
-                              const pctV = e.esperadoMes > 0 ? (v / e.esperadoMes) * 100 : 0;
-                              const c    = pctV >= 90 ? '#34d399' : pctV >= 50 ? '#f0b429' : v > 0 ? '#f87171' : '#9ca3af';
-                              return (
-                                <td key={m} style={{...s.td,textAlign:'right',color:c,fontWeight:v>0?600:400}}>
-                                  {v > 0 ? fmt(v) : '—'}
-                                </td>
-                              );
-                            })}
-                            <td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>
-                            <td style={s.td}>
-                              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                                <div style={{background:'#f0f2f8',borderRadius:3,height:5,width:50,overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:`${Math.min(e.aderencia,100)}%`,background:corSit}}></div>
-                                </div>
-                                <span style={{color:corSit,fontWeight:600,fontSize:'0.75rem'}}>{fmtPct(e.aderencia)}</span>
-                              </div>
-                            </td>
-                            {/* COLUNA: Apurado Meta — mostra regra + mês + valor */}
-                            <td style={{...s.td,textAlign:'right'}}>
-                              {e.valorMeta > 0 ? (
-                                <div>
-                                  <div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div>
-                                  <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:2}}>
-                                    {e.metaRegra==='beneficio' ? '1ª rec.' : e.metaRegra==='convenio' ? '3º mês' : '—'}
-                                    {' · '}{fmtMes(e.metaComp)}
-                                  </div>
-                                  {e._pct < 100 && (
-                                    <div style={{color:'#f0b429',fontSize:'0.6rem'}}>{e._pct}% de {fmt(e.metaBruto)}</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div>
-                                  <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>
-                                  {/* Mostra quantas liberações faltam para convênio */}
-                                  {(e.categoria||'').toLowerCase().includes('conv') || (e.categoria||'').toLowerCase().includes('mobil') ? (
-                                    <div style={{color:'#6b7280',fontSize:'0.6rem',marginTop:2}}>
-                                      {e.mesesAtivos}/3 meses
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )}
-                            </td>
-                            <td style={s.td}>
-                              <span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {listaFiltrada.length === 0 && (
-                        <tr><td colSpan={8+mesesDisp.length} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>
+                            ))}
+                            {semMovMes.length>12&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',color:'#4b5563',fontSize:'0.78rem',background:'rgba(255,255,255,0.02)',borderRadius:8,padding:10}}>+ {semMovMes.length-12} empresas</div>}
+                          </div>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* ══════════════ ABA: CARTEIRA ══════════════ */}
+            {aba==='carteira'&&(
+              <div style={{display:'flex',flexDirection:'column',gap:16,animation:'fadeUp 0.3s ease'}}>
+
+                {/* Carteira por ano */}
+                <div style={s.card}>
+                  <div style={{...s.cardTitle,marginBottom:16}}>📅 Carteira por Ano de Cadastro</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginBottom:20}}>
+                    {Object.entries(carteiraPorAno).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))).map(([ano,data])=>{
+                      const pctAtiv=data.empresas.length>0?(data.comMov/data.empresas.length)*100:0;
+                      return(
+                        <div key={ano} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:12,padding:'16px 18px'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                            <span style={{background:'rgba(96,165,250,0.12)',color:'#60a5fa',borderRadius:6,padding:'3px 10px',fontSize:'0.78rem',fontWeight:700}}>{ano}</span>
+                            <span style={{color:'#6b7280',fontSize:'0.75rem'}}>{data.empresas.length} empresas</span>
+                          </div>
+                          <div style={{fontSize:'1.1rem',fontWeight:700,color:'#f0b429',marginBottom:4}}>{fmt(data.totalMov)}</div>
+                          <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',color:'#4b5563',marginBottom:8}}>
+                            <span style={{color:'#16a34a'}}>{data.comMov} movimentando</span>
+                            {data.naMeta>0&&<span style={{color:'#34d399'}}>🎯 {data.naMeta} na meta</span>}
+                          </div>
+                          <Barra pct={pctAtiv} cor={corPct(pctAtiv)}/>
+                          <div style={{color:'#374151',fontSize:'0.68rem',marginTop:4}}>{fmtPct(pctAtiv)} de ativação</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tabela detalhada */}
+                <div style={s.card}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
+                    <div style={s.cardTitle}>📋 Todas as Empresas ({listaFiltrada.length})</div>
+                    <span style={{color:'#4b5563',fontSize:'0.72rem'}}>pág {paginaCarteira}/{paginasCarteira||1}</span>
+                  </div>
+                  <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+                    <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e=>setBusca(e.target.value)}/>
+                    <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
+                      <option value="">Todos os produtos</option>
+                      {[...new Set(dados.lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+                      <option value="">Todos os status</option>
+                      <option value="acima do esperado">✅ Acima</option>
+                      <option value="dentro do esperado">⚡ Dentro</option>
+                      <option value="abaixo do esperado">⚠️ Abaixo</option>
+                      <option value="sem movimentação">❌ Sem mov.</option>
+                    </select>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table style={s.table}>
+                      <thead><tr style={{background:'rgba(255,255,255,0.02)'}}>
+                        {['Empresa','Produto','Ano','Vendedor',
+                          ...(mesesDisp.map(m=>fmtMes(m+'-01'))),
+                          'Média/mês','% Adere','Meta','Status'].map(h=><th key={h} style={s.th}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {listaPage.map((e,i)=>{
+                          const corSit=e.situacao==='acima do esperado'?COR.ok:e.situacao==='dentro do esperado'?COR.warn:e.situacao==='abaixo do esperado'?COR.bad:COR.neutral;
+                          return(
+                            <tr key={e._key} className="row-hover" style={{background:i%2===0?'rgba(255,255,255,0.015)':'transparent'}}>
+                              <td style={s.td}>
+                                <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#e8eaf0',textDecoration:'none',fontSize:'0.82rem'}}
+                                  onMouseEnter={ev=>ev.currentTarget.style.color='#34d399'}
+                                  onMouseLeave={ev=>ev.currentTarget.style.color='#e8eaf0'}>
+                                  {e.nome}
+                                </a>
+                                <div style={{color:'#374151',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                              </td>
+                              <td style={{...s.td,color:'#a78bfa',fontSize:'0.72rem',whiteSpace:'nowrap'}}>{e.produto}</td>
+                              <td style={{...s.td,color:'#60a5fa',fontSize:'0.72rem',textAlign:'center'}}>{e.anoCadastro||'—'}</td>
+                              <td style={{...s.td,fontSize:'0.75rem'}}>
+                                {e.vendedor}
+                                {e._pct<100&&<span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 5px',fontSize:'0.6rem',fontWeight:700,marginLeft:4}}>{e._pct}%</span>}
+                              </td>
+                              {mesesDisp.map(m=>{
+                                const v=e.movPorMes[m]||0;
+                                const isMetaMes=e.metaComp?.substring(0,7)===m;
+                                return(
+                                  <td key={m} style={{...s.td,textAlign:'right',background:isMetaMes?'rgba(52,211,153,0.06)':undefined}}>
+                                    {v>0?<span style={{color:isMetaMes?'#34d399':'#f0b429',fontWeight:500,fontSize:'0.78rem'}}>{fmt(v)}{isMetaMes?' ✅':''}</span>:<span style={{color:'#1f2937'}}>—</span>}
+                                  </td>
+                                );
+                              })}
+                              <td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700,fontSize:'0.78rem'}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>
+                              <td style={s.td}>
+                                <div style={{display:'flex',alignItems:'center',gap:5}}>
+                                  <div style={{background:'rgba(255,255,255,0.07)',borderRadius:3,height:4,width:40,overflow:'hidden'}}>
+                                    <div style={{height:'100%',width:`${Math.min(e.aderencia,100)}%`,background:corSit}}/>
+                                  </div>
+                                  <span style={{color:corSit,fontWeight:600,fontSize:'0.72rem'}}>{fmtPct(e.aderencia)}</span>
+                                </div>
+                              </td>
+                              <td style={{...s.td,textAlign:'right'}}>
+                                {e.valorMeta>0?(
+                                  <div>
+                                    <div style={{color:'#34d399',fontWeight:700,fontSize:'0.78rem'}}>{fmt(e.valorMeta)}</div>
+                                    <div style={{color:'#374151',fontSize:'0.62rem'}}>{e.metaRegra==='beneficio'?'1ª rec.':'3º mês'} · {fmtMes(e.metaComp)}</div>
+                                  </div>
+                                ):<span style={{color:'#1f2937',fontSize:'0.72rem'}}>—</span>}
+                              </td>
+                              <td style={s.td}>
+                                <span style={{background:`${corSit}15`,color:corSit,borderRadius:5,padding:'2px 7px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {listaPage.length===0&&<tr><td colSpan={8+mesesDisp.length} style={{...s.td,textAlign:'center',color:'#4b5563',padding:32}}>Nenhuma empresa encontrada</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Paginação */}
+                  {paginasCarteira>1&&(
+                    <div style={{display:'flex',justifyContent:'center',gap:6,marginTop:16,flexWrap:'wrap'}}>
+                      <button style={s.pagBtn} disabled={paginaCarteira===1} onClick={()=>setPaginaCarteira(p=>p-1)}>‹</button>
+                      {Array.from({length:Math.min(paginasCarteira,7)},(_,i)=>i+1).map(p=>(
+                        <button key={p} style={{...s.pagBtn,...(p===paginaCarteira?{background:'rgba(240,180,41,0.2)',borderColor:'rgba(240,180,41,0.4)',color:'#f0b429',fontWeight:700}:{})}}
+                          onClick={()=>setPaginaCarteira(p)}>{p}</button>
+                      ))}
+                      {paginasCarteira>7&&<span style={{color:'#4b5563',padding:'5px 8px'}}>…{paginasCarteira}</span>}
+                      <button style={s.pagBtn} disabled={paginaCarteira===paginasCarteira} onClick={()=>setPaginaCarteira(p=>p+1)}>›</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* ── PRODUTOS ── */}
-            {aba === 'produtos' && (
-              <div style={s.card}>
-                <div style={s.cardTitle}>🎯 Resultado por Produto</div>
-                <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:12}}>
-                  {porProduto.map((p) => {
-                    const pctAdere = p.esperado > 0 ? (p.movReal / p.esperado) * 100 : 0;
-                    const cor = pctAdere >= 90 ? '#34d399' : pctAdere >= 50 ? '#f0b429' : '#f87171';
-                    return (
-                      <div key={p.nome} style={{background:'#f9fafb',borderRadius:12,padding:'16px 20px',border:'1px solid #e4e7ef'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                          <span style={{fontWeight:700}}>{p.nome}</span>
-                          <span style={{color:'#8b92b0',fontSize:'0.78rem'}}>{p.contratos} empresa{p.contratos>1?'s':''}</span>
+            {/* ══════════════ ABA: PRODUTOS ══════════════ */}
+            {aba==='produtos'&&(
+              <div style={{...s.card,animation:'fadeUp 0.3s ease'}}>
+                <div style={{...s.cardTitle,marginBottom:20}}>🎯 Resultado por Produto</div>
+                <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                  {porProduto.map(p=>{
+                    const pctAd=p.esperado>0?(p.movReal/p.esperado)*100:0;
+                    const cor=corPct(pctAd);
+                    return(
+                      <div key={p.nome} style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'16px 20px'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}}>
+                          <div>
+                            <span style={{fontWeight:700,fontSize:'0.92rem'}}>{p.nome}</span>
+                            <span style={{marginLeft:10,color:'#6b7280',fontSize:'0.75rem'}}>{p.contratos} empresa{p.contratos>1?'s':''}</span>
+                          </div>
+                          {p.naMeta>0&&<span style={{background:'rgba(52,211,153,0.1)',color:'#34d399',border:'1px solid rgba(52,211,153,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
+                            🎯 {p.naMeta} na meta · {fmt(p.totalMeta)}
+                          </span>}
                         </div>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
                           {[
-                            {label:'Mov. Esperada/mês', val:fmt(p.esperado),                              cor:'#a78bfa'},
-                            {label:'Mov. Real Média',   val:p.movReal>0?fmt(p.movReal):'—',               cor:'#f0b429'},
-                            {label:'% Aderência',       val:fmtPct(pctAdere),                             cor},
-                          ].map(k => (
+                            {label:'Mov. Esperada/mês',val:fmt(p.esperado),cor:'#a78bfa'},
+                            {label:'Mov. Real Média',  val:p.movReal>0?fmt(p.movReal):'—',cor:'#f0b429'},
+                            {label:'% Aderência',      val:fmtPct(pctAd),cor},
+                          ].map(k=>(
                             <div key={k.label}>
-                              <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',marginBottom:4}}>{k.label}</div>
-                              <div style={{fontWeight:700,color:k.cor}}>{k.val}</div>
+                              <div style={{color:'#6b7280',fontSize:'0.65rem',textTransform:'uppercase',marginBottom:4}}>{k.label}</div>
+                              <div style={{fontWeight:700,color:k.cor,fontSize:'0.95rem'}}>{k.val}</div>
                             </div>
                           ))}
                         </div>
-                        <div style={{background:'#e4e7ef',borderRadius:4,height:6,overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${Math.min(pctAdere,100)}%`,background:cor,borderRadius:4}}></div>
-                        </div>
+                        <Barra pct={pctAd} cor={cor}/>
                       </div>
                     );
                   })}
-                  {porProduto.length === 0 && <div style={s.semDados}>Nenhum produto encontrado</div>}
+                  {porProduto.length===0&&<div style={s.semDados}>Nenhum dado disponível</div>}
                 </div>
               </div>
             )}
 
-            {/* ── RANKING ── */}
-            {aba === 'ranking' && (
-              <div style={s.card}>
-                <div style={s.cardTitle}>🏆 Ranking — Movimentação Real por Vendedor</div>
-                <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:10}}>
-                  {ranking.map((c,i) => {
-                    const medal  = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
-                    const corM   = i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
-                    const pctAd  = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
-                    const cor    = pctAd >= 90 ? '#34d399' : pctAd >= 50 ? '#f0b429' : '#f87171';
-                    const isAtu  = c.id === consultorId;
-                    const maxMov = Math.max(...ranking.map(x=>x.movReal), 1);
-                    return (
-                      <div key={c.id} style={{borderRadius:10,overflow:'hidden',background:isAtu?'#fff8e6':'#f9fafb',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`}}>
-                        <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',flexWrap:'wrap'}}>
-                          <span style={{fontWeight:700,fontSize:'1rem',color:corM,minWidth:32,textAlign:'center'}}>{medal}</span>
-                          <div style={{flex:1}}>
-                            <div style={{fontWeight:700,fontSize:'0.88rem',color:isAtu?'#b45309':'#1a1d2e'}}>{c.nome}</div>
-                            <div style={{fontSize:'0.72rem',color:'#8b92b0',marginTop:2}}>{c.empresas} empresa{c.empresas>1?'s':''} · gestor: {c.gestor}</div>
+            {/* ══════════════ ABA: RANKING ══════════════ */}
+            {aba==='ranking'&&(
+              <div style={{...s.card,animation:'fadeUp 0.3s ease'}}>
+                <div style={{...s.cardTitle,marginBottom:20}}>🏆 Ranking de Vendedores</div>
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {ranking.map((c,i)=>{
+                    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
+                    const corM=i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
+                    const pctAd=c.esperado>0?(c.movReal/c.esperado)*100:0;
+                    const cor=corPct(pctAd);
+                    const isAtu=c.id===consultorId;
+                    const maxMov=Math.max(...ranking.map(x=>x.movReal),1);
+                    const pctAtivacao=c.empresas>0?(c.comMov/c.empresas)*100:0;
+                    return(
+                      <div key={c.id} style={{borderRadius:10,overflow:'hidden',background:isAtu?'rgba(240,180,41,0.06)':'rgba(255,255,255,0.02)',border:`1px solid ${isAtu?'rgba(240,180,41,0.25)':'rgba(255,255,255,0.07)'}`}}>
+                        <div style={{display:'flex',alignItems:'center',gap:14,padding:'14px 18px',flexWrap:'wrap',gap:10}}>
+                          <span style={{fontWeight:800,fontSize:'1.1rem',color:corM,minWidth:36,textAlign:'center'}}>{medal}</span>
+                          <div style={{flex:1,minWidth:160}}>
+                            <div style={{fontWeight:700,fontSize:'0.9rem',color:isAtu?'#f0b429':'#e8eaf0',display:'flex',alignItems:'center',gap:8}}>
+                              {c.nome}
+                              {isAtu&&<span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:5,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>você</span>}
+                            </div>
+                            <div style={{fontSize:'0.72rem',color:'#4b5563',marginTop:2}}>
+                              {c.empresas} empresas · {fmtPct(pctAtivacao)} ativação · gestor: {c.gestor}
+                            </div>
                           </div>
-                          <div style={{textAlign:'right'}}>
-                            <div style={{fontWeight:700,color:'#f0b429'}}>{fmt(c.movReal)}</div>
-                            <div style={{fontSize:'0.68rem',color:cor}}>esperado: {fmt(c.esperado)} · {fmtPct(pctAd)}</div>
-                            {c.valorMeta > 0 && (
-                              <div style={{fontSize:'0.65rem',color:'#34d399',marginTop:2}}>meta: {fmt(c.valorMeta)} apurado</div>
+                          {/* Métricas em linha */}
+                          <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
+                            <div style={{textAlign:'center'}}>
+                              <div style={{fontWeight:700,color:'#f0b429',fontSize:'0.88rem'}}>{fmt(c.movReal)}</div>
+                              <div style={{color:'#4b5563',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Média</div>
+                            </div>
+                            <div style={{textAlign:'center'}}>
+                              <div style={{fontWeight:700,color:cor,fontSize:'0.88rem'}}>{fmtPct(pctAd)}</div>
+                              <div style={{color:'#4b5563',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>% Esperado</div>
+                            </div>
+                            {c.valorMeta>0&&(
+                              <div style={{textAlign:'center'}}>
+                                <div style={{fontWeight:700,color:'#34d399',fontSize:'0.88rem'}}>{fmt(c.valorMeta)}</div>
+                                <div style={{color:'#4b5563',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta ({c.naMeta})</div>
+                              </div>
                             )}
                           </div>
-                          {isAtu && <span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
                         </div>
-                        <div style={{height:3,background:'#f5f6fa'}}>
-                          <div style={{height:'100%',width:`${(c.movReal/maxMov)*100}%`,background:isAtu?'#f0b429':i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}></div>
+                        {/* Barra de progresso relativa ao 1º colocado */}
+                        <div style={{height:3,background:'rgba(255,255,255,0.04)'}}>
+                          <div style={{height:'100%',width:`${(c.movReal/maxMov)*100}%`,background:isAtu?'#f0b429':i<3?COR.ok:'rgba(255,255,255,0.15)',transition:'width 0.6s'}}/>
                         </div>
                       </div>
                     );
                   })}
-                  {ranking.length === 0 && <div style={s.semDados}>Nenhum dado disponível</div>}
+                  {ranking.length===0&&<div style={s.semDados}>Nenhum dado disponível</div>}
                 </div>
               </div>
             )}
@@ -713,27 +885,29 @@ export default function DashboardVendedor() {
 }
 
 const s = {
-  page:         {maxWidth:1300,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'},
-  header:       {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24},
-  tag:          {color:'#b45309',fontWeight:700,fontSize:'0.75rem',letterSpacing:2,marginBottom:8,textTransform:'uppercase'},
-  title:        {fontSize:'1.6rem',fontWeight:700,margin:'0 0 6px',color:'#1a1d2e'},
-  sub:          {color:'#8b92b0',fontSize:'0.875rem'},
-  filtrosCard:  {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',marginBottom:20,display:'flex',gap:24,flexWrap:'wrap',alignItems:'flex-end',boxShadow:'0 1px 3px rgba(0,0,0,0.06)'},
-  filtroGrupo:  {display:'flex',flexDirection:'column',gap:6},
-  filtroLabel:  {color:'#8b92b0',fontSize:'0.65rem',letterSpacing:2,textTransform:'uppercase',fontWeight:600},
-  gestorBtn:    {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'7px 14px',color:'#4a5068',cursor:'pointer',fontSize:'0.82rem',fontWeight:500,fontFamily:'inherit'},
-  gestorBtnAtivo:{background:'#fff8e6',border:'1px solid #f0b429',color:'#b45309',fontWeight:700},
-  select:       {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',color:'#1a1d2e',fontSize:'0.875rem',fontFamily:'inherit',cursor:'pointer',minWidth:220},
-  busca:        {flex:'1 1 200px',background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',outline:'none'},
-  sel:          {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 12px',color:'#1a1d2e',fontSize:'0.85rem',fontFamily:'inherit',cursor:'pointer',outline:'none'},
-  vazio:        {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'64px 32px',textAlign:'center'},
-  tabs:         {display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'},
-  tab:          {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:8,padding:'7px 16px',color:'#4a5068',cursor:'pointer',fontSize:'0.85rem',fontWeight:500,fontFamily:'inherit'},
-  tabAtiva:     {background:'#fff8e6',border:'1px solid #f0b429',color:'#b45309',fontWeight:600},
-  card:         {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'24px',marginBottom:16,boxShadow:'0 1px 3px rgba(0,0,0,0.05)'},
-  cardTitle:    {fontSize:'0.95rem',fontWeight:700,color:'#1a1d2e'},
-  table:        {width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'},
-  th:           {padding:'8px 12px',textAlign:'left',color:'#8b92b0',fontWeight:600,borderBottom:'1px solid #e4e7ef',whiteSpace:'nowrap',textTransform:'uppercase',fontSize:'0.67rem',letterSpacing:0.5,background:'#f9fafb'},
-  td:           {padding:'10px 12px',whiteSpace:'nowrap',color:'#1a1d2e'},
-  semDados:     {color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'32px 0'},
+  page:        {maxWidth:1400,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#e8eaf0',background:'#0a0c10',minHeight:'100vh'},
+  header:      {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20},
+  tag:         {color:'#f0b429',fontWeight:800,fontSize:'0.8rem',letterSpacing:2,marginBottom:8,textTransform:'uppercase'},
+  title:       {fontSize:'1.6rem',fontWeight:800,margin:'0 0 6px',color:'#e8eaf0'},
+  sub:         {color:'#4b5563',fontSize:'0.85rem'},
+  filtrosCard: {background:'#111827',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:'16px 20px',marginBottom:20,display:'flex',gap:24,flexWrap:'wrap',alignItems:'flex-end'},
+  filtroGrupo: {display:'flex',flexDirection:'column',gap:6},
+  filtroLabel: {color:'#4b5563',fontSize:'0.65rem',letterSpacing:2,textTransform:'uppercase',fontWeight:600},
+  gestorBtn:   {background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:8,padding:'6px 14px',color:'#6b7280',cursor:'pointer',fontSize:'0.8rem',fontWeight:500,fontFamily:'inherit',transition:'all 0.15s'},
+  gestorBtnAtivo:{background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.35)',color:'#f0b429',fontWeight:700},
+  select:      {background:'#111827',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'8px 14px',color:'#e8eaf0',fontSize:'0.85rem',fontFamily:'inherit',cursor:'pointer',minWidth:220},
+  card:        {background:'#111827',border:'1px solid rgba(255,255,255,0.07)',borderRadius:16,padding:24,marginBottom:0},
+  barCard:     {background:'#111827',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:'16px 20px'},
+  cardTitle:   {fontSize:'0.85rem',fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:0.5},
+  tabs:        {display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'},
+  tab:         {background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:10,padding:'8px 16px',color:'#6b7280',cursor:'pointer',fontSize:'0.85rem',fontWeight:500,fontFamily:'inherit',transition:'all 0.15s'},
+  tabAtiva:    {background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.3)',color:'#f0b429',fontWeight:700},
+  table:       {width:'100%',borderCollapse:'collapse',fontSize:'0.78rem'},
+  th:          {padding:'8px 12px',textAlign:'left',color:'#4b5563',fontWeight:600,borderBottom:'1px solid rgba(255,255,255,0.06)',whiteSpace:'nowrap',textTransform:'uppercase',fontSize:'0.65rem',letterSpacing:0.5},
+  td:          {padding:'9px 12px',borderBottom:'1px solid rgba(255,255,255,0.03)',whiteSpace:'nowrap'},
+  busca:       {flex:'1 1 200px',background:'#1a1f2e',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.82rem',fontFamily:'inherit',outline:'none'},
+  sel:         {background:'#1a1f2e',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'8px 12px',color:'#e8eaf0',fontSize:'0.82rem',fontFamily:'inherit',cursor:'pointer',outline:'none'},
+  semDados:    {color:'#4b5563',fontSize:'0.85rem',textAlign:'center',padding:'32px 0'},
+  pagBtn:      {background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:7,padding:'5px 10px',color:'#9ca3af',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',minWidth:32},
+  spin:        {width:36,height:36,border:'3px solid rgba(255,255,255,0.08)',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto',animation:'spin 0.8s linear infinite'},
 };
