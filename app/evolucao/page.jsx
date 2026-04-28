@@ -192,14 +192,20 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + (e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.reduce((s, e) => {
-    const chave   = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
-    const gravado = metasGravadas[chave];
-    const valor   = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+    // Busca meta gravada: chave exata ou fallback por empresa_id
+    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chaveCalc
+      ? metasGravadas[chaveCalc]
+      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
     return s + (valor || 0);
   }, 0);
   const naMeta = lista.filter(e => {
-    const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
-    return metasGravadas[chave] || e._meta?.elegivel;
+    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chaveCalc
+      ? metasGravadas[chaveCalc]
+      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    return gravado || e._meta?.elegivel;
   }).length;
 
   const col = (k) => !colunas || colunas.has(k);
@@ -270,10 +276,21 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
             {listaPagina.map((e, i) => {
               const ts   = TEND[e.tend];
               const meta = e._meta;
-              // Verifica se tem meta gravada localmente (prioridade sobre _meta calculada)
-              const _metaChave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
-              const metaLocal = metasGravadas[_metaChave];
-              const temMetaGravada = !!metaLocal;
+
+              // Busca meta gravada: tenta pela chave calculada, depois varre o mapa por empresa_id
+              const _metaChaveCalc = meta?.mesAlvo ? `${e.id}__${meta.mesAlvo.substring(0,10)}` : null;
+              const metaLocal = _metaChaveCalc
+                ? metasGravadas[_metaChaveCalc]
+                // fallback: varre o mapa buscando qualquer entrada para esta empresa
+                : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+
+              // Também tenta encontrar mesmo sem mesAlvo calculado
+              const metaLocalFallback = !metaLocal
+                ? Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1]
+                : null;
+
+              const metaFinal      = metaLocal || metaLocalFallback;
+              const temMetaGravada = !!metaFinal;
               const isModalAberto  = modalMeta?._key === e._key;
               const rowBg = (meta?.elegivel || temMetaGravada)
                 ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
@@ -337,9 +354,9 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     {temMetaGravada ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                         <span style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.4)', color: '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
-                          ✅ Gravado · {fmtMes(metaLocal.competencia_meta)}
+                          ✅ Gravado · {fmtMes(metaFinal.competencia_meta)}
                         </span>
-                        <span style={{ color: '#34d399', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(metaLocal.valor_meta)}</span>
+                        <span style={{ color: '#34d399', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(metaFinal.valor_meta)}</span>
                         <span style={{ color: '#4b5563', fontSize: '0.6rem' }}>clique para editar</span>
                       </div>
                     ) : (
@@ -775,15 +792,16 @@ export default function Evolucao() {
     const crescendo   = listaFiltrada.filter(e => e.tend === 'up').length;
     const pctAtivacao = total > 0 ? (creditaram / total) * 100 : 0;
     // KPIs de meta — usa valor do banco (metasGravadas) quando disponível, senão o calculado
-    const naMeta      = listaFiltrada.filter(e => {
-      const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
-      return metasGravadas[chave] || e._meta?.elegivel;
-    }).length;
+    function getMetaGravada(e) {
+      const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+      return chaveCalc
+        ? metasGravadas[chaveCalc]
+        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    }
+    const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
     const totalMetaApurado = listaFiltrada.reduce((s, e) => {
-      const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
-      const gravado = metasGravadas[chave];
-      // Prioriza valor gravado no banco; senão usa o calculado
+      const gravado = getMetaGravada(e);
       const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
       return s + (valor || 0);
     }, 0);
