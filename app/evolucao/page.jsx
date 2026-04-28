@@ -39,12 +39,14 @@ const TEND = {
 
 const POR_PAGINA = 12;
 
-// ─── LÓGICA DE META (mesma do vendedor) ──────────────────────────────────────
-// Retorna objeto com info da meta ou null se não elegível
+// ─── LÓGICA DE META ──────────────────────────────────────────────────────────
+// Regra de peso: APENAS Vegas Benefícios aplica peso na meta (30%)
+// Todos os outros produtos: peso é só para previsão, meta usa 100% da movimentação
 function calcularMeta(empresa, libsTodasMap, ajusteMap, pct) {
-  const catLower = (empresa.categoria || '').toLowerCase();
-  const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
-  const isConv   = catLower.includes('conv')   || catLower.includes('mobil');
+  const catLower  = (empresa.categoria || '').toLowerCase();
+  const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
+  const isBenef   = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
+  const isConv    = catLower.includes('conv')   || catLower.includes('mobil');
   if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
@@ -53,24 +55,32 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct) {
 
   const totalMesesComMov = libsOrdenadas.length;
 
+  // Peso só entra na meta se for Vegas Benefícios
+  const isVB   = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+  const peso   = isVB ? (empresa.peso_categoria ?? 1) : 1;
+
+  function calcValorMeta(valorConsid) {
+    return Math.round(valorConsid * peso * (pct / 100) * 100) / 100;
+  }
+
   if (isBenef) {
     if (totalMesesComMov === 0) return { elegivel: false, regra: 'beneficio', progresso: 0, precisam: 1 };
-    const mesAlvo    = libsOrdenadas[0].comp;
-    const ajuste     = ajusteMap[`${empresa.id}__${mesAlvo}`];
-    const valorBruto = libsOrdenadas[0].val;
+    const mesAlvo     = libsOrdenadas[0].comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = libsOrdenadas[0].val;
     const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
-    const valorMeta  = Math.round(valorConsid * (pct / 100) * 100) / 100;
-    return { elegivel: true, regra: 'beneficio', mesAlvo, valorMeta, valorBruto, valorConsid, progresso: 1, precisam: 1 };
+    const valorMeta   = calcValorMeta(valorConsid);
+    return { elegivel: true, regra: 'beneficio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: 1, precisam: 1 };
   }
 
   if (isConv) {
     if (totalMesesComMov < 3) return { elegivel: false, regra: 'convenio', progresso: totalMesesComMov, precisam: 3 };
-    const mesAlvo    = libsOrdenadas[2].comp;
-    const ajuste     = ajusteMap[`${empresa.id}__${mesAlvo}`];
-    const valorBruto = libsOrdenadas[2].val;
+    const mesAlvo     = libsOrdenadas[2].comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = libsOrdenadas[2].val;
     const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
-    const valorMeta  = Math.round(valorConsid * (pct / 100) * 100) / 100;
-    return { elegivel: true, regra: 'convenio', mesAlvo, valorMeta, valorBruto, valorConsid, progresso: totalMesesComMov, precisam: 3 };
+    const valorMeta   = calcValorMeta(valorConsid);
+    return { elegivel: true, regra: 'convenio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: totalMesesComMov, precisam: 3 };
   }
 
   return { elegivel: false, regra: null };
@@ -179,7 +189,16 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const listaPagina  = lista.slice((pagina - 1) * porPagina, pagina * porPagina);
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + (e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
-  const totalMetaApurado = lista.filter(e => e._meta?.elegivel).reduce((s, e) => s + (e._meta?.valorMeta || 0), 0);
+  const totalMetaApurado = lista.reduce((s, e) => {
+    const chave   = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
+    const gravado = metasGravadas[chave];
+    const valor   = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+    return s + (valor || 0);
+  }, 0);
+  const naMeta = lista.filter(e => {
+    const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
+    return metasGravadas[chave] || e._meta?.elegivel;
+  }).length;
 
   const col = (k) => !colunas || colunas.has(k); // helper
 
@@ -190,7 +209,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
           Exibindo <strong style={{ color: '#e8eaf0' }}>{listaPagina.length}</strong> de <strong style={{ color: '#e8eaf0' }}>{lista.length}</strong> empresas
           {totalMetaApurado > 0 && (
             <span style={{ marginLeft: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 6, padding: '2px 10px', color: '#34d399', fontSize: '0.72rem', fontWeight: 600 }}>
-              ✅ {lista.filter(e => e._meta?.elegivel).length} na meta · {fmt(totalMetaApurado)} apurado
+              ✅ {naMeta} na meta · {fmt(totalMetaApurado)} apurado
             </span>
           )}
         </div>
@@ -791,17 +810,26 @@ export default function Evolucao() {
     const totalCred   = listaFiltrada.reduce((s, e) => s + e.totalCreditado, 0);
     const crescendo   = listaFiltrada.filter(e => e.tend === 'up').length;
     const pctAtivacao = total > 0 ? (creditaram / total) * 100 : 0;
-    // NOVO: KPIs de meta
-    const naMeta      = listaFiltrada.filter(e => e._meta?.elegivel).length;
+    // KPIs de meta — usa valor do banco (metasGravadas) quando disponível, senão o calculado
+    const naMeta      = listaFiltrada.filter(e => {
+      const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
+      return metasGravadas[chave] || e._meta?.elegivel;
+    }).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
-    const totalMetaApurado = listaFiltrada.filter(e => e._meta?.elegivel).reduce((s, e) => s + (e._meta?.valorMeta || 0), 0);
+    const totalMetaApurado = listaFiltrada.reduce((s, e) => {
+      const chave = `${e.id}__${e._meta?.mesAlvo?.substring(0,10)}`;
+      const gravado = metasGravadas[chave];
+      // Prioriza valor gravado no banco; senão usa o calculado
+      const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+      return s + (valor || 0);
+    }, 0);
     const porMes = meses.map(m => ({
       mes: m,
       total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+(e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0)); }, 0),
       empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return (e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0))>0; }).length,
     }));
     return { total, creditaram, semCredito, totalCred, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado };
-  }, [listaFiltrada, meses, libMap]);
+  }, [listaFiltrada, meses, libMap, metasGravadas]);
 
   function limparFiltros() {
     setBusca(''); setFiltroCategoria('todos'); setFiltroDiretor('todos');
