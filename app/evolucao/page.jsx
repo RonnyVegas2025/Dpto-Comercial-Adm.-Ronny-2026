@@ -325,11 +325,13 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('meses') && meses.map(m => {
                     const mi = meses.indexOf(m);
                     const v  = e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0);
-                    const isMesAlvo = meta?.elegivel && meta?.mesAlvo === m;
+                    // Usa mesAlvo calculado OU competencia_meta gravada no banco
+                    const mesMetaRef = metaFinal?.competencia_meta?.substring(0,7) || meta?.mesAlvo?.substring(0,7);
+                    const isMesAlvo  = !!(mesMetaRef && m?.substring(0,7) === mesMetaRef);
                     return (
                       <td key={m} style={{ ...s.td, textAlign: 'right', background: isMesAlvo ? 'rgba(52,211,153,0.08)' : undefined }}>
                         {v > 0
-                          ? <span style={{ color: isMesAlvo ? '#34d399' : '#34d399', fontWeight: isMesAlvo ? 700 : 500 }}>
+                          ? <span style={{ color: '#34d399', fontWeight: isMesAlvo ? 700 : 500 }}>
                               {fmt(v)}
                               {isMesAlvo && <span style={{ fontSize: '0.6rem', marginLeft: 3 }}>✅</span>}
                             </span>
@@ -773,8 +775,19 @@ export default function Evolucao() {
     if (filtroMeta === 'na_meta')   arr = arr.filter(e => e._meta?.elegivel === true);
     if (filtroMeta === 'pendente')  arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
     if (filtroMeta === 'fora')      arr = arr.filter(e => !e._meta || e._meta?.regra === null);
-    // NOVO: filtro por mês específico da meta
-    if (filtroMesMeta !== 'todos')  arr = arr.filter(e => e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === filtroMesMeta);
+    // Filtro por mês específico da meta — usa mesAlvo calculado OU competencia_meta gravada
+    if (filtroMesMeta !== 'todos') {
+      arr = arr.filter(e => {
+        // Checa meta calculada
+        if (e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === filtroMesMeta) return true;
+        // Checa meta gravada no banco (fallback)
+        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+        const gravado = chaveCalc
+          ? metasGravadas[chaveCalc]
+          : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+        return gravado?.competencia_meta?.substring(0,7) === filtroMesMeta;
+      });
+    }
     if (ordenar === 'ultimo')    arr.sort((a, b) => b.ultimoValor - a.ultimoValor);
     if (ordenar === 'total')     arr.sort((a, b) => b.totalCreditado - a.totalCreditado);
     if (ordenar === 'nome')      arr.sort((a, b) => a.nome.localeCompare(b.nome));
@@ -1024,21 +1037,51 @@ export default function Evolucao() {
                 onClick={() => setFiltroMesMeta('todos')}>
                 Todos
               </button>
-              {/* Extrai meses únicos de meta da lista completa */}
-              {[...new Set(listaCompleta.filter(e => e._meta?.elegivel).map(e => e._meta.mesAlvo?.substring(0,7)).filter(Boolean))].sort().map(m => {
-                const totalMes = listaCompleta.filter(e => e._meta?.elegivel && e._meta.mesAlvo?.substring(0,7) === m).reduce((s,e) => s+(e._meta?.valorMeta||0),0);
-                const qtd      = listaCompleta.filter(e => e._meta?.elegivel && e._meta.mesAlvo?.substring(0,7) === m).length;
-                const ativo    = filtroMesMeta === m;
-                return (
-                  <button key={m}
-                    onClick={() => setFiltroMesMeta(ativo ? 'todos' : m)}
-                    style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1, background: ativo ? 'rgba(52,211,153,0.18)' : 'rgba(52,211,153,0.05)', border: `1px solid ${ativo ? 'rgba(52,211,153,0.5)' : 'rgba(52,211,153,0.2)'}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    <span style={{ color: ativo ? '#34d399' : '#6b7280', fontWeight: ativo ? 700 : 500, fontSize: '0.78rem' }}>{fmtMes(m+'-01')}</span>
-                    <span style={{ color: '#34d399', fontWeight: 700, fontSize: '0.7rem' }}>{fmt(totalMes)}</span>
-                    <span style={{ color: '#4b5563', fontSize: '0.62rem' }}>{qtd} emp.</span>
-                  </button>
-                );
-              })}
+              {/* Extrai meses únicos de meta — inclui calculadas E gravadas no banco */}
+              {(() => {
+                // Meses das metas calculadas automaticamente
+                const mesesCalc = listaCompleta
+                  .filter(e => e._meta?.elegivel)
+                  .map(e => e._meta.mesAlvo?.substring(0,7))
+                  .filter(Boolean);
+                // Meses das metas gravadas no banco
+                const mesesGrav = Object.values(metasGravadas)
+                  .map(v => v.competencia_meta?.substring(0,7))
+                  .filter(Boolean);
+                const mesesUnicos = [...new Set([...mesesCalc, ...mesesGrav])].sort();
+
+                return mesesUnicos.map(m => {
+                  // Total: soma calculadas + gravadas (sem duplicar)
+                  const totalMes = listaCompleta.reduce((s, e) => {
+                    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+                    const gravado = chaveCalc
+                      ? metasGravadas[chaveCalc]
+                      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                    const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
+                    if (mesRef !== m) return s;
+                    const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+                    return s + (valor || 0);
+                  }, 0);
+                  const qtd = listaCompleta.filter(e => {
+                    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+                    const gravado = chaveCalc
+                      ? metasGravadas[chaveCalc]
+                      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                    const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
+                    return mesRef === m;
+                  }).length;
+                  const ativo = filtroMesMeta === m;
+                  return (
+                    <button key={m}
+                      onClick={() => setFiltroMesMeta(ativo ? 'todos' : m)}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1, background: ativo ? 'rgba(52,211,153,0.18)' : 'rgba(52,211,153,0.05)', border: `1px solid ${ativo ? 'rgba(52,211,153,0.5)' : 'rgba(52,211,153,0.2)'}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <span style={{ color: ativo ? '#34d399' : '#6b7280', fontWeight: ativo ? 700 : 500, fontSize: '0.78rem' }}>{fmtMes(m+'-01')}</span>
+                      <span style={{ color: '#34d399', fontWeight: 700, fontSize: '0.7rem' }}>{fmt(totalMes)}</span>
+                      <span style={{ color: '#4b5563', fontSize: '0.62rem' }}>{qtd} emp.</span>
+                    </button>
+                  );
+                });
+              })()}
             </div>
 
             {/* Seletor de colunas + por página */}
