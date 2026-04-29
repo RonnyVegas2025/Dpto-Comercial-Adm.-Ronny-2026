@@ -581,6 +581,7 @@ function TabelaCruzamento({ lista, meses }) {
 // ─── Página principal ────────────────────────────────────────────────────────
 export default function Evolucao() {
   const [loading, setLoading]   = useState(true);
+  const [recarregando, setRecarregando] = useState(false);
   const [xlsxLib, setXlsxLib]   = useState(null);
   const [ajustes, setAjustes]   = useState([]);
   const [empresas, setEmpresas] = useState([]);
@@ -635,6 +636,44 @@ export default function Evolucao() {
   useEffect(() => { import('xlsx').then(m => setXlsxLib(m.default || m)); }, []);
   useEffect(() => { setFiltroGestor('todos'); setFiltroVendedor('todos'); }, [filtroDiretor]);
   useEffect(() => { setFiltroVendedor('todos'); }, [filtroGestor]);
+
+
+  // Recarrega dados sem resetar filtros
+  async function recarregar() {
+    setRecarregando(true);
+    try {
+      const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
+        supabase.from('empresas').select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
+          data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
+          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
+          .eq('ativo', true)
+          .in('categoria', ['Beneficios', 'Beneficios', 'Bonus', 'Bonus', 'Convenio', 'Convenio', 'Mobilidade'])
+          .not('produto_contratado', 'ilike', '%desconto condicional%')
+          .not('categoria', 'eq', 'Taxa Negativa'),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+      ]);
+      setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
+      setEmpresas(emps || []);
+      setLibs(libsData || []);
+      setAjustes(ajustesData || []);
+      setLibsTodas(libsTodasData || []);
+      const { data: vmetas } = await supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra');
+      if (vmetas) {
+        const map = {};
+        for (const v of vmetas) {
+          const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
+          if (!comp) continue;
+          map[String(v.empresa_id) + '__' + comp] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+        }
+        setMetasGravadas(map);
+      }
+    } catch(err) { console.error('Erro ao recarregar:', err); }
+    setRecarregando(false);
+  }
 
   async function carregar() {
     setLoading(true);
@@ -934,6 +973,11 @@ export default function Evolucao() {
           <button onClick={exportarExcel} disabled={!xlsxLib || listaFiltrada.length===0}
             style={{ ...s.linkBtnGreen, background:'rgba(52,211,153,0.08)', borderColor:'rgba(52,211,153,0.2)', color:'#34d399', cursor:'pointer', border:'1px solid rgba(52,211,153,0.2)', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
             📥 Exportar Excel ({listaFiltrada.length})
+          </button>
+          <button onClick={recarregar} disabled={recarregando}
+            style={{ ...s.linkBtnGreen, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid rgba(52,211,153,0.2)', opacity: recarregando ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', animation: recarregando ? 'spin 0.8s linear infinite' : 'none' }}>🔄</span>
+            {recarregando ? 'Atualizando...' : 'Atualizar'}
           </button>
           <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
           <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'#60a5fa', borderColor:'rgba(96,165,250,0.2)', background:'rgba(96,165,250,0.08)' }}>💳 Importar Liberações</a>
