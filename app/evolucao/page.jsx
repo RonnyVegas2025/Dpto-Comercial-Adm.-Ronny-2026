@@ -878,8 +878,8 @@ export default function Evolucao() {
     }, 0);
     const porMes = meses.map(m => ({
       mes: m,
-      total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+(e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0)); }, 0),
-      empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return (e.vals?.[mi]??(libMap[`${e.produto_id}__${m}`]||0))>0; }).length,
+      total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)); }, 0),
+      empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0))>0; }).length,
     }));
     return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado };
   }, [listaFiltrada, meses, libMap, metasGravadas]);
@@ -1005,7 +1005,7 @@ export default function Evolucao() {
       listaFiltrada.reduce((s,e)=>{
         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
         const grav = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k])=>k.startsWith(`${e.id}__`))?.[1];
-        return s + (grav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0) || 0);
+        return s + ((grav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
       }, 0),
       '',
     );
