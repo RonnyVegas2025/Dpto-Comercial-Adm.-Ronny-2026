@@ -643,7 +643,7 @@ export default function Evolucao() {
     setRecarregando(true);
     try {
       const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
-        supabase.from('empresas').select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
+        supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
           consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
           consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
@@ -680,7 +680,7 @@ export default function Evolucao() {
     const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
       supabase
         .from('empresas')
-        .select(`id, produto_id, nome, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
+        .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
           consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
           consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
@@ -885,9 +885,23 @@ export default function Evolucao() {
   }, [listaFiltrada, meses, libMap, metasGravadas]);
 
   // Meses únicos de cadastro para o filtro
-  const mesesCadastro = useMemo(() =>
-    [...new Set(listaCompleta.map(e => e.mesCadastro).filter(Boolean))].sort().reverse(),
-  [listaCompleta]);
+  // mesesCadastro em cascata: mostra só meses disponíveis com os filtros atuais (exceto o próprio filtro de cadastro)
+  const mesesCadastro = useMemo(() => {
+    let base = [...listaCompleta];
+    if (busca.trim())            { const b = busca.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); base = base.filter(e => e.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(b) || String(e.produto_id).includes(b)); }
+    if (filtroCategoria !== 'todos') base = base.filter(e => e.categoria === filtroCategoria);
+    if (filtroDiretor   !== 'todos') base = base.filter(e => e.diretor   === filtroDiretor);
+    if (filtroGestor    !== 'todos') base = base.filter(e => e.gestor    === filtroGestor);
+    if (filtroDepto     !== 'todos') base = base.filter(e => e.depto     === filtroDepto);
+    if (filtroVendedor  !== 'todos') base = base.filter(e => e.vendedor  === filtroVendedor);
+    if (filtroProduto   !== 'todos') base = base.filter(e => e.produto   === filtroProduto);
+    if (filtroStatus === 'creditou')    base = base.filter(e =>  e.creditou);
+    if (filtroStatus === 'sem_credito') base = base.filter(e => !e.creditou);
+    if (filtroTend  !== 'todos') base = base.filter(e => e.tend === filtroTend);
+    if (filtroMeta === 'na_meta')  base = base.filter(e => e._meta?.elegivel === true);
+    if (filtroMeta === 'pendente') base = base.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
+    return [...new Set(base.map(e => e.mesCadastro).filter(Boolean))].sort().reverse();
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta]);
 
   function limparFiltros() {
     setBusca(''); setFiltroCategoria('todos'); setFiltroDiretor('todos');
@@ -904,40 +918,110 @@ export default function Evolucao() {
 
   function exportarExcel() {
     if (!xlsxLib) return;
-    const headers = ['ID', 'Empresa', 'Categoria', 'Produto', 'Vendedor', 'Gestor', 'Diretor'];
+
+    // Todas as colunas fixas
+    const headers = [
+      'ID Produto', 'Empresa', 'CNPJ', 'Data Cadastro', 'Categoria', 'Produto',
+      'Cidade', 'Estado', 'Vendedor', '% Consultor', 'Gestor', 'Diretor',
+      'Potencial/mês', 'Peso Meta (%)', 'Previsto/mês',
+    ];
+    // Colunas de meses
     meses.forEach(m => headers.push(fmtMes(m)));
-    headers.push('Total Movimentado', 'Status', 'Meta Regra', 'Meta Mês', 'Meta Valor');
+    // Colunas de totais e meta
+    headers.push(
+      'Total Movimentado', 'Total Previsto', 'Status', 'Tendência',
+      'Meta Regra', 'Meta Mês', 'Valor Bruto Meta', 'Valor Meta Apurado', 'Meta Status'
+    );
+
+    const fmtDate = (d) => { if(!d) return '—'; const [y,m,day]=d.split('-'); return day+'/'+m+'/'+y; };
 
     const rows = listaFiltrada.map(e => {
-      const row = [e.produto_id, e.nome, e.categoria, e.produto, e._pct < 100 ? `${e.vendedor} (${e._pct}%)` : e.vendedor, e.gestor, e.diretor];
-      let total = 0;
+      // Busca meta gravada ou calculada
+      const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+      const metaGrav  = chaveCalc
+        ? metasGravadas[chaveCalc]
+        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+      const valorMetaFinal = metaGrav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+      const mesMetaRef     = metaGrav?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
+      const metaRegra      = metaGrav?.regra || e._meta?.regra;
+      const temMeta        = !!(metaGrav || e._meta?.elegivel);
+
+      const row = [
+        e.produto_id,
+        e.nome,
+        e.cnpj || '—',
+        fmtDate(e.data_cadastro),
+        e.categoria,
+        e.produto,
+        e.cidade || '—',
+        e.estado || '—',
+        e.vendedor,
+        e._pct,
+        e.gestor,
+        e.diretor || '—',
+        e.potencial_movimentacao || 0,
+        Math.round((e.peso_categoria || 1) * 100),
+        e.previsto || 0,
+      ];
+
+      // Valores por mês
+      let totalMov = 0;
       meses.forEach(m => {
         const mi2 = meses.indexOf(m);
         const v   = (e.vals?.[mi2] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
-        total += v;
+        totalMov += v;
         row.push(v > 0 ? v : 0);
       });
-      row.push(total);
-      row.push(e.creditou ? 'Movimentou' : 'Sem movimentação');
-      // Meta no Excel
-      row.push(e._meta?.elegivel ? (e._meta.regra === 'beneficio' ? '1ª Recarga' : '3º Mês Conv.') : e._meta?.regra ? 'Pendente' : '—');
-      row.push(e._meta?.elegivel ? fmtMes(e._meta.mesAlvo) : '—');
-      row.push(e._meta?.elegivel ? e._meta.valorMeta : 0);
+
+      row.push(
+        totalMov,
+        e.previsto || 0,
+        e.creditou ? 'Movimentou' : 'Sem movimentação',
+        e.tend === 'up' ? 'Crescendo' : e.tend === 'down' ? 'Caindo' : e.tend === 'flat' ? 'Estável' : e.tend === 'new' ? 'Nova' : 'Sem movimentação',
+        metaRegra === 'beneficio' ? '1ª Recarga' : metaRegra === 'convenio' ? '3º Mês' : metaRegra === 'manual' ? 'Manual' : e._meta?.regra ? 'Pendente' : '—',
+        mesMetaRef ? fmtMes(mesMetaRef + '-01') : '—',
+        e._meta?.valorBruto || 0,
+        valorMetaFinal || 0,
+        temMeta ? 'Na meta' : e._meta?.regra ? 'Pendente' : '—',
+      );
       return row;
     });
 
-    const totRow = ['', 'TOTAL', '', '', '', '', ''];
-    meses.forEach(m => {
+    // Linha de totais
+    const totRow = new Array(15).fill('');
+    totRow[0] = 'TOTAL'; totRow[1] = `(${listaFiltrada.length} empresas)`;
+    totRow[12] = listaFiltrada.reduce((s,e) => s+(e.potencial_movimentacao||0), 0);
+    totRow[14] = listaFiltrada.reduce((s,e) => s+(e.previsto||0), 0);
+    meses.forEach((m, i) => {
       const t = listaFiltrada.reduce((s, e) => s+(libMap[`${e.produto_id}__${m}`]||0), 0);
       totRow.push(t);
     });
-    totRow.push(listaFiltrada.reduce((s,e)=>s+e.totalCreditado,0), '', '', '', listaFiltrada.filter(e=>e._meta?.elegivel).reduce((s,e)=>s+(e._meta?.valorMeta||0),0));
+    const basePos = 15 + meses.length;
+    totRow.push(
+      listaFiltrada.reduce((s,e)=>s+e.totalCreditado,0),
+      listaFiltrada.reduce((s,e)=>s+(e.previsto||0),0),
+      '', '', '', '',
+      0,
+      listaFiltrada.reduce((s,e)=>{
+        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+        const grav = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k])=>k.startsWith(`${e.id}__`))?.[1];
+        return s + (grav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0) || 0);
+      }, 0),
+      '',
+    );
     rows.push(totRow);
 
     const ws = xlsxLib.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = headers.map((_, i) => ({ wch: i < 7 ? 20 : 16 }));
+    // Larguras de colunas
+    ws['!cols'] = headers.map((h, i) => ({
+      wch: ['Empresa','Vendedor','Gestor'].some(x=>h.includes(x)) ? 28
+         : ['ID','%','Peso'].some(x=>h.includes(x)) ? 10
+         : h.includes('/') ? 14  // meses
+         : 18
+    }));
+    // Linha de cabeçalho em negrito (via estilo)
     const wb = xlsxLib.utils.book_new();
-    xlsxLib.utils.book_append_sheet(wb, ws, 'Evolução');
+    xlsxLib.utils.book_append_sheet(wb, ws, 'Evolucao');
     xlsxLib.writeFile(wb, `evolucao-novas-empresas-${new Date().toISOString().substring(0,10)}.xlsx`);
   }
 
