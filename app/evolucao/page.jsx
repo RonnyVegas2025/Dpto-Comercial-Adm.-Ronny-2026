@@ -189,7 +189,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
   const totalPaginas = Math.ceil(lista.length / porPagina);
   const listaPagina  = lista.slice((pagina - 1) * porPagina, pagina * porPagina);
-  const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + (e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0)), 0));
+  const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.reduce((s, e) => {
     // Busca meta gravada: chave exata ou fallback por empresa_id
@@ -329,7 +329,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('diretor')  && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.diretor||'—'}</td>}
                   {col('meses') && meses.map(m => {
                     const mi = meses.indexOf(m);
-                    const v  = e.vals?.[mi] ?? (libMap[`${e.produto_id}__${m}`] || 0);
+                    const v  = (e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
                     // Usa mesAlvo calculado OU competencia_meta gravada no banco
                     const mesMetaRef = metaFinal?.competencia_meta?.substring(0,7) || meta?.mesAlvo?.substring(0,7);
                     const isMesAlvo  = !!(mesMetaRef && m?.substring(0,7) === mesMetaRef);
@@ -874,7 +874,7 @@ export default function Evolucao() {
       let total = 0;
       meses.forEach(m => {
         const mi2 = meses.indexOf(m);
-        const v   = e.vals?.[mi2] ?? (libMap[`${e.produto_id}__${m}`] || 0);
+        const v   = (e.vals?.[mi2] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
         total += v;
         row.push(v > 0 ? v : 0);
       });
@@ -1098,7 +1098,7 @@ export default function Evolucao() {
                         const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
                         const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
                         if (mesRef !== m) return s;
-                        return s + (gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0) || 0);
+                        return s + ((gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
                       }, 0);
                       const qtd = listaCompleta.filter(e => {
                         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
