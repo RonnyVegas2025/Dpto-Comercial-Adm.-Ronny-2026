@@ -392,14 +392,15 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         {/* Cabeçalho do modal */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
                           <div>
-                            <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.88rem', marginBottom: 3 }}>
-                              🎯 {temMetaGravada ? 'Editar meta' : 'Marcar na meta'} — {e.nome}
+                            <div style={{ fontWeight: 700, color: metaForm.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.88rem', marginBottom: 3 }}>
+                              {metaForm.regra === 'upsell' ? '📈 Upsell detectado' : temMetaGravada ? '🎯 Editar meta' : '🎯 Marcar na meta'} — {e.nome}
                             </div>
                             <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
-                              {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes(meta?.mesAlvo)}
-                              {' '}· Valor bruto: <strong style={{ color: '#e8eaf0' }}>{fmt(meta?.valorBruto)}</strong>
+                              {metaForm.regra === 'upsell'
+                                ? <>Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes(metaForm.mesAlvoOverride)}</strong> · Meta anterior: {fmt(meta?.valorMeta)} preservada</>
+                                : <>{meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes(meta?.mesAlvo)}</>
+                              }
                               {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor}</strong> ({e._pct}%)
-                              {' '}· Sugerido: <strong style={{ color: '#34d399' }}>{fmt(meta?.valorMeta)}</strong>
                             </div>
                           </div>
                           <button onClick={() => setModalMeta(null)}
@@ -478,10 +479,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           <span style={{ color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
                           <span style={{ color: '#6b7280', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
                           <button
-                            onClick={() => {
-                              // Abre modal de meta com o valor do upsell pré-preenchido
-                              if (onSalvarMeta) abrirModalMeta({...e, _upsellMes: up.mes, _upsellValor: up.valor});
-                            }}
+                            onClick={() => abrirModalMeta({...e, _upsellMes: up.mes, _upsellValor: up.valor})}
                             style={{ marginTop: 2, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '2px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700 }}>
                             + Adicionar na meta
                           </button>
