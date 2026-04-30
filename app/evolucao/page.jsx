@@ -150,6 +150,7 @@ function BannerFiltros({ filtros, onLimpar }) {
   if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
   if (filtros.metaStatus !== 'todos') tags.push({ label: filtros.metaStatus === 'na_meta' ? '✅ Na meta' : filtros.metaStatus === 'pendente' ? '⏳ Pendente meta' : '— Fora da meta', cor: filtros.metaStatus === 'na_meta' ? '#34d399' : filtros.metaStatus === 'pendente' ? '#f0b429' : '#6b7280' });
   if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: '#34d399' });
+  if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: '#fbbf24' });
   if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: '#e8eaf0' });
   if (tags.length === 0) return null;
 
@@ -212,12 +213,14 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
 
   // Abre o modal para uma empresa
   function abrirModalMeta(empresa) {
-    const meta = empresa._meta;
-    const chave = `${empresa.id}__${meta?.mesAlvo?.substring(0,10)}`;
-    const gravado = metasGravadas[chave];
+    const meta    = empresa._meta;
+    const upsell  = empresa._upsellMes ? { mesAlvo: empresa._upsellMes, valor: empresa._upsellValor } : null;
+    const chave   = meta?.mesAlvo ? `${empresa.id}__${meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chave ? metasGravadas[chave] : null;
     setMetaForm({
-      valor: gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : '') ,
-      regra:  gravado?.regra    ?? meta?.regra ?? 'beneficio',
+      valor: upsell?.valor ?? gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : ''),
+      regra: upsell ? 'upsell' : (gravado?.regra ?? meta?.regra ?? 'beneficio'),
+      mesAlvoOverride: upsell?.mesAlvo || null, // mês do upsell sobrescreve o mesAlvo da meta
     });
     setErroMeta('');
     setModalMeta(empresa);
@@ -272,6 +275,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               {col('status')   && <th style={{ ...s.th, textAlign: 'center' }}>Status</th>}
               {col('tendencia')&& <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>}
               {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.2)', color: '#34d399', minWidth: 120 }}>🎯 Meta</th>}
+              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.2)', color: '#fbbf24', minWidth: 130 }}>📈 Upsell</th>}
             </tr>
           </thead>
           <tbody>
@@ -435,6 +439,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                               <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
                               <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
                               <option value="manual">✏️ Inclusão Manual</option>
+                              <option value="upsell">📈 Upsell (entrada adicional)</option>
                             </select>
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -460,6 +465,33 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     </td>
                   </tr>
                 )}
+                {/* ── COLUNA UPSELL ── */}
+                {col('upsell') && (() => {
+                  const up = e._upsell;
+                  return (
+                    <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.1)' }}>
+                      {up ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                          <span style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                            ↑ +{up.crescPct}% · {fmtMes(up.mes+'-01')}
+                          </span>
+                          <span style={{ color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
+                          <span style={{ color: '#6b7280', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
+                          <button
+                            onClick={() => {
+                              // Abre modal de meta com o valor do upsell pré-preenchido
+                              if (onSalvarMeta) abrirModalMeta({...e, _upsellMes: up.mes, _upsellValor: up.valor});
+                            }}
+                            style={{ marginTop: 2, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '2px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700 }}>
+                            + Adicionar na meta
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#1f2937', fontSize: '0.72rem' }}>—</span>
+                      )}
+                    </td>
+                  );
+                })()}
                 </React.Fragment>
               );
             })}
@@ -601,6 +633,7 @@ export default function Evolucao() {
   const [filtroTend, setFiltroTend]           = useState('todos');
   const [filtroMeta, setFiltroMeta]           = useState('todos'); // filtro por status de meta
   const [filtroMesMeta, setFiltroMesMeta]     = useState('todos'); // filtro por mês da meta
+  const [filtroUpsell, setFiltroUpsell]         = useState(false);    // NOVO: só empresas com upsell
   const [filtroMesCadastro, setFiltroMesCadastro] = useState('todos'); // NOVO: filtro por mês de cadastro
   const [ordenar, setOrdenar]                 = useState('ultimo');
   const [porPagina, setPorPagina]             = useState(12);
@@ -623,6 +656,7 @@ export default function Evolucao() {
     { key:'status',       label:'Status',          grupo:'Movimentação'  },
     { key:'tendencia',    label:'Tendência',       grupo:'Movimentação'  },
     { key:'meta',         label:'🎯 Meta',         grupo:'Meta'          },
+    { key:'upsell',       label:'📈 Upsell',       grupo:'Meta'          },
   ];
   const PRESETS = {
     padrao:  ['categoria','produto','vendedor','gestor','meses','previsto','total','status','meta'],
@@ -777,10 +811,40 @@ export default function Evolucao() {
         // NOVO: calcula meta para este par empresa/consultor
         const metaInfo = calcularMeta(e, libsTodasMap, ajusteMap, pct);
 
+        // ── Detecta upsell: meses após a meta com crescimento ≥ 45% ──
+        let upsellInfo = null;
+        if (metaInfo?.elegivel && metaInfo.mesAlvo) {
+          const baseValorMeta = metaInfo.valorMeta; // valor que entrou na meta (com peso e %)
+          const idxMetaMes    = meses.indexOf(metaInfo.mesAlvo?.substring(0,10) === meses.find(m => m === metaInfo.mesAlvo?.substring(0,7)+'-01') ? metaInfo.mesAlvo?.substring(0,10) : meses.find(m => m?.startsWith(metaInfo.mesAlvo?.substring(0,7))));
+          // Meses POSTERIORES ao mês da meta
+          const mesesApos = meses.filter(m => m > (metaInfo.mesAlvo?.substring(0,7) || ''));
+          let melhorUpsell = null;
+          for (const m of mesesApos) {
+            const mi   = meses.indexOf(m);
+            const vMes = vals[mi] || 0;
+            if (vMes > 0 && baseValorMeta > 0) {
+              const crescPct = ((vMes - baseValorMeta) / baseValorMeta) * 100;
+              if (crescPct >= 45) {
+                if (!melhorUpsell || vMes > melhorUpsell.valor) {
+                  melhorUpsell = {
+                    mes:        m,
+                    valor:      vMes,
+                    crescPct:   Math.round(crescPct),
+                    baseValor:  baseValorMeta,
+                    diferenca:  Math.round((vMes - baseValorMeta) * 100) / 100,
+                  };
+                }
+              }
+            }
+          }
+          upsellInfo = melhorUpsell;
+        }
+
         expanded.push({
           ...e,
           _key:   `${e.id}__${cons.id}`,
           _meta:  metaInfo,
+          _upsell: upsellInfo,   // ← info de upsell detectado
           vals, totalCreditado, tend,
           creditou:    totalCreditado > 0,
           pctPot:      e.potencial_movimentacao > 0 ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria||1) * meses.length * fator)) * 100 : null,
@@ -793,7 +857,6 @@ export default function Evolucao() {
           _pct:        pct,
           _valsBase:   valsBase,
           _totalBase:  totalBase,
-          // NOVOS campos
           previsto:    Math.round((e.potencial_movimentacao||0) * (e.peso_categoria||1) * fator * 100) / 100,
           mesCadastro: e.data_cadastro ? e.data_cadastro.substring(0,7) : null,
         });
@@ -828,6 +891,8 @@ export default function Evolucao() {
     if (filtroTend !== 'todos') arr = arr.filter(e => e.tend === filtroTend);
     // Filtro por mês de cadastro
     if (filtroMesCadastro !== 'todos') arr = arr.filter(e => e.mesCadastro === filtroMesCadastro);
+    // Filtro upsell
+    if (filtroUpsell) arr = arr.filter(e => e._upsell);
     // NOVO: filtro por status de meta
     if (filtroMeta === 'na_meta')   arr = arr.filter(e => e._meta?.elegivel === true);
     if (filtroMeta === 'pendente')  arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
@@ -852,7 +917,7 @@ export default function Evolucao() {
     if (ordenar === 'sem')       arr.sort((a, b) => Number(a.creditou) - Number(b.creditou));
     if (ordenar === 'meta')      arr.sort((a, b) => (b._meta?.valorMeta || 0) - (a._meta?.valorMeta || 0));
     return arr;
-  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta, filtroMesMeta, filtroMesCadastro, ordenar]);
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta, filtroMesMeta, filtroMesCadastro, filtroUpsell, ordenar]);
 
   const kpis = useMemo(() => {
     const total       = listaFiltrada.length;
@@ -881,7 +946,8 @@ export default function Evolucao() {
       total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)); }, 0),
       empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0))>0; }).length,
     }));
-    return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado };
+    const totalUpsell = listaFiltrada.filter(e => e._upsell).length;
+    return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado, totalUpsell };
   }, [listaFiltrada, meses, libMap, metasGravadas]);
 
   // Meses únicos de cadastro para o filtro
@@ -907,10 +973,10 @@ export default function Evolucao() {
     setBusca(''); setFiltroCategoria('todos'); setFiltroDiretor('todos');
     setFiltroGestor('todos'); setFiltroDepto('todos'); setFiltroVendedor('todos');
     setFiltroProduto('todos'); setFiltroStatus('todos'); setFiltroTend('todos');
-    setFiltroMeta('todos'); setFiltroMesMeta('todos'); setFiltroMesCadastro('todos'); setOrdenar('ultimo');
+    setFiltroMeta('todos'); setFiltroMesMeta('todos'); setFiltroMesCadastro('todos'); setFiltroUpsell(false); setOrdenar('ultimo');
   }
 
-  const filtrosAtivos = { diretor: filtroDiretor, gestor: filtroGestor, depto: filtroDepto, vendedor: filtroVendedor, categoria: filtroCategoria, produto: filtroProduto, status: filtroStatus, tend: filtroTend, metaStatus: filtroMeta, mesMeta: filtroMesMeta, busca };
+  const filtrosAtivos = { diretor: filtroDiretor, gestor: filtroGestor, depto: filtroDepto, vendedor: filtroVendedor, categoria: filtroCategoria, produto: filtroProduto, status: filtroStatus, tend: filtroTend, metaStatus: filtroMeta, mesMeta: filtroMesMeta, upsell: filtroUpsell, busca };
   const temFiltro = filtroDiretor !== 'todos' || filtroGestor !== 'todos' || filtroDepto !== 'todos' ||
     filtroVendedor !== 'todos' || filtroCategoria !== 'todos' || filtroProduto !== 'todos' ||
     filtroStatus !== 'todos' || filtroTend !== 'todos' || filtroMeta !== 'todos' ||
@@ -1109,6 +1175,16 @@ export default function Evolucao() {
           <span style={{ ...s.kpiVal, color: '#f0b429' }}>{kpis.pendenteMeta}</span>
           <span style={s.kpiSub}>aguardando elegibilidade</span>
         </div>
+        {/* KPI Upsell */}
+        <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.2)', cursor: 'pointer', background: filtroUpsell ? 'rgba(251,191,36,0.08)' : '#161a26' }}
+          onClick={() => { setFiltroUpsell(f => !f); setAba('evolucao'); }}>
+          <span style={s.kpiLabel}>📈 Possível Upsell</span>
+          <span style={{ ...s.kpiVal, color: '#fbbf24' }}>{kpis.totalUpsell || 0}</span>
+          <span style={{ ...s.kpiSub, color: kpis.totalUpsell > 0 ? '#fbbf24' : '#4b5563' }}>
+            {kpis.totalUpsell > 0 ? `≥45% acima da meta` : 'nenhum detectado'}
+            {filtroUpsell && <span style={{color:'#fbbf24',marginLeft:4,fontWeight:700}}>· ativo</span>}
+          </span>
+        </div>
       </div>
 
       {/* Abas */}
@@ -1156,6 +1232,11 @@ export default function Evolucao() {
               <option value="pendente">⏳ Pendente meta</option>
               <option value="fora">— Fora da meta</option>
             </select>
+            {/* Filtro upsell toggle */}
+            <button onClick={() => setFiltroUpsell(f => !f)}
+              style={{ ...s.sel, cursor: 'pointer', fontFamily: 'inherit', background: filtroUpsell ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)', borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.12)', color: filtroUpsell ? '#fbbf24' : '#6b7280', fontWeight: filtroUpsell ? 700 : 400 }}>
+              📈 {filtroUpsell ? '✓ Upsell' : 'Upsell'}
+            </button>
           </div>
           {/* Linha 2: hierarquia + ordenar */}
           <div style={s.filtroRow}>
@@ -1316,12 +1397,17 @@ export default function Evolucao() {
             colunas={colunasVisiveis} porPagina={porPagina}
             metasGravadas={metasGravadas}
             onSalvarMeta={async (empresa, form) => {
-              // Executa o save diretamente aqui no pai e retorna resultado
-              const comp = empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
+              // Para upsell usa mesAlvoOverride; senão usa mesAlvo da meta normal
+              const comp = form.mesAlvoOverride
+                ? String(form.mesAlvoOverride).substring(0,10)
+                : empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
               if (!comp) return { error: 'Mês da meta não identificado' };
 
-              await supabase.from('valor_meta_empresa')
-                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+              // Para upsell NÃO deleta a meta anterior — só insere nova
+              if (!form.mesAlvoOverride) {
+                await supabase.from('valor_meta_empresa')
+                  .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+              }
 
               const { error } = await supabase.from('valor_meta_empresa').insert({
                 empresa_id:        empresa.id,
