@@ -397,10 +397,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             </div>
                             <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
                               {metaForm.regra === 'upsell'
-                                ? <>Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes(metaForm.mesAlvoOverride)}</strong> · Meta anterior: {fmt(meta?.valorMeta)} preservada</>
-                                : <>{meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes(meta?.mesAlvo)}</>
+                                ? <>📈 Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes((metaForm.mesAlvoOverride||'2000-01').substring(0,7)+'-01')}</strong> · Meta original preservada</>
+                                : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((meta.mesAlvo||'2000-01').substring(0,7)+'-01')}</> : <span>—</span>
                               }
-                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor}</strong> ({e._pct}%)
+                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
                             </div>
                           </div>
                           <button onClick={() => setModalMeta(null)}
@@ -478,11 +478,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           </span>
                           <span style={{ color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
                           <span style={{ color: '#6b7280', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
-                          <button
-                            onClick={() => abrirModalMeta({...e, _upsellMes: up.mes, _upsellValor: up.valor})}
-                            style={{ marginTop: 2, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '2px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700 }}>
-                            + Adicionar na meta
-                          </button>
+                          <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                            style={{ marginTop: 2, display: 'block', textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '3px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
+                            + Adicionar na meta ↗
+                          </a>
                         </div>
                       ) : (
                         <span style={{ color: '#1f2937', fontSize: '0.72rem' }}>—</span>
