@@ -335,9 +335,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     const mi = meses.indexOf(m);
                     const v  = (e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
                     // Verifica se este mês foi considerado meta (pode ter múltiplas entradas)
-                    const todosMesesMeta = (metasGravadas[`all__${e.id}`] || []).map(x => x.competencia_meta?.substring(0,7));
-                    if (todosMesesMeta.length === 0 && metaFinal?.competencia_meta) todosMesesMeta.push(metaFinal.competencia_meta.substring(0,7));
-                    if (todosMesesMeta.length === 0 && meta?.mesAlvo) todosMesesMeta.push(meta.mesAlvo.substring(0,7));
+                    // Todos os meses de meta: banco (all__) + calculado inline (mesAlvo)
+                    const _gravados = (metasGravadas[`all__${e.id}`] || []).map(x => x.competencia_meta?.substring(0,7)).filter(Boolean);
+                    const _calculado = meta?.elegivel && meta?.mesAlvo ? meta.mesAlvo.substring(0,7) : null;
+                    const todosMesesMeta = [...new Set([..._gravados, ...(_calculado ? [_calculado] : [])])];
                     const isMesAlvo  = todosMesesMeta.includes(m?.substring(0,7));
                     // Pega o valor específico deste mês de meta (para mostrar no tooltip)
                     const entradaMeta = (metasGravadas[`all__${e.id}`] || []).find(x => x.competencia_meta?.substring(0,7) === m?.substring(0,7));
@@ -376,8 +377,17 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     {temMetaGravada ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
                         {/* Mostra TODAS as entradas de meta da empresa */}
-                        {(metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : [])).sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||'')).map((entrada, idx) => (
-                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < (metasGravadas[`all__${e.id}`]||[]).length - 1 ? 4 : 0, borderBottom: idx < (metasGravadas[`all__${e.id}`]||[]).length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
+                        {(() => {
+                          // Junta: entradas gravadas no banco + meta calculada inline (se não gravada ainda)
+                          const gravadas = metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : []);
+                          const mesesBanco = gravadas.map(x => x.competencia_meta?.substring(0,7));
+                          const calculada = meta?.elegivel && meta?.mesAlvo && !mesesBanco.includes(meta.mesAlvo.substring(0,7))
+                            ? [{ competencia_meta: meta.mesAlvo.substring(0,10), valor_meta: meta.valorMeta, regra: meta.regra }]
+                            : [];
+                          const todasEntradas = [...gravadas, ...calculada].sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
+                          return todasEntradas;
+                        })().map((entrada, idx, arr) => (
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
                             <span style={{ background: entrada.regra === 'upsell' ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.15)', border: `1px solid ${entrada.regra === 'upsell' ? 'rgba(251,191,36,0.4)' : 'rgba(52,211,153,0.4)'}`, color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                               {entrada.regra === 'upsell' ? '📈' : '✅'} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
                             </span>
