@@ -334,15 +334,24 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('meses') && meses.map(m => {
                     const mi = meses.indexOf(m);
                     const v  = (e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
-                    // Usa mesAlvo calculado OU competencia_meta gravada no banco
-                    const mesMetaRef = metaFinal?.competencia_meta?.substring(0,7) || meta?.mesAlvo?.substring(0,7);
-                    const isMesAlvo  = !!(mesMetaRef && m?.substring(0,7) === mesMetaRef);
+                    // Verifica se este mês foi considerado meta (pode ter múltiplas entradas)
+                    const todosMesesMeta = (metasGravadas[`all__${e.id}`] || []).map(x => x.competencia_meta?.substring(0,7));
+                    if (todosMesesMeta.length === 0 && metaFinal?.competencia_meta) todosMesesMeta.push(metaFinal.competencia_meta.substring(0,7));
+                    if (todosMesesMeta.length === 0 && meta?.mesAlvo) todosMesesMeta.push(meta.mesAlvo.substring(0,7));
+                    const isMesAlvo  = todosMesesMeta.includes(m?.substring(0,7));
+                    // Pega o valor específico deste mês de meta (para mostrar no tooltip)
+                    const entradaMeta = (metasGravadas[`all__${e.id}`] || []).find(x => x.competencia_meta?.substring(0,7) === m?.substring(0,7));
                     return (
                       <td key={m} style={{ ...s.td, textAlign: 'right', background: isMesAlvo ? 'rgba(52,211,153,0.08)' : undefined }}>
                         {v > 0
                           ? <span style={{ color: '#34d399', fontWeight: isMesAlvo ? 700 : 500 }}>
                               {fmt(v)}
-                              {isMesAlvo && <span style={{ fontSize: '0.6rem', marginLeft: 3 }}>✅</span>}
+                              {isMesAlvo && (
+                                <span title={entradaMeta ? `Meta: ${fmt(entradaMeta.valor_meta)} (${entradaMeta.regra})` : 'Na meta'}
+                                  style={{ fontSize: '0.6rem', marginLeft: 3, cursor: 'help' }}>
+                                  {entradaMeta?.regra === 'upsell' ? '📈' : '✅'}
+                                </span>
+                              )}
                             </span>
                           : <span style={{ color: '#374151' }}>—</span>}
                       </td>
@@ -365,12 +374,17 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)', cursor: meta?.elegivel || meta?.regra ? 'pointer' : 'default' }}
                     onClick={() => (meta?.elegivel || meta?.regra) && abrirModalMeta(e)}>
                     {temMetaGravada ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                        <span style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.4)', color: '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
-                          ✅ Gravado · {fmtMes(metaFinal.competencia_meta)}
-                        </span>
-                        <span style={{ color: '#34d399', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(metaFinal.valor_meta)}</span>
-                        <span style={{ color: '#4b5563', fontSize: '0.6rem' }}>clique para editar</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                        {/* Mostra TODAS as entradas de meta da empresa */}
+                        {(metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : [])).sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||'')).map((entrada, idx) => (
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < (metasGravadas[`all__${e.id}`]||[]).length - 1 ? 4 : 0, borderBottom: idx < (metasGravadas[`all__${e.id}`]||[]).length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
+                            <span style={{ background: entrada.regra === 'upsell' ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.15)', border: `1px solid ${entrada.regra === 'upsell' ? 'rgba(251,191,36,0.4)' : 'rgba(52,211,153,0.4)'}`, color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {entrada.regra === 'upsell' ? '📈' : '✅'} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
+                            </span>
+                            <span style={{ color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
+                          </div>
+                        ))}
+                        <span style={{ color: '#4b5563', fontSize: '0.58rem', marginTop: 2 }}>clique para editar</span>
                       </div>
                     ) : (
                       <BadgeMeta meta={meta} pct={e._pct} onClick={() => meta?.elegivel && abrirModalMeta(e)} />
@@ -698,7 +712,11 @@ export default function Evolucao() {
         for (const v of vmetas) {
           const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
           if (!comp) continue;
-          map[String(v.empresa_id) + '__' + comp] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+          const key = String(v.empresa_id) + '__' + comp;
+          map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+          const keyAll = 'all__' + String(v.empresa_id);
+          if (!map[keyAll]) map[keyAll] = [];
+          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
         }
         setMetasGravadas(map);
       }
@@ -738,11 +756,15 @@ export default function Evolucao() {
     if (vmetas) {
       const map = {};
       for (const v of vmetas) {
-        // Normaliza: pega só os primeiros 10 chars (YYYY-MM-DD) da competencia_meta
         const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
         if (!comp) continue;
+        // Chave específica por empresa+mês (para lookup rápido)
         const key = `${v.empresa_id}__${comp}`;
         map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+        // Também guarda lista de TODOS os meses de meta da empresa
+        const keyAll = `all__${v.empresa_id}`;
+        if (!map[keyAll]) map[keyAll] = [];
+        map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
       }
       setMetasGravadas(map);
     }
@@ -1438,10 +1460,16 @@ export default function Evolucao() {
 
               // Atualiza mapa local
               const metaKey = `${empresa.id}__${comp}`;
-              setMetasGravadas(prev => ({
-                ...prev,
-                [metaKey]: { valor_meta: parseFloat(form.valor), regra: form.regra, competencia_meta: comp },
-              }));
+              const allKey = `all__${empresa.id}`;
+              setMetasGravadas(prev => {
+                const novaEntrada = { valor_meta: parseFloat(form.valor), regra: form.regra, competencia_meta: comp };
+                const listaAtual = (prev[allKey] || []).filter(x => x.competencia_meta !== comp);
+                return {
+                  ...prev,
+                  [metaKey]: novaEntrada,
+                  [allKey]: [...listaAtual, novaEntrada],
+                };
+              });
               return { ok: true };
             }}
             onRemoverMeta={async (empresa) => {
