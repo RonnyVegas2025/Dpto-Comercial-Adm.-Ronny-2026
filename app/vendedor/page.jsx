@@ -168,6 +168,7 @@ export default function DashboardVendedor() {
   const [aba,            setAba]            = useState('resumo');
   const [meses,          setMeses]          = useState([]);
   const [mesSelecionado, setMesSelecionado] = useState('');
+  const [filtroMesCad,   setFiltroMesCad]   = useState('todos'); // filtro por mês de cadastro na análise
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
@@ -622,13 +623,181 @@ export default function DashboardVendedor() {
             {/* ══════════════ ABA: ANÁLISE MENSAL ══════════════ */}
             {aba==='analise'&&(
               <div style={{display:'flex',flexDirection:'column',gap:16,animation:'fadeUp 0.3s ease'}}>
-                {!mesSelecionado?(
-                  <div style={{...s.card,textAlign:'center',padding:48}}>
-                    <div style={{fontSize:'2rem',marginBottom:12}}>📅</div>
-                    <div style={{fontWeight:600,color:'#9ca3af',marginBottom:8}}>Selecione um mês acima para ver a análise detalhada</div>
-                    <div style={{color:'#4b5563',fontSize:'0.82rem'}}>Você verá: empresas que movimentaram, meta considerada e distribuição por produto</div>
-                  </div>
-                ):(()=>{
+                {(()=>{
+                  // ── Dados consolidados ou do mês selecionado ──────────────────────────
+                  const isTodos = !mesSelecionado;
+
+                  const mesesCad = [...new Set(dados.lista.map(e => e.data_cadastro?.substring(0,7)).filter(Boolean))].sort().reverse();
+
+                  // Lista base: todas as empresas (não só as que movimentaram)
+                  let listaBase = dados.lista;
+                  if (filtroMesCad !== 'todos') listaBase = listaBase.filter(e => e.data_cadastro?.substring(0,7) === filtroMesCad);
+
+                  // Função para obter movimentação de uma empresa num período
+                  function movEmpresa(e) {
+                    if (isTodos) return e.totalMov || 0;
+                    return e.movPorMes?.[mesSelecionado] || 0;
+                  }
+
+                  // KPIs do período
+                  const totalMov    = listaBase.reduce((s,e) => s + movEmpresa(e), 0);
+                  const totalEsp    = listaBase.reduce((s,e) => s + (e.esperadoMes||0), 0);
+                  const comMov      = listaBase.filter(e => movEmpresa(e) > 0).length;
+                  const semMov      = listaBase.filter(e => movEmpresa(e) === 0).length;
+                  const metaLista   = isTodos
+                    ? listaBase.filter(e => e.metaComp)
+                    : listaBase.filter(e => e.metaComp?.substring(0,7) === mesSelecionado);
+                  const totalMeta   = metaLista.reduce((s,e) => s + (e.valorMeta||0), 0);
+                  const pctReal     = totalEsp > 0 ? (totalMov / totalEsp) * 100 : 0;
+
+                  // Ordena: com movimentação primeiro, depois por valor desc
+                  const listaOrdenada = [...listaBase].sort((a,b) => {
+                    const mA = movEmpresa(a), mB = movEmpresa(b);
+                    if (mA > 0 && mB === 0) return -1;
+                    if (mA === 0 && mB > 0) return 1;
+                    return mB - mA;
+                  });
+
+                  const labelPeriodo = isTodos ? 'Todos os meses' : fmtMes(mesSelecionado+'-01');
+
+                  return (
+                    <>
+                      {/* Filtro por mês de cadastro */}
+                      <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'rgba(96,165,250,0.05)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:10,padding:'10px 14px'}}>
+                        <span style={{color:'#60a5fa',fontSize:'0.75rem',fontWeight:700,whiteSpace:'nowrap'}}>📅 Cadastro em:</span>
+                        <select value={filtroMesCad} onChange={ev=>setFiltroMesCad(ev.target.value)}
+                          style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:7,padding:'5px 10px',color:'#60a5fa',fontSize:'0.78rem',fontFamily:'inherit',cursor:'pointer'}}>
+                          <option value="todos">Todos os meses</option>
+                          {mesesCad.map(m=>{
+                            const qtd=dados.lista.filter(e=>e.data_cadastro?.substring(0,7)===m).length;
+                            return <option key={m} value={m}>{fmtMes(m+'-01')} ({qtd} emp.)</option>;
+                          })}
+                        </select>
+                        {filtroMesCad!=='todos'&&(
+                          <span style={{color:'#60a5fa',fontSize:'0.75rem'}}>
+                            → <strong>{listaBase.length}</strong> empresas cadastradas em {fmtMes(filtroMesCad+'-01')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* KPIs do período */}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12}}>
+                        <KPI label={`Movimentação`} val={fmt(totalMov)} sub={`${comMov} empresas · ${labelPeriodo}`} cor="#f0b429" destaque/>
+                        <KPI label="Esperado" val={fmt(totalEsp)} sub="potencial × peso/mês"/>
+                        <KPI label="% Realizado" val={fmtPct(pctReal)} sub="mov / esperado" cor={corPct(pctReal)} destaque/>
+                        <KPI label="🎯 Meta Considerada" val={totalMeta>0?fmt(totalMeta):'—'} sub={`${metaLista.length} empresa${metaLista.length!==1?'s':''}`} cor={COR.ok} destaque={totalMeta>0}/>
+                        <KPI label="Sem Movimentação" val={semMov} sub={`${listaBase.length} total`} cor={COR.bad}/>
+                        <KPI label="Taxa de Ativação" val={fmtPct(listaBase.length>0?(comMov/listaBase.length)*100:0)} sub={`${comMov} / ${listaBase.length}`}/>
+                      </div>
+
+                      {/* Tabela unificada — TODAS as empresas */}
+                      <div style={s.card}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
+                          <div style={s.cardTitle}>
+                            📋 Empresas — {labelPeriodo}
+                            <span style={{color:'#4b5563',fontSize:'0.78rem',fontWeight:400,marginLeft:8}}>
+                              ({comMov} movimentaram · {semMov} sem movimentação)
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{overflowX:'auto'}}>
+                          <table style={s.table}>
+                            <thead><tr>
+                              {['Empresa','Data Cad.','Produto','Vendedor','Esperado/mês',isTodos?'Total Mov.':'Mov. '+fmtMes(mesSelecionado+'-01'),'VS Esperado','Meta (mês)'].map(h=>(
+                                <th key={h} style={s.th}>{h}</th>
+                              ))}
+                            </tr></thead>
+                            <tbody>
+                              {listaOrdenada.map((e,i)=>{
+                                const movMes  = movEmpresa(e);
+                                const esp     = e.esperadoMes || 0;
+                                const pctAd   = esp > 0 ? (movMes/esp)*100 : 0;
+                                const corAd   = corPct(pctAd);
+                                const ehMeta  = isTodos
+                                  ? !!e.metaComp
+                                  : e.metaComp?.substring(0,7) === mesSelecionado;
+                                const semMovimentacao = movMes === 0;
+                                return (
+                                  <tr key={e._key} style={{
+                                    background: semMovimentacao
+                                      ? (i%2===0?'rgba(248,113,113,0.03)':'rgba(248,113,113,0.01)')
+                                      : (i%2===0?'rgba(255,255,255,0.02)':'transparent'),
+                                    opacity: semMovimentacao ? 0.75 : 1,
+                                  }}>
+                                    <td style={s.td}>
+                                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                        {semMovimentacao && <span style={{color:'#f87171',fontSize:'0.65rem'}}>●</span>}
+                                        <div>
+                                          <a href={`/gestao/${e.id}`} target="_blank" style={{fontWeight:600,color:'#e8eaf0',textDecoration:'none'}}
+                                            onMouseEnter={ev=>ev.currentTarget.style.color='#34d399'}
+                                            onMouseLeave={ev=>ev.currentTarget.style.color='#e8eaf0'}>
+                                            {e.nome}
+                                          </a>
+                                          <div style={{color:'#374151',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td style={{...s.td,color:'#60a5fa',fontSize:'0.72rem',whiteSpace:'nowrap'}}>
+                                      {e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}
+                                    </td>
+                                    <td style={{...s.td,color:'#a78bfa',fontSize:'0.78rem'}}>{e.produto}</td>
+                                    <td style={{...s.td,fontSize:'0.78rem'}}>
+                                      {e.vendedor}
+                                      {e._pct<100&&<span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 5px',fontSize:'0.6rem',fontWeight:700,marginLeft:3}}>{e._pct}%</span>}
+                                    </td>
+                                    <td style={{...s.td,color:'#a78bfa',textAlign:'right'}}>{fmt(esp)}</td>
+                                    <td style={{...s.td,color: semMovimentacao?'#374151':'#f0b429',fontWeight: semMovimentacao?400:700,textAlign:'right'}}>
+                                      {movMes > 0 ? fmt(movMes) : <span style={{color:'#374151'}}>—</span>}
+                                    </td>
+                                    <td style={s.td}>
+                                      {movMes > 0 ? (
+                                        <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                          <div style={{background:'rgba(255,255,255,0.07)',borderRadius:3,height:5,width:40,overflow:'hidden'}}>
+                                            <div style={{height:'100%',width:`${Math.min(pctAd,100)}%`,background:corAd}}/>
+                                          </div>
+                                          <span style={{color:corAd,fontWeight:600,fontSize:'0.72rem'}}>{fmtPct(pctAd)}</span>
+                                        </div>
+                                      ) : <span style={{color:'#374151',fontSize:'0.72rem'}}>sem mov.</span>}
+                                    </td>
+                                    <td style={s.td}>
+                                      {ehMeta ? (
+                                        <div>
+                                          <span style={{background:'rgba(52,211,153,0.1)',color:'#34d399',border:'1px solid rgba(52,211,153,0.25)',borderRadius:5,padding:'2px 7px',fontSize:'0.68rem',fontWeight:700,whiteSpace:'nowrap'}}>
+                                            ✅ {fmt(e.valorMeta)}
+                                          </span>
+                                          <div style={{color:'#374151',fontSize:'0.6rem',marginTop:2}}>
+                                            {e.metaRegra==='beneficio'?'1ª recarga':e.metaRegra==='convenio'?'3º mês':'manual'}
+                                          </div>
+                                        </div>
+                                      ) : <span style={{color:'#374151',fontSize:'0.72rem'}}>—</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr style={{borderTop:'2px solid rgba(255,255,255,0.1)',background:'rgba(240,180,41,0.04)'}}>
+                                <td colSpan={4} style={{...s.td,fontWeight:700,color:'#f0b429',fontSize:'0.8rem',paddingTop:12}}>
+                                  TOTAL ({listaBase.length} empresas)
+                                </td>
+                                <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#a78bfa',paddingTop:12}}>{fmt(totalEsp)}</td>
+                                <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#f0b429',paddingTop:12}}>{fmt(totalMov)}</td>
+                                <td style={{...s.td,paddingTop:12}}>
+                                  <span style={{color:corPct(pctReal),fontWeight:700,fontSize:'0.82rem'}}>{fmtPct(pctReal)}</span>
+                                </td>
+                                <td style={{...s.td,paddingTop:12}}>
+                                  {totalMeta>0&&<span style={{color:'#34d399',fontWeight:700,fontSize:'0.78rem'}}>{fmt(totalMeta)}</span>}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
                   const mesData=porMes.find(m=>m.mes===mesSelecionado)||{mov:0,esperado:0,meta:0,empresas:0};
                   const empresasMes=dados.lista.filter(e=>(e.movPorMes[mesSelecionado]||0)>0).sort((a,b)=>b.movPorMes[mesSelecionado]-a.movPorMes[mesSelecionado]);
                   const semMovMes=dados.lista.filter(e=>(e.movPorMes[mesSelecionado]||0)===0);
