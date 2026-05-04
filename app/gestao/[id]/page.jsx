@@ -115,7 +115,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [salvandoMeta, setSalvandoMeta] = useState(false);
   const [erroMeta,     setErroMeta]     = useState('');
 
-  const [aplicandoAuto, setAplicandoAuto] = useState(false);
+  const [aplicandoAuto,     setAplicandoAuto]     = useState(false);
+  const [mesSelecionado,    setMesSelecionado]    = useState(null);   // troca manual do mês da meta
+  const [trocandoMes,       setTrocandoMes]       = useState(false);  // mostra o select de troca
   const [removendoMeta, setRemovendoMeta] = useState(false);
 
   const [loading,   setLoading]   = useState(true);
@@ -693,36 +695,118 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </button>
                 </div>
               )}
-              {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
-                <div style={{background:'rgba(240,180,41,0.05)',border:'1px solid rgba(240,180,41,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12,animation:'fadeIn 0.3s ease'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:12}}>
-                    <span style={{fontSize:'1.4rem'}}>🎯</span>
-                    <div>
-                      <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem'}}>
-                        Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
-                      </div>
-                      {/* Detalhamento do cálculo — peso só aparece se for Vegas Benefícios */}
-                      <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                        <span>{fmt(metaAuto.valorConsiderado)}</span>
-                        {metaAuto.peso < 1 && (
-                          <>
+              {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(()=>{
+                // Meses disponíveis para troca manual (todos com valor > 0)
+                const mesesDisponiveis = movimentos
+                  .filter(m => m.total_liberado > 0)
+                  .sort((a,b) => a.competencia.localeCompare(b.competencia));
+                // Mês efetivo: manual ou automático
+                const mesEfetivo = mesSelecionado
+                  ? mesesDisponiveis.find(m => m.competencia?.substring(0,10) === mesSelecionado) || mesesDisponiveis[0]
+                  : mesesDisponiveis[metaAuto.regra === 'beneficio' ? 0 : 2] || mesesDisponiveis[0];
+                const compEfetivo   = mesEfetivo?.competencia?.substring(0,10);
+                const ajEfetivo     = ajusteMap[compEfetivo];
+                const valorConsidEf = ajEfetivo ? ajEfetivo.valor_considerado : (mesEfetivo?.total_liberado || 0);
+                const valorMetaEf   = Math.round(valorConsidEf * metaAuto.peso * (pctCons/100) * 100) / 100;
+                const isManual      = !!mesSelecionado;
+
+                return (
+                  <div style={{background:'rgba(240,180,41,0.05)',border:'1px solid rgba(240,180,41,0.25)',borderRadius:12,padding:'14px 18px',animation:'fadeIn 0.3s ease'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <span style={{fontSize:'1.4rem'}}>🎯</span>
+                        <div>
+                          <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                            {isManual
+                              ? <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontSize:'0.72rem',fontWeight:700}}>✏️ Mês alterado manualmente</span>
+                              : <span>Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'}</span>
+                            }
+                            <span style={{color:'#b45309'}}>· {fmtMes(compEfetivo)}</span>
+                          </div>
+                          <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                            <span>{fmt(valorConsidEf)}</span>
+                            {metaAuto.peso < 1 && <>
+                              <span style={{color:'#d1d5db'}}>×</span>
+                              <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
+                            </>}
                             <span style={{color:'#d1d5db'}}>×</span>
-                            <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
-                          </>
+                            <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
+                            <span style={{color:'#d1d5db'}}>=</span>
+                            <strong style={{color:'#f0b429',fontSize:'0.85rem'}}>{fmt(valorMetaEf)}</strong>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                        {/* Botão trocar mês */}
+                        <button onClick={()=>setTrocandoMes(t=>!t)}
+                          style={{background:trocandoMes?'rgba(96,165,250,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${trocandoMes?'rgba(96,165,250,0.4)':'rgba(107,114,128,0.2)'}`,borderRadius:7,padding:'6px 14px',color:trocandoMes?'#2563eb':'#6b7280',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                          📅 {trocandoMes ? 'Fechar' : 'Trocar mês'}
+                        </button>
+                        {isManual && (
+                          <button onClick={()=>{setMesSelecionado(null);setTrocandoMes(false);}}
+                            style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'6px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>
+                            ✕ Desfazer
+                          </button>
                         )}
-                        <span style={{color:'#d1d5db'}}>×</span>
-                        <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
-                        <span style={{color:'#d1d5db'}}>=</span>
-                        <strong style={{color:'#f0b429',fontSize:'0.85rem'}}>{fmt(metaAuto.valorMeta)}</strong>
+                        <button
+                          onClick={async () => {
+                            setAplicandoAuto(true);
+                            setErroMeta('');
+                            await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
+                            const { error } = await supabase.from('valor_meta_empresa').insert({
+                              empresa_id: empresa.id, produto_id: empresa.produto_id,
+                              consultor_id: empresa.consultor_principal_id || null,
+                              competencia_meta: compEfetivo,
+                              valor_bruto: mesEfetivo?.total_liberado || 0,
+                              valor_considerado: valorConsidEf,
+                              valor_meta: valorMetaEf,
+                              pct_consultor: pctCons,
+                              regra: isManual ? 'manual' : metaAuto.regra,
+                              mes_sequencia: isManual ? 0 : (metaAuto.regra === 'beneficio' ? 1 : 3),
+                            });
+                            if (error) { setErroMeta('Erro: ' + error.message); }
+                            else { await carregarEmpresa(); setMesSelecionado(null); setTrocandoMes(false); }
+                            setAplicandoAuto(false);
+                          }}
+                          disabled={aplicandoAuto}
+                          style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                          {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
+                        </button>
                       </div>
                     </div>
+
+                    {/* Seletor de mês expandível */}
+                    {trocandoMes && (
+                      <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(240,180,41,0.15)'}}>
+                        <div style={{color:'#6b7280',fontSize:'0.72rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
+                          Escolha o mês para considerar na meta:
+                        </div>
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                          {mesesDisponiveis.map((mv,idx) => {
+                            const comp = mv.competencia?.substring(0,10);
+                            const aj   = ajusteMap[comp];
+                            const val  = aj ? aj.valor_considerado : mv.total_liberado;
+                            const metaVal = Math.round(val * metaAuto.peso * (pctCons/100) * 100) / 100;
+                            const isAuto   = !mesSelecionado && comp === compEfetivo;
+                            const isSelected = mesSelecionado === comp || isAuto;
+                            return (
+                              <button key={comp} onClick={()=>{setMesSelecionado(comp);setTrocandoMes(false);}}
+                                style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,background:isSelected?'rgba(16,163,74,0.12)':'#f9fafb',border:`2px solid ${isSelected?'#16a34a':'#e4e7ef'}`,borderRadius:10,padding:'8px 14px',cursor:'pointer',fontFamily:'inherit',minWidth:110,transition:'all 0.15s'}}>
+                                <span style={{fontWeight:700,fontSize:'0.82rem',color:isSelected?'#16a34a':'#1a1d2e'}}>{fmtMes(comp)}</span>
+                                <span style={{fontSize:'0.72rem',color:'#4b5563'}}>{fmt(val)}</span>
+                                <span style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:700}}>meta: {fmt(metaVal)}</span>
+                                {!mesSelecionado && idx === (metaAuto.regra === 'beneficio' ? 0 : 2) && (
+                                  <span style={{fontSize:'0.6rem',color:'#16a34a',fontWeight:700,background:'rgba(16,163,74,0.1)',borderRadius:3,padding:'1px 5px'}}>automático</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button onClick={aplicarMetaAuto} disabled={aplicandoAuto}
-                    style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                    {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
-                  </button>
-                </div>
-              )}
+                );
+              })()}
               {metaAuto?.pendente&&(
                 <div style={{background:'rgba(107,114,128,0.06)',border:'1px solid rgba(107,114,128,0.15)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:12}}>
                   <span style={{fontSize:'1.2rem'}}>⏳</span>
