@@ -371,9 +371,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('tendencia') && <td style={{ ...s.td, textAlign: 'center' }}>
                     <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
                   </td>}
-                  {/* ── COLUNA META — clicável ── */}
-                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)', cursor: meta?.elegivel || meta?.regra ? 'pointer' : 'default' }}
-                    onClick={() => (meta?.elegivel || meta?.regra) && abrirModalMeta(e)}>
+                  {/* ── COLUNA META — clicável abre gestão em nova aba ── */}
+                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
                     {temMetaGravada ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
                         {/* Mostra TODAS as entradas de meta da empresa */}
@@ -394,22 +393,25 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             <span style={{ color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
                           </div>
                         ))}
-                        <span style={{ color: '#4b5563', fontSize: '0.58rem', marginTop: 2 }}>clique para editar</span>
+                        <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#4b5563', fontSize: '0.58rem', marginTop: 2, textDecoration: 'none' }}>
+                          ✏️ editar ↗
+                        </a>
                       </div>
                     ) : (
                       <BadgeMeta meta={meta} pct={e._pct} onClick={() => meta?.elegivel && abrirModalMeta(e)} />
                     )}
                     {(meta?.elegivel && !temMetaGravada) && (
-                      <button onClick={(ev) => { ev.stopPropagation(); abrirModalMeta(e); }}
-                        style={{ marginTop: 4, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 5, padding: '2px 10px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700, display: 'block', width: '100%' }}>
-                        + Marcar meta
-                      </button>
+                      <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                        style={{ marginTop: 4, display: 'block', textAlign: 'center', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 5, padding: '2px 10px', color: '#34d399', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
+                        + Marcar meta ↗
+                      </a>
                     )}
                   </td>}
                 </tr>
 
-                {/* ── LINHA EXPANDIDA: Modal de meta inline ── */}
-                {isModalAberto && col('meta') && (
+                {/* Modal inline desabilitado — usa página de gestão */}
+                {false && isModalAberto && col('meta') && (
                   <tr key={e._key + '-modal'} style={{ background: 'rgba(52,211,153,0.03)' }}>
                     <td colSpan={99} style={{ padding: '0 12px 12px' }}>
                       <div style={{ background: '#0f1923', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 12, padding: '16px 20px', animation: 'fadeIn 0.2s ease' }}>
