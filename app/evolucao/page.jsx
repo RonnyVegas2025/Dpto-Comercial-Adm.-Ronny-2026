@@ -184,7 +184,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
 }) {
   const [pagina,       setPagina]       = useState(1);
   const [modalMeta,    setModalMeta]    = useState(null);
-  const [metaForm,     setMetaForm]     = useState({ valor: '', regra: 'beneficio' });
+  const [metaForm,     setMetaForm]     = useState({ valor: '', regra: 'beneficio', mesAlvoOverride: null });
   const [erroMeta,     setErroMeta]     = useState('');
 
   useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
@@ -197,7 +197,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
     const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
     const gravado = chaveCalc
       ? metasGravadas[chaveCalc]
-      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+      : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
     const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
     return s + (valor || 0);
   }, 0);
@@ -205,7 +205,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
     const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
     const gravado = chaveCalc
       ? metasGravadas[chaveCalc]
-      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+      : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
     return gravado || e._meta?.elegivel;
   }).length;
 
@@ -218,9 +218,9 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
     const chave   = meta?.mesAlvo ? `${empresa.id}__${meta.mesAlvo.substring(0,10)}` : null;
     const gravado = chave ? metasGravadas[chave] : null;
     setMetaForm({
-      valor: upsell?.valor ?? gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : ''),
+      valor: upsell?.valor ?? gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : '') ?? '',
       regra: upsell ? 'upsell' : (gravado?.regra ?? meta?.regra ?? 'beneficio'),
-      mesAlvoOverride: upsell?.mesAlvo || null, // mês do upsell sobrescreve o mesAlvo da meta
+      mesAlvoOverride: upsell?.mesAlvo || null,
     });
     setErroMeta('');
     setModalMeta(empresa);
@@ -288,11 +288,11 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               const metaLocal = _metaChaveCalc
                 ? metasGravadas[_metaChaveCalc]
                 // fallback: varre o mapa buscando qualquer entrada para esta empresa
-                : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
 
               // Também tenta encontrar mesmo sem mesAlvo calculado
               const metaLocalFallback = !metaLocal
-                ? Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1]
+                ? Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1]
                 : null;
 
               const metaFinal      = metaLocal || metaLocalFallback;
@@ -421,8 +421,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             </div>
                             <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
                               {metaForm.regra === 'upsell'
-                                ? <>📈 Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes((metaForm.mesAlvoOverride||'2000-01').substring(0,7)+'-01')}</strong> · Meta original preservada</>
-                                : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((meta.mesAlvo||'2000-01').substring(0,7)+'-01')}</> : <span>—</span>
+                                ? <>📈 Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes((String(metaForm.mesAlvoOverride||'2000-01')).substring(0,7)+'-01')}</strong> · Meta original preservada</>
+                                : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((String(meta.mesAlvo||'2000-01')).substring(0,7)+'-01')}</> : <span>—</span>
                               }
                               {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
                             </div>
@@ -933,7 +933,7 @@ export default function Evolucao() {
         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
         const gravado = chaveCalc
           ? metasGravadas[chaveCalc]
-          : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+          : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
         return gravado?.competencia_meta?.substring(0,7) === filtroMesMeta;
       });
     }
@@ -959,7 +959,7 @@ export default function Evolucao() {
       const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
       return chaveCalc
         ? metasGravadas[chaveCalc]
-        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+        : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
     }
     const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
@@ -1033,7 +1033,7 @@ export default function Evolucao() {
       const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
       const metaGrav  = chaveCalc
         ? metasGravadas[chaveCalc]
-        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+        : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
       const valorMetaFinal = metaGrav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
       const mesMetaRef     = metaGrav?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
       const metaRegra      = metaGrav?.regra || e._meta?.regra;
@@ -1097,7 +1097,7 @@ export default function Evolucao() {
       0,
       listaFiltrada.reduce((s,e)=>{
         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-        const grav = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k])=>k.startsWith(`${e.id}__`))?.[1];
+        const grav = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).filter(([k])=>!k.startsWith('all__')).find(([k])=>k.startsWith(`${e.id}__`))?.[1];
         return s + ((grav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
       }, 0),
       '',
@@ -1331,14 +1331,14 @@ export default function Evolucao() {
                     {mesesUnicos.map(m => {
                       const totalMes = listaCompleta.reduce((s, e) => {
                         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
                         const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
                         if (mesRef !== m) return s;
                         return s + ((gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
                       }, 0);
                       const qtd = listaCompleta.filter(e => {
                         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
                         return (gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7)) === m;
                       }).length;
                       return <option key={m} value={m}>{fmtMes(m+'-01')} — {fmt(totalMes)} ({qtd} emp.)</option>;
