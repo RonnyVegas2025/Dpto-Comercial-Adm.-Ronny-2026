@@ -752,7 +752,15 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           onClick={async () => {
                             setAplicandoAuto(true);
                             setErroMeta('');
-                            await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
+                            // Se troca de mês: remove TODAS as entradas anteriores desta empresa
+                            // para não ficar com dois meses marcados
+                            if (isManual) {
+                              await supabase.from('valor_meta_empresa')
+                                .delete().eq('empresa_id', empresa.id);
+                            } else {
+                              await supabase.from('valor_meta_empresa')
+                                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
+                            }
                             const { error } = await supabase.from('valor_meta_empresa').insert({
                               empresa_id: empresa.id, produto_id: empresa.produto_id,
                               consultor_id: empresa.consultor_principal_id || null,
