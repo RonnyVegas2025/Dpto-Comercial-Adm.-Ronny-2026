@@ -1,1098 +1,1602 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const fmt     = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const fmtPct  = (v) => `${Number(v||0).toFixed(0)}%`;
-const fmtDate = (d) => { if(!d) return '—'; const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
-const fmtDT   = (d) => {
-  if(!d) return '—';
-  const dt = new Date(d);
-  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+const fmt    = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtMes = (d) => {
+  if (!d) return '—';
+  const [y, m] = d.split('-');
+  const ms = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${ms[parseInt(m) - 1]}/${y}`;
 };
-const fmtMes  = (d) => {
-  if(!d) return '—';
-  const [y,m] = String(d).substring(0,7).split('-');
-  return `${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m)-1]}/${y}`;
-};
+const fmtPct = (v) => `${Number(v || 0).toFixed(1)}%`;
+const norm   = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-const COR_CAT = {
-  'Benefícios':   { bg:'#eff6ff', text:'#2563eb', border:'#bfdbfe' },
-  'Bônus':        { bg:'#f5f3ff', text:'#7c3aed', border:'#ddd6fe' },
-  'Convênio':     { bg:'#f0fdf4', text:'#16a34a', border:'#86efac' },
-  'Mobilidade':   { bg:'#fff7ed', text:'#ea580c', border:'#fed7aa' },
-  'Taxa Negativa':{ bg:'#fef2f2', text:'#dc2626', border:'#fca5a5' },
-};
-
-const TIPO_CRM = {
-  contato:    { icon:'📞', label:'Contato',     cor:'#2563eb' },
-  prazo:      { icon:'⏳', label:'Prazo Extra',  cor:'#f0b429' },
-  juros:      { icon:'💸', label:'Juros/Boleto', cor:'#7c3aed' },
-  reclamacao: { icon:'⚠️', label:'Reclamação',  cor:'#dc2626' },
-  negociacao: { icon:'🤝', label:'Negociação',  cor:'#16a34a' },
-  upsell:     { icon:'📈', label:'Up-sell',      cor:'#0891b2' },
-  outro:      { icon:'📌', label:'Outro',        cor:'#6b7280' },
-};
-
-// ─── Calcula meta automática ───────────────────────────────────────────────
-// Regra de peso:
-//   Vegas Benefícios → peso do produto aplica na meta (ex: 30% → R$10k vira R$3k)
-//   Todos os outros  → peso é só para previsão de faturamento; meta usa 100%
-function calcularMetaAutomatica(empresa, movimentos, ajustes) {
-  const cat     = (empresa?.categoria        || '').toLowerCase();
-  const produto = (empresa?.produto_contratado || '').toLowerCase().trim();
-  const isBenef = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus');
-  const isConv  = cat.includes('conv')   || cat.includes('mobil');
-  if (!isBenef && !isConv) return null;
-
-  const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
-
-  // Peso só entra na meta se for especificamente "Vegas Benefícios"
-  const isVegasBeneficios = produto === 'vegas benefícios' || produto === 'vegas beneficios';
-  const peso = isVegasBeneficios ? (empresa?.peso_categoria ?? 1) : 1;
-  const pct  = empresa?.pct_principal ?? 100;
-
-  const comValor = movimentos
-    .filter(m => m.total_liberado > 0)
-    .sort((a, b) => a.competencia.localeCompare(b.competencia));
-
-  if (comValor.length === 0) return null;
-
-  let mesAlvo = null;
-  if (isBenef) {
-    mesAlvo = comValor[0]; // 1ª recarga
-  } else {
-    if (comValor.length < 3) return { pendente: true, progresso: comValor.length, precisam: 3, regra: 'convenio' };
-    mesAlvo = comValor[2]; // 3ª liberação
-  }
-
-  const comp            = mesAlvo.competencia?.substring(0, 10);
-  const aj              = ajusteMap[comp];
-  const valorBruto      = mesAlvo.total_liberado;
-  const valorConsiderado = aj ? aj.valor_considerado : valorBruto;
-
-  // Valor meta = movimentação × peso do produto × % do consultor
-  const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
-
-  return {
-    pendente:          false,
-    comp,
-    mesLabel:          fmtMes(comp),
-    valorBruto,
-    valorConsiderado,
-    valorMeta,
-    peso,
-    pct,
-    regra:             isBenef ? 'beneficio' : 'convenio',
-    temAjuste:         !!aj,
-  };
+function tendencia(vals) {
+  const ativos = vals.filter(v => v > 0);
+  if (ativos.length === 0) return 'none';
+  if (ativos.length === 1) return 'new';
+  const ultimo = vals[vals.length - 1];
+  const penult = vals.slice(0, -1).reverse().find(v => v > 0) || 0;
+  if (ultimo > penult * 1.05) return 'up';
+  if (ultimo < penult * 0.95) return 'down';
+  return 'flat';
 }
 
-export default function GestaoEmpresaDetalhe({ params }) {
-  const router = useRouter();
-  const id     = params?.id;
+const TEND = {
+  up:   { color: '#16a34a', label: '↑ Crescendo' },
+  down: { color: '#dc2626', label: '↓ Caindo' },
+  flat: { color: '#6b7280', label: '→ Estável' },
+  new:  { color: '#2563eb', label: '✦ Nova' },
+  none: { color: '#4b5563', label: '— Sem movimentação' },
+};
 
-  const [empresa,      setEmpresa]      = useState(null);
-  const [form,         setForm]         = useState(null);
-  const [historico,    setHistorico]    = useState([]);
-  const [movimentos,   setMovimentos]   = useState([]);
-  const [ajustes,      setAjustes]      = useState([]);
-  const [valorMetas,   setValorMetas]   = useState([]);
+const POR_PAGINA = 12;
 
-  const [editandoMes,    setEditandoMes]    = useState(null);
-  const [ajusteForm,     setAjusteForm]     = useState({ valor:'', motivo:'upsell', observacao:'' });
-  const [salvandoAjuste, setSalvandoAjuste] = useState(false);
+// ─── LÓGICA DE META ──────────────────────────────────────────────────────────
+// Regra de peso: APENAS Vegas Benefícios aplica peso na meta (30%)
+// Todos os outros produtos: peso é só para previsão, meta usa 100% da movimentação
+function calcularMeta(empresa, libsTodasMap, ajusteMap, pct) {
+  const catLower  = (empresa.categoria || '').toLowerCase();
+  const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
+  const isBenef   = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
+  const isConv    = catLower.includes('conv')   || catLower.includes('mobil');
+  if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
-  const [metaMes,      setMetaMes]      = useState(null);
-  const [metaForm,     setMetaForm]     = useState({ valor:'', regra:'beneficio' });
-  const [salvandoMeta, setSalvandoMeta] = useState(false);
+  const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
+    .filter(l => l.val > 0)
+    .sort((a, b) => a.comp.localeCompare(b.comp));
+
+  const totalMesesComMov = libsOrdenadas.length;
+
+  // Peso só entra na meta se for Vegas Benefícios
+  const isVB   = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+  const peso   = isVB ? (empresa.peso_categoria ?? 1) : 1;
+
+  function calcValorMeta(valorConsid) {
+    return Math.round(valorConsid * peso * (pct / 100) * 100) / 100;
+  }
+
+  if (isBenef) {
+    if (totalMesesComMov === 0) return { elegivel: false, regra: 'beneficio', progresso: 0, precisam: 1 };
+    const mesAlvo     = libsOrdenadas[0].comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = libsOrdenadas[0].val;
+    const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
+    const valorMeta   = calcValorMeta(valorConsid);
+    return { elegivel: true, regra: 'beneficio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: 1, precisam: 1 };
+  }
+
+  if (isConv) {
+    if (totalMesesComMov < 3) return { elegivel: false, regra: 'convenio', progresso: totalMesesComMov, precisam: 3 };
+    const mesAlvo     = libsOrdenadas[2].comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = libsOrdenadas[2].val;
+    const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
+    const valorMeta   = calcValorMeta(valorConsid);
+    return { elegivel: true, regra: 'convenio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: totalMesesComMov, precisam: 3 };
+  }
+
+  return { elegivel: false, regra: null };
+}
+
+// Badge de meta para exibição na tabela
+function BadgeMeta({ meta, pct }) {
+  if (!meta || meta.regra === null) {
+    return <span style={{ color: '#374151', fontSize: '0.72rem' }}>—</span>;
+  }
+
+  if (meta.elegivel) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', borderRadius: 5, padding: '2px 7px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+          ✅ {meta.regra === 'beneficio' ? '1ª rec.' : '3º mês'} · {fmtMes(meta.mesAlvo)}
+        </span>
+        <span style={{ color: '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
+        {pct < 100 && <span style={{ color: '#f0b429', fontSize: '0.62rem' }}>{pct}% de {fmt(meta.valorBruto)}</span>}
+      </div>
+    );
+  }
+
+  // Não elegível ainda — mostra progresso
+  const barW = (meta.progresso / meta.precisam) * 100;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 90 }}>
+      <span style={{ color: '#6b7280', fontSize: '0.7rem', fontWeight: 600 }}>
+        {meta.regra === 'beneficio' ? 'Aguardando 1ª rec.' : `${meta.progresso}/${meta.precisam} meses`}
+      </span>
+      {meta.regra === 'convenio' && (
+        <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 3, height: 4, width: 80, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${barW}%`, background: meta.progresso >= 2 ? '#f0b429' : '#4b5563', borderRadius: 3 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Paginacao({ pagina, total, onChange }) {
+  if (total <= 1) return null;
+  const start = Math.max(1, pagina - 2);
+  const end   = Math.min(total, pagina + 2);
+  const pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button style={{ ...ps.btn, ...(pagina === 1 ? ps.disabled : {}) }} onClick={() => onChange(pagina - 1)} disabled={pagina === 1}>‹</button>
+      {start > 1 && <><button style={ps.btn} onClick={() => onChange(1)}>1</button><span style={ps.dots}>…</span></>}
+      {pages.map(p => <button key={p} style={{ ...ps.btn, ...(p === pagina ? ps.ativo : {}) }} onClick={() => onChange(p)}>{p}</button>)}
+      {end < total && <><span style={ps.dots}>…</span><button style={ps.btn} onClick={() => onChange(total)}>{total}</button></>}
+      <button style={{ ...ps.btn, ...(pagina === total ? ps.disabled : {}) }} onClick={() => onChange(pagina + 1)} disabled={pagina === total}>›</button>
+      <span style={{ color: '#4b5563', fontSize: '0.75rem', marginLeft: 4 }}>de {total}</span>
+    </div>
+  );
+}
+
+function BannerFiltros({ filtros, onLimpar }) {
+  const tags = [];
+  if (filtros.diretor   !== 'todos') tags.push({ label: `Diretor: ${filtros.diretor}`,       cor: '#a78bfa' });
+  if (filtros.gestor    !== 'todos') tags.push({ label: `Gestor: ${filtros.gestor}`,          cor: '#60a5fa' });
+  if (filtros.produto   !== 'todos') tags.push({ label: `Produto: ${filtros.produto}`,        cor: '#a78bfa' });
+  if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,           cor: '#f97316' });
+  if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: '#34d399' });
+  if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
+  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
+  if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
+  if (filtros.metaStatus !== 'todos') tags.push({ label: filtros.metaStatus === 'na_meta' ? '✅ Na meta' : filtros.metaStatus === 'pendente' ? '⏳ Pendente meta' : '— Fora da meta', cor: filtros.metaStatus === 'na_meta' ? '#34d399' : filtros.metaStatus === 'pendente' ? '#f0b429' : '#6b7280' });
+  if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: '#34d399' });
+  if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: '#fbbf24' });
+  if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: '#e8eaf0' });
+  if (tags.length === 0) return null;
+
+  return (
+    <div style={bb.wrap}>
+      <span style={bb.icone}>🔍</span>
+      <span style={bb.label}>Analisando:</span>
+      <div style={bb.tags}>
+        {tags.map((t, i) => (
+          <span key={i} style={{ ...bb.tag, borderColor: t.cor + '55', color: t.cor, background: t.cor + '15' }}>
+            {t.label}
+          </span>
+        ))}
+      </div>
+      <button style={bb.limpar} onClick={onLimpar}>✕ Limpar</button>
+    </div>
+  );
+}
+
+const bb = {
+  wrap:   { display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, flexWrap: 'wrap' },
+  icone:  { fontSize: '0.9rem' },
+  label:  { color: '#6b7280', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' },
+  tags:   { display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 },
+  tag:    { border: '1px solid', borderRadius: 6, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' },
+  limpar: { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '4px 12px', color: '#f87171', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+};
+
+function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
+  metasGravadas = {}, onSalvarMeta, onRemoverMeta,
+}) {
+  const [pagina,       setPagina]       = useState(1);
+  const [modalMeta,    setModalMeta]    = useState(null);
+  const [metaForm,     setMetaForm]     = useState({ valor: '', regra: 'beneficio' });
   const [erroMeta,     setErroMeta]     = useState('');
 
-  const [aplicandoAuto,     setAplicandoAuto]     = useState(false);
-  const [mesSelecionado,    setMesSelecionado]    = useState(null);   // troca manual do mês da meta
-  const [trocandoMes,       setTrocandoMes]       = useState(false);  // mostra o select de troca
-  const [removendoMeta, setRemovendoMeta] = useState(false);
+  useEffect(() => { setPagina(1); }, [lista.length, porPagina]);
+  const totalPaginas = Math.ceil(lista.length / porPagina);
+  const listaPagina  = lista.slice((pagina - 1) * porPagina, pagina * porPagina);
+  const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)), 0));
+  const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
+  const totalMetaApurado = lista.reduce((s, e) => {
+    // Busca meta gravada: chave exata ou fallback por empresa_id
+    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chaveCalc
+      ? metasGravadas[chaveCalc]
+      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+    return s + (valor || 0);
+  }, 0);
+  const naMeta = lista.filter(e => {
+    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chaveCalc
+      ? metasGravadas[chaveCalc]
+      : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    return gravado || e._meta?.elegivel;
+  }).length;
 
-  const [loading,   setLoading]   = useState(true);
-  const [salvando,  setSalvando]  = useState(false);
-  const [sucesso,   setSucesso]   = useState(false);
-  const [erro,      setErro]      = useState('');
-  const [editando,  setEditando]  = useState(false);
-  const [abaAtiva,  setAbaAtiva]  = useState('crm');
+  const col = (k) => !colunas || colunas.has(k);
 
-  const [novaOco,    setNovaOco]    = useState({ tipo:'contato', titulo:'', descricao:'' });
-  const [addCRM,     setAddCRM]     = useState(false);
-  const [salvandoCRM,setSalvandoCRM]= useState(false);
-
-  const [consultores, setConsultores] = useState([]);
-  const [parceiros,   setParceiros]   = useState([]);
-  const [produtos,    setProdutos]    = useState([]);
-
-  useEffect(() => { if(id) carregar(); }, [id]);
-
-  async function carregar() {
-    setLoading(true);
-    const { data: emp } = await supabase.from('empresas').select(`
-      *, consultor_principal:consultor_principal_id(id,nome,gestor),
-      consultor_agregado:consultor_agregado_id(id,nome),
-      consultor_agregado_2:consultor_agregado_2_id(id,nome),
-      parceiro:parceiro_id(id,nome)
-    `).eq('id', id).single();
-
-    const [
-      { data: cons },
-      { data: parc },
-      { data: prods },
-      { data: hist },
-      { data: movs },
-      { data: ajms },
-      { data: vmetas },
-    ] = await Promise.all([
-      supabase.from('consultores').select('id,nome,gestor').eq('ativo',true).order('nome'),
-      supabase.from('parceiros').select('id,nome').order('nome'),
-      supabase.from('produtos').select('id,nome,peso').order('nome'),
-      supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
-      supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id||0).order('competencia'),
-      supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
-      // Busca sem campo observacao para evitar erro de schema
-      supabase.from('valor_meta_empresa')
-        .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
-        .eq('empresa_id', id).order('competencia_meta'),
-    ]);
-
-    setEmpresa(emp);
-    setConsultores(cons||[]);
-    setParceiros(parc||[]);
-    setProdutos(prods||[]);
-    setHistorico(hist||[]);
-    setMovimentos(movs||[]);
-    setAjustes(ajms||[]);
-    setValorMetas(vmetas||[]);
-
-    if(emp) setForm({
-      potencial_movimentacao:  emp.potencial_movimentacao||0,
-      categoria:               emp.categoria||'',
-      produto_contratado:      emp.produto_contratado||'',
-      peso_categoria:          emp.peso_categoria||1,
-      taxa_negativa:           emp.taxa_negativa||0,
-      taxa_positiva:           emp.taxa_positiva||0,
-      consultor_principal_id:  emp.consultor_principal_id||'',
-      consultor_agregado_id:   emp.consultor_agregado_id||'',
-      consultor_agregado_2_id: emp.consultor_agregado_2_id||'',
-      parceiro_id:             emp.parceiro_id||'',
-      ativo:                   emp.ativo??true,
-      pct_principal:           emp.pct_principal  ?? 100,
-      pct_agregado_1:          emp.pct_agregado_1 ?? 0,
-      pct_agregado_2:          emp.pct_agregado_2 ?? 0,
-      divisao_manual:          emp.divisao_manual ?? false,
+  // Abre o modal para uma empresa
+  function abrirModalMeta(empresa) {
+    const meta    = empresa._meta;
+    const upsell  = empresa._upsellMes ? { mesAlvo: empresa._upsellMes, valor: empresa._upsellValor } : null;
+    const chave   = meta?.mesAlvo ? `${empresa.id}__${meta.mesAlvo.substring(0,10)}` : null;
+    const gravado = chave ? metasGravadas[chave] : null;
+    setMetaForm({
+      valor: upsell?.valor ?? gravado?.valor_meta ?? (meta?.elegivel ? meta.valorMeta : ''),
+      regra: upsell ? 'upsell' : (gravado?.regra ?? meta?.regra ?? 'beneficio'),
+      mesAlvoOverride: upsell?.mesAlvo || null, // mês do upsell sobrescreve o mesAlvo da meta
     });
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    if(empresa?.produto_id) {
-      supabase.from('liberacoes').select('competencia,total_liberado')
-        .eq('produto_id', empresa.produto_id).order('competencia')
-        .then(({data}) => setMovimentos(data||[]));
-    }
-  }, [empresa?.produto_id]);
-
-  const metaAuto = useMemo(
-    () => calcularMetaAutomatica(empresa, movimentos, ajustes),
-    [empresa, movimentos, ajustes]
-  );
-
-  const metaAutoGravada = useMemo(() => {
-    if (!metaAuto || metaAuto.pendente) return false;
-    return valorMetas.some(v => v.competencia_meta?.substring(0,10) === metaAuto.comp);
-  }, [metaAuto, valorMetas]);
-
-  const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
-  const metaMap   = Object.fromEntries(valorMetas.map(v => [v.competencia_meta?.substring(0,10), v]));
-  const totalMetaApurado = valorMetas.reduce((s,v) => s+(v.valor_meta||0), 0);
-
-  async function salvar() {
-    setSalvando(true); setErro(''); setSucesso(false);
-    try {
-      const payload = {
-        potencial_movimentacao:  parseFloat(form.potencial_movimentacao)||0,
-        categoria:               form.categoria,
-        produto_contratado:      form.produto_contratado,
-        peso_categoria:          parseFloat(form.peso_categoria)||1,
-        taxa_negativa:           parseFloat(form.taxa_negativa)||0,
-        taxa_positiva:           parseFloat(form.taxa_positiva)||0,
-        consultor_principal_id:  form.consultor_principal_id||null,
-        consultor_agregado_id:   form.consultor_agregado_id||null,
-        consultor_agregado_2_id: form.consultor_agregado_2_id||null,
-        parceiro_id:             form.parceiro_id||null,
-        ativo:                   form.ativo,
-        pct_principal:           form.pct_principal,
-        pct_agregado_1:          form.pct_agregado_1,
-        pct_agregado_2:          form.pct_agregado_2,
-        divisao_manual:          form.divisao_manual,
-      };
-      const { error } = await supabase.from('empresas').update(payload).eq('id',id);
-      if(error) throw error;
-      setSucesso(true); setEditando(false);
-      await carregar();
-      setTimeout(()=>setSucesso(false),3000);
-    } catch(err) { setErro(err.message); }
-    setSalvando(false);
-  }
-
-  async function salvarCRM() {
-    if(!novaOco.titulo.trim()) return;
-    setSalvandoCRM(true);
-    await supabase.from('historico_empresa').insert({
-      empresa_id: id, tipo: novaOco.tipo,
-      titulo: novaOco.titulo.trim(), descricao: novaOco.descricao.trim()||null,
-    });
-    setNovaOco({tipo:'contato',titulo:'',descricao:''});
-    setAddCRM(false);
-    const {data} = await supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false});
-    setHistorico(data||[]);
-    setSalvandoCRM(false);
-  }
-
-  async function deletarCRM(ocId) {
-    if(!confirm('Remover este registro?')) return;
-    await supabase.from('historico_empresa').delete().eq('id',ocId);
-    setHistorico(h=>h.filter(x=>x.id!==ocId));
-  }
-
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
-
-  async function salvarAjuste(competencia, valorOriginal) {
-    if (!ajusteForm.valor) return;
-    setSalvandoAjuste(true);
-    const comp = competencia?.substring(0,10);
-    const payload = {
-      empresa_id: id, produto_id: empresa.produto_id, competencia: comp,
-      valor_original: valorOriginal, valor_considerado: parseFloat(ajusteForm.valor),
-      motivo: ajusteForm.motivo, observacao: ajusteForm.observacao||null,
-    };
-    const { error } = await supabase.from('ajustes_movimentacao')
-      .upsert(payload, { onConflict:'empresa_id,competencia' });
-    if (!error) {
-      const { data } = await supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia');
-      setAjustes(data||[]);
-      setEditandoMes(null);
-      setAjusteForm({ valor:'', motivo:'upsell', observacao:'' });
-    }
-    setSalvandoAjuste(false);
-  }
-
-  async function removerAjuste(competencia) {
-    if (!confirm('Remover ajuste?')) return;
-    const comp = competencia?.substring(0,10);
-    await supabase.from('ajustes_movimentacao').delete().eq('empresa_id', id).eq('competencia', comp);
-    setAjustes(a => a.filter(x => x.competencia?.substring(0,10) !== comp));
-  }
-
-  // ── Salvar meta: delete → insert (sem campo observacao) ──────────────────
-  async function salvarMetaComp(comp, payload) {
     setErroMeta('');
-    await supabase.from('valor_meta_empresa')
-      .delete().eq('empresa_id', id).eq('competencia_meta', comp);
-    const { error } = await supabase.from('valor_meta_empresa').insert(payload);
-    if (error) {
-      setErroMeta('Erro ao salvar: ' + error.message);
-      return false;
-    }
-    const { data } = await supabase.from('valor_meta_empresa')
-      .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
-      .eq('empresa_id', id).order('competencia_meta');
-    setValorMetas(data||[]);
-    return true;
+    setModalMeta(empresa);
   }
 
-  // Payload base — apenas colunas que existem na tabela (sem observacao)
-  function montarPayload(comp, valorBruto, valorConsiderado, valorMeta, regra, mesSeq) {
-    return {
-      empresa_id:        id,
-      produto_id:        empresa?.produto_id,
-      consultor_id:      empresa?.consultor_principal_id || null,
-      competencia_meta:  comp,
-      valor_bruto:       valorBruto,
-      valor_considerado: valorConsiderado,
-      valor_meta:        valorMeta,
-      pct_consultor:     empresa?.pct_principal ?? 100,
-      regra,
-      mes_sequencia:     mesSeq,
-    };
-  }
-
-  async function aplicarMetaAuto() {
-    if (!metaAuto || metaAuto.pendente) return;
-    setAplicandoAuto(true);
-    const payload = montarPayload(
-      metaAuto.comp,
-      metaAuto.valorBruto,
-      metaAuto.valorConsiderado,
-      metaAuto.valorMeta,
-      metaAuto.regra,
-      metaAuto.regra === 'beneficio' ? 1 : 3
-    );
-    await salvarMetaComp(metaAuto.comp, payload);
-    setAplicandoAuto(false);
-  }
-
-  async function salvarMetaManual(comp, valorBruto) {
-    if (!metaForm.valor) return;
+  // Salva meta no banco via callback para o pai
+  async function salvarMeta() {
+    if (!modalMeta || !metaForm.valor) return;
     setSalvandoMeta(true);
-    const payload = montarPayload(
-      comp,
-      valorBruto,
-      valorBruto,
-      parseFloat(metaForm.valor),
-      metaForm.regra,
-      metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0
-    );
-    const ok = await salvarMetaComp(comp, payload);
-    if (ok) { setMetaMes(null); setMetaForm({ valor:'', regra:'beneficio' }); }
+    setErroMeta('');
+    const resultado = await onSalvarMeta(modalMeta, metaForm);
+    if (resultado?.error) {
+      setErroMeta('Erro: ' + resultado.error);
+    } else {
+      setModalMeta(null);
+    }
     setSalvandoMeta(false);
   }
 
-  async function removerMeta(comp) {
-    if (!confirm('Remover este valor da meta?')) return;
-    setRemovendoMeta(true);
-    await supabase.from('valor_meta_empresa').delete().eq('empresa_id', id).eq('competencia_meta', comp);
-    setValorMetas(v => v.filter(x => x.competencia_meta?.substring(0,10) !== comp));
-    setRemovendoMeta(false);
+  async function removerMeta(empresa) {
+    if (!confirm('Remover da meta?')) return;
+    await onRemoverMeta(empresa);
+  } // helper
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
+          Exibindo <strong style={{ color: '#e8eaf0' }}>{listaPagina.length}</strong> de <strong style={{ color: '#e8eaf0' }}>{lista.length}</strong> empresas
+          {totalMetaApurado > 0 && (
+            <span style={{ marginLeft: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 6, padding: '2px 10px', color: '#34d399', fontSize: '0.72rem', fontWeight: 600 }}>
+              ✅ {naMeta} na meta · {fmt(totalMetaApurado)} apurado
+            </span>
+          )}
+        </div>
+        <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Empresa</th>
+              {col('categoria')    && <th style={s.th}>Categoria</th>}
+              {col('produto')      && <th style={s.th}>Produto</th>}
+              {col('datacadastro') && <th style={s.th}>Cadastro</th>}
+              {col('vendedor')     && <th style={s.th}>Vendedor</th>}
+              {col('gestor')       && <th style={s.th}>Gestor</th>}
+              {col('diretor')      && <th style={s.th}>Diretor</th>}
+              {col('meses')   && meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
+              {col('previsto') && <th style={{ ...s.th, textAlign: 'right', color: '#a78bfa' }}>Previsto/mês</th>}
+              {col('total')    && <th style={{ ...s.th, textAlign: 'right' }}>Movimentado</th>}
+              {col('status')   && <th style={{ ...s.th, textAlign: 'center' }}>Status</th>}
+              {col('tendencia')&& <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>}
+              {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.2)', color: '#34d399', minWidth: 120 }}>🎯 Meta</th>}
+              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.2)', color: '#fbbf24', minWidth: 130 }}>📈 Upsell</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {listaPagina.map((e, i) => {
+              const ts   = TEND[e.tend];
+              const meta = e._meta;
+
+              // Busca meta gravada: tenta pela chave calculada, depois varre o mapa por empresa_id
+              const _metaChaveCalc = meta?.mesAlvo ? `${e.id}__${meta.mesAlvo.substring(0,10)}` : null;
+              const metaLocal = _metaChaveCalc
+                ? metasGravadas[_metaChaveCalc]
+                // fallback: varre o mapa buscando qualquer entrada para esta empresa
+                : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+
+              // Também tenta encontrar mesmo sem mesAlvo calculado
+              const metaLocalFallback = !metaLocal
+                ? Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1]
+                : null;
+
+              const metaFinal      = metaLocal || metaLocalFallback;
+              const temMetaGravada = !!metaFinal;
+              const isModalAberto  = modalMeta?._key === e._key;
+              const rowBg = (meta?.elegivel || temMetaGravada)
+                ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
+                : (i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent');
+              return (
+                <React.Fragment key={e._key}>
+                <tr style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
+                  <td style={s.td}>
+                    {/* Link para gestão + botão de meta lado a lado */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
+                          onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                          onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                          {e.nome} ↗
+                        </a>
+                        <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>ID {e.produto_id}</div>
+                      </div>
+                    </div>
+                  </td>
+                  {col('categoria')    && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>}
+                  {col('produto')      && <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>}
+                  {col('datacadastro') && <td style={{ ...s.td, color: '#60a5fa', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                    {e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}
+                  </td>}
+                  {col('vendedor')  && <td style={{ ...s.td, fontSize: '0.78rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {e.vendedor}
+                      {e._pct < 100 && <span style={{ background: 'rgba(240,180,41,0.12)', color: '#f0b429', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
+                    </div>
+                  </td>}
+                  {col('gestor')   && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>}
+                  {col('diretor')  && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.diretor||'—'}</td>}
+                  {col('meses') && meses.map(m => {
+                    const mi = meses.indexOf(m);
+                    const v  = (e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
+                    // Verifica se este mês foi considerado meta (pode ter múltiplas entradas)
+                    // Todos os meses de meta: banco (all__) + calculado inline (mesAlvo)
+                    const _gravados = (metasGravadas[`all__${e.id}`] || []).map(x => x.competencia_meta?.substring(0,7)).filter(Boolean);
+                    const _calculado = meta?.elegivel && meta?.mesAlvo ? meta.mesAlvo.substring(0,7) : null;
+                    const todosMesesMeta = [...new Set([..._gravados, ...(_calculado ? [_calculado] : [])])];
+                    const isMesAlvo  = todosMesesMeta.includes(m?.substring(0,7));
+                    // Pega o valor específico deste mês de meta (para mostrar no tooltip)
+                    const entradaMeta = (metasGravadas[`all__${e.id}`] || []).find(x => x.competencia_meta?.substring(0,7) === m?.substring(0,7));
+                    return (
+                      <td key={m} style={{ ...s.td, textAlign: 'right', background: isMesAlvo ? 'rgba(52,211,153,0.08)' : undefined }}>
+                        {v > 0
+                          ? <span style={{ color: '#34d399', fontWeight: isMesAlvo ? 700 : 500 }}>
+                              {fmt(v)}
+                              {isMesAlvo && (
+                                <span title={entradaMeta ? `Meta: ${fmt(entradaMeta.valor_meta)} (${entradaMeta.regra})` : 'Na meta'}
+                                  style={{ fontSize: '0.6rem', marginLeft: 3, cursor: 'help' }}>
+                                  {entradaMeta?.regra === 'upsell' ? '📈' : '✅'}
+                                </span>
+                              )}
+                            </span>
+                          : <span style={{ color: '#374151' }}>—</span>}
+                      </td>
+                    );
+                  })}
+                  {col('previsto') && <td style={{ ...s.td, textAlign: 'right', color: '#a78bfa', fontWeight: 600 }}>
+                    {e.previsto > 0 ? fmt(e.previsto) : '—'}
+                  </td>}
+                  {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>
+                    {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}
+                  </td>}                  {col('status') && <td style={{ ...s.td, textAlign: 'center' }}>
+                    {e.creditou
+                      ? <span style={s.badgeGreen}>✅ Movimentou</span>
+                      : <span style={s.badgeRed}>❌ Sem movimentação</span>}
+                  </td>}
+                  {col('tendencia') && <td style={{ ...s.td, textAlign: 'center' }}>
+                    <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
+                  </td>}
+                  {/* ── COLUNA META — clicável ── */}
+                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)', cursor: meta?.elegivel || meta?.regra ? 'pointer' : 'default' }}
+                    onClick={() => (meta?.elegivel || meta?.regra) && abrirModalMeta(e)}>
+                    {temMetaGravada ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                        {/* Mostra TODAS as entradas de meta da empresa */}
+                        {(() => {
+                          // Junta: entradas gravadas no banco + meta calculada inline (se não gravada ainda)
+                          const gravadas = metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : []);
+                          const mesesBanco = gravadas.map(x => x.competencia_meta?.substring(0,7));
+                          const calculada = meta?.elegivel && meta?.mesAlvo && !mesesBanco.includes(meta.mesAlvo.substring(0,7))
+                            ? [{ competencia_meta: meta.mesAlvo.substring(0,10), valor_meta: meta.valorMeta, regra: meta.regra }]
+                            : [];
+                          const todasEntradas = [...gravadas, ...calculada].sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
+                          return todasEntradas;
+                        })().map((entrada, idx, arr) => (
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
+                            <span style={{ background: entrada.regra === 'upsell' ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.15)', border: `1px solid ${entrada.regra === 'upsell' ? 'rgba(251,191,36,0.4)' : 'rgba(52,211,153,0.4)'}`, color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {entrada.regra === 'upsell' ? '📈' : '✅'} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
+                            </span>
+                            <span style={{ color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
+                          </div>
+                        ))}
+                        <span style={{ color: '#4b5563', fontSize: '0.58rem', marginTop: 2 }}>clique para editar</span>
+                      </div>
+                    ) : (
+                      <BadgeMeta meta={meta} pct={e._pct} onClick={() => meta?.elegivel && abrirModalMeta(e)} />
+                    )}
+                    {(meta?.elegivel && !temMetaGravada) && (
+                      <button onClick={(ev) => { ev.stopPropagation(); abrirModalMeta(e); }}
+                        style={{ marginTop: 4, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 5, padding: '2px 10px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 700, display: 'block', width: '100%' }}>
+                        + Marcar meta
+                      </button>
+                    )}
+                  </td>}
+                </tr>
+
+                {/* ── LINHA EXPANDIDA: Modal de meta inline ── */}
+                {isModalAberto && col('meta') && (
+                  <tr key={e._key + '-modal'} style={{ background: 'rgba(52,211,153,0.03)' }}>
+                    <td colSpan={99} style={{ padding: '0 12px 12px' }}>
+                      <div style={{ background: '#0f1923', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 12, padding: '16px 20px', animation: 'fadeIn 0.2s ease' }}>
+                        {/* Cabeçalho do modal */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: metaForm.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.88rem', marginBottom: 3 }}>
+                              {metaForm.regra === 'upsell' ? '📈 Upsell detectado' : temMetaGravada ? '🎯 Editar meta' : '🎯 Marcar na meta'} — {e.nome}
+                            </div>
+                            <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
+                              {metaForm.regra === 'upsell'
+                                ? <>📈 Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes((metaForm.mesAlvoOverride||'2000-01').substring(0,7)+'-01')}</strong> · Meta original preservada</>
+                                : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((meta.mesAlvo||'2000-01').substring(0,7)+'-01')}</> : <span>—</span>
+                              }
+                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
+                            </div>
+                          </div>
+                          <button onClick={() => setModalMeta(null)}
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', color: '#6b7280', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                            ✕ Fechar
+                          </button>
+                        </div>
+
+                        {erroMeta && <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: '#f87171', fontSize: '0.78rem' }}>{erroMeta}</div>}
+
+                        {/* Campos */}
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <div style={{ minWidth: 200 }}>
+                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Valor que entra na meta *</label>
+                            <input type="number" step="0.01" value={metaForm.valor}
+                              onChange={ev => setMetaForm(f => ({ ...f, valor: ev.target.value }))}
+                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
+                              placeholder="Ex: 4398.00" autoFocus />
+                            {/* Atalhos */}
+                            <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                              {[
+                                { label: 'Sugerido', val: meta?.valorMeta },
+                                { label: 'Bruto',    val: meta?.valorBruto },
+                                { label: 'Consid.',  val: meta?.valorConsid },
+                              ].filter(o => o.val > 0).filter((o,i,a) => a.findIndex(x=>x.val===o.val)===i).map(o => (
+                                <button key={o.label} onClick={() => setMetaForm(f => ({ ...f, valor: o.val }))}
+                                  style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 5, padding: '2px 8px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 600 }}>
+                                  {o.label}: {fmt(o.val)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{ minWidth: 200 }}>
+                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Regra</label>
+                            <select value={metaForm.regra} onChange={ev => setMetaForm(f => ({ ...f, regra: ev.target.value }))}
+                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }}>
+                              <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
+                              <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
+                              <option value="manual">✏️ Inclusão Manual</option>
+                              <option value="upsell">📈 Upsell (entrada adicional)</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <button onClick={salvarMeta} disabled={salvandoMeta || !metaForm.valor}
+                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                              {salvandoMeta ? 'Salvando...' : temMetaGravada ? '💾 Atualizar' : '🎯 Confirmar'}
+                            </button>
+                            {temMetaGravada && (
+                              <button onClick={() => removerMeta(e)}
+                                style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, padding: '10px 16px', color: '#f87171', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                🗑 Remover
+                              </button>
+                            )}
+                            <a href={`/gestao/${e.id}`} target="_blank"
+                              style={{ color: '#6b7280', fontSize: '0.72rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                              onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                              onMouseLeave={ev => ev.currentTarget.style.color='#6b7280'}>
+                              ↗ Abrir ficha completa
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {/* ── COLUNA UPSELL ── */}
+                {col('upsell') && (() => {
+                  const up = e._upsell;
+                  return (
+                    <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.1)' }}>
+                      {up ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                          <span style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                            ↑ +{up.crescPct}% · {fmtMes(up.mes+'-01')}
+                          </span>
+                          <span style={{ color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
+                          <span style={{ color: '#6b7280', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
+                          <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
+                            style={{ marginTop: 2, display: 'block', textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '3px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
+                            + Adicionar na meta ↗
+                          </a>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#1f2937', fontSize: '0.72rem' }}>—</span>
+                      )}
+                    </td>
+                  );
+                })()}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
+              <td colSpan={
+                1 +
+                (col('categoria')?1:0) +
+                (col('produto')?1:0) +
+                (col('vendedor')?1:0) +
+                (col('gestor')?1:0) +
+                (col('diretor')?1:0)
+              } style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
+                TOTAL ({lista.length} empresas)
+              </td>
+              {col('meses') && totaisMes.map((t, i) => (
+                <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
+                  {t > 0 ? fmt(t) : <span style={{ color: '#374151' }}>—</span>}
+                </td>
+              ))}
+              {col('previsto') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#a78bfa', paddingTop: 14 }}>
+                {fmt(lista.reduce((s,e)=>s+(e.previsto||0),0))}
+              </td>}
+              {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totalGeral)}</td>}
+              {(col('status') || col('tendencia')) && <td colSpan={(col('status')?1:0)+(col('tendencia')?1:0)} style={{ ...s.td, paddingTop: 14 }} />}
+              {col('meta') && (
+                <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: '#34d399', paddingTop: 14, borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
+                  {totalMetaApurado > 0 ? fmt(totalMetaApurado) : '—'}
+                </td>
+              )}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}><Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} /></div>}
+    </>
+  );
+}
+
+function TabelaCruzamento({ lista, meses }) {
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => { setPagina(1); }, [lista.length]);
+  const listaSorted  = [...lista].filter(e => e.potencial_movimentacao > 0).sort((a, b) => (b.pctPot || 0) - (a.pctPot || 0));
+  const totalPaginas = Math.ceil(listaSorted.length / POR_PAGINA);
+  const listaPagina  = listaSorted.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const totPot  = listaSorted.reduce((s, e) => s + (e.potencial_movimentacao || 0), 0);
+  const totEsp  = listaSorted.reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length), 0);
+  const totCred = listaSorted.reduce((s, e) => s + e.totalCreditado, 0);
+  const pctGeral = totEsp > 0 ? (totCred / totEsp) * 100 : 0;
+  const corGeral = pctGeral >= 80 ? '#16a34a' : pctGeral >= 40 ? '#f0b429' : '#dc2626';
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}><strong style={{ color: '#e8eaf0' }}>{listaSorted.length}</strong> empresas com potencial cadastrado</div>
+        <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={s.table}>
+          <thead>
+            <tr>{['Empresa','Cat.','Vendedor','Gestor','Diretor','Potencial/mês','Esperado Total','Movimentado Total','% Realizado','Barra','Status'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {listaPagina.map((e, i) => {
+              const pct = e.pctPot || 0;
+              const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f0b429' : '#dc2626';
+              const stLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
+              return (
+                <tr key={e._key} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
+                  <td style={s.td}>
+                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer' }}
+                      onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
+                      onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                      {e.nome}
+                    </a>
+                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                  </td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {e.vendedor}
+                      {e._pct < 100 && <span style={{ background: 'rgba(240,180,41,0.12)', color: '#f0b429', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
+                    </div>
+                  </td>
+                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
+                  <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.diretor}</td>
+                  <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
+                  <td style={{ ...s.td, color: '#f0b429' }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length)}</td>
+                  <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.totalCreditado)}</td>
+                  <td style={{ ...s.td, color: cor, fontWeight: 700 }}>{fmtPct(pct)}</td>
+                  <td style={{ ...s.td, minWidth: 100 }}>
+                    <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                      <div style={{ background: cor, height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4 }} />
+                    </div>
+                  </td>
+                  <td style={{ ...s.td, fontSize: '0.78rem' }}>{stLabel}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
+              <td colSpan={5} style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>TOTAL ({listaSorted.length} empresas)</td>
+              <td style={{ ...s.td, fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totPot)}</td>
+              <td style={{ ...s.td, color: '#f0b429', fontWeight: 700, paddingTop: 14 }}>{fmt(totEsp)}</td>
+              <td style={{ ...s.td, color: '#34d399', fontWeight: 700, paddingTop: 14 }}>{fmt(totCred)}</td>
+              <td style={{ ...s.td, fontWeight: 700, color: corGeral, paddingTop: 14 }}>{fmtPct(pctGeral)}</td>
+              <td colSpan={2} style={{ ...s.td, paddingTop: 14 }} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}><Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} /></div>}
+    </>
+  );
+}
+
+// ─── Página principal ────────────────────────────────────────────────────────
+export default function Evolucao() {
+  const [loading, setLoading]   = useState(true);
+  const [recarregando, setRecarregando] = useState(false);
+  const [xlsxLib, setXlsxLib]   = useState(null);
+  const [ajustes, setAjustes]   = useState([]);
+  const [empresas, setEmpresas] = useState([]);
+  const [libs, setLibs]         = useState([]);
+  const [libsTodas, setLibsTodas] = useState([]); // todas as libs sem filtro de mês
+  const [meses, setMeses]       = useState([]);
+  const [aba, setAba]           = useState('evolucao');
+
+  const [busca, setBusca]                     = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [filtroDiretor, setFiltroDiretor]     = useState('todos');
+  const [filtroGestor, setFiltroGestor]       = useState('todos');
+  const [filtroDepto, setFiltroDepto]         = useState('todos');
+  const [filtroVendedor, setFiltroVendedor]   = useState('todos');
+  const [filtroProduto, setFiltroProduto]     = useState('todos');
+  const [filtroStatus, setFiltroStatus]       = useState('todos');
+  const [filtroTend, setFiltroTend]           = useState('todos');
+  const [filtroMeta, setFiltroMeta]           = useState('todos'); // filtro por status de meta
+  const [filtroMesMeta, setFiltroMesMeta]     = useState('todos'); // filtro por mês da meta
+  const [filtroUpsell, setFiltroUpsell]         = useState(false);    // NOVO: só empresas com upsell
+  const [filtroMesCadastro, setFiltroMesCadastro] = useState('todos'); // NOVO: filtro por mês de cadastro
+  const [ordenar, setOrdenar]                 = useState('ultimo');
+  const [porPagina, setPorPagina]             = useState(12);
+
+  // ── Modal de meta inline ──────────────────────────────────────────────────
+  // Mapa de metas gravadas: empresa_id__consultor_id → valor_meta
+  const [metasGravadas, setMetasGravadas] = useState({}); // NOVO: itens por página
+
+  // ── Configuração de colunas ──────────────────────────────────────────────
+  const COLUNAS_DEF = [
+    { key:'categoria',    label:'Categoria',       grupo:'Identificação' },
+    { key:'produto',      label:'Produto',         grupo:'Identificação' },
+    { key:'datacadastro', label:'Data Cadastro',   grupo:'Identificação' },
+    { key:'vendedor',     label:'Vendedor',        grupo:'Comercial'     },
+    { key:'gestor',       label:'Gestor',          grupo:'Comercial'     },
+    { key:'diretor',      label:'Diretor',         grupo:'Comercial'     },
+    { key:'meses',        label:'Meses (mov.)',    grupo:'Movimentação'  },
+    { key:'previsto',     label:'Total Previsto',  grupo:'Movimentação'  },
+    { key:'total',        label:'Total Mov.',      grupo:'Movimentação'  },
+    { key:'status',       label:'Status',          grupo:'Movimentação'  },
+    { key:'tendencia',    label:'Tendência',       grupo:'Movimentação'  },
+    { key:'meta',         label:'🎯 Meta',         grupo:'Meta'          },
+    { key:'upsell',       label:'📈 Upsell',       grupo:'Meta'          },
+  ];
+  const PRESETS = {
+    padrao:  ['categoria','produto','vendedor','gestor','meses','previsto','total','status','meta'],
+    minimo:  ['produto','vendedor','meses','total','meta'],
+    todas:   COLUNAS_DEF.map(c=>c.key),
+  };
+  const [colunasVisiveis, setColunasVisiveis] = useState(new Set(PRESETS.padrao));
+  const [painelColunas,   setPainelColunas]   = useState(false);
+
+  useEffect(() => { carregar(); }, []);
+  useEffect(() => { import('xlsx').then(m => setXlsxLib(m.default || m)); }, []);
+  useEffect(() => { setFiltroGestor('todos'); setFiltroVendedor('todos'); }, [filtroDiretor]);
+  useEffect(() => { setFiltroVendedor('todos'); }, [filtroGestor]);
+
+
+  // Recarrega dados sem resetar filtros
+  async function recarregar() {
+    setRecarregando(true);
+    try {
+      const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
+        supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
+          data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
+          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
+          .eq('ativo', true),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+      ]);
+      setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
+      setEmpresas(emps || []);
+      setLibs(libsData || []);
+      setAjustes(ajustesData || []);
+      setLibsTodas(libsTodasData || []);
+      const { data: vmetas } = await supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra');
+      if (vmetas) {
+        const map = {};
+        for (const v of vmetas) {
+          const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
+          if (!comp) continue;
+          const key = String(v.empresa_id) + '__' + comp;
+          map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+          const keyAll = 'all__' + String(v.empresa_id);
+          if (!map[keyAll]) map[keyAll] = [];
+          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
+        }
+        setMetasGravadas(map);
+      }
+    } catch(err) { console.error('Erro ao recarregar:', err); }
+    setRecarregando(false);
   }
 
-  function abrirMetaManual(comp, valConsiderado) {
-    const peso     = empresa?.peso_categoria ?? 1;
-    const pct      = empresa?.pct_principal  ?? 100;
-    const valMeta  = Math.round(valConsiderado * peso * (pct/100) * 100) / 100;
-    const existente = metaMap[comp];
-    setMetaForm({
-      valor: existente ? existente.valor_meta : valMeta,
-      regra: existente?.regra || detectarRegra(),
+  async function carregar() {
+    setLoading(true);
+    try {
+      const [{ data: emps, error: errEmps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
+        supabase
+          .from('empresas')
+          .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
+            data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
+            consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
+            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+            consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
+          .eq('ativo', true),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
+        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+      ]);
+
+      if (errEmps) console.error('[carregar] erro empresas:', errEmps);
+
+      setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
+      setEmpresas(emps || []);
+      setLibs(libsData || []);
+      setAjustes(ajustesData || []);
+      setLibsTodas(libsTodasData || []);
+
+      // Carrega metas gravadas para o mapa local
+      const { data: vmetas } = await supabase
+        .from('valor_meta_empresa')
+        .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra');
+      if (vmetas) {
+        const map = {};
+        for (const v of vmetas) {
+          const comp = v.competencia_meta ? String(v.competencia_meta).substring(0,10) : null;
+          if (!comp) continue;
+          const key = `${v.empresa_id}__${comp}`;
+          map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
+          const keyAll = `all__${v.empresa_id}`;
+          if (!map[keyAll]) map[keyAll] = [];
+          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
+        }
+        setMetasGravadas(map);
+      }
+    } catch(err) {
+      console.error('[carregar] erro inesperado:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const libMap = useMemo(() => {
+    const m = {};
+    for (const l of libs) { const k = `${l.produto_id}__${l.competencia}`; m[k] = (m[k] || 0) + l.total_liberado; }
+    return m;
+  }, [libs]);
+
+  const ajusteMap = useMemo(() => {
+    const m = {};
+    for (const a of ajustes) {
+      const comp = a.competencia?.substring(0, 10);
+      m[`${a.empresa_id}__${comp}`] = a.valor_considerado;
+    }
+    return m;
+  }, [ajustes]);
+
+  // NOVO: libsTodasMap para cálculo de meta
+  const libsTodasMap = useMemo(() => {
+    const m = {};
+    for (const l of libsTodas) {
+      const pid = l.produto_id;
+      if (!m[pid]) m[pid] = [];
+      m[pid].push({ comp: l.competencia?.substring(0, 10), val: l.total_liberado || 0 });
+    }
+    return m;
+  }, [libsTodas]);
+
+  const listaCompleta = useMemo(() => {
+    const baseEmpresas = empresas
+      .filter(e => !e.produto_contratado?.toLowerCase().includes('desconto condicional') && e.categoria !== 'Taxa Negativa');
+
+    const expanded = [];
+    for (const e of baseEmpresas) {
+      const valsBase = meses.map(m => {
+        const comp    = m?.substring(0, 10);
+        const ajustado = ajusteMap[`${e.id}__${comp}`];
+        return ajustado !== undefined ? ajustado : (libMap[`${e.produto_id}__${m}`] || 0);
+      });
+      const totalBase = valsBase.reduce((s, v) => s + v, 0);
+      const tend = tendencia(valsBase);
+
+      const pctP  = e.pct_principal  ?? 100;
+      const pctA1 = e.pct_agregado_1 ?? 0;
+      const pctA2 = e.pct_agregado_2 ?? 0;
+
+      const consultores = [
+        e.consultor_principal  ? { cons: e.consultor_principal,  pct: pctP  } : null,
+        e.consultor_agregado   && pctA1 > 0 ? { cons: e.consultor_agregado,   pct: pctA1 } : null,
+        e.consultor_agregado_2 && pctA2 > 0 ? { cons: e.consultor_agregado_2, pct: pctA2 } : null,
+      ].filter(Boolean);
+
+      for (const { cons, pct } of consultores) {
+        const fator = pct / 100;
+        const vals  = valsBase.map(v => Math.round(v * fator * 100) / 100);
+        const totalCreditado = vals.reduce((s, v) => s + v, 0);
+
+        // NOVO: calcula meta para este par empresa/consultor
+        const metaInfo = calcularMeta(e, libsTodasMap, ajusteMap, pct);
+
+        // ── Detecta upsell: meses após a meta com crescimento ≥ 45% ──
+        let upsellInfo = null;
+        if (metaInfo?.elegivel && metaInfo.mesAlvo) {
+          const baseValorMeta = metaInfo.valorMeta; // valor que entrou na meta (com peso e %)
+          const idxMetaMes    = meses.indexOf(metaInfo.mesAlvo?.substring(0,10) === meses.find(m => m === metaInfo.mesAlvo?.substring(0,7)+'-01') ? metaInfo.mesAlvo?.substring(0,10) : meses.find(m => m?.startsWith(metaInfo.mesAlvo?.substring(0,7))));
+          // Meses POSTERIORES ao mês da meta
+          const mesesApos = meses.filter(m => m > (metaInfo.mesAlvo?.substring(0,7) || ''));
+          let melhorUpsell = null;
+          for (const m of mesesApos) {
+            const mi   = meses.indexOf(m);
+            const vMes = vals[mi] || 0;
+            if (vMes > 0 && baseValorMeta > 0) {
+              const crescPct = ((vMes - baseValorMeta) / baseValorMeta) * 100;
+              if (crescPct >= 45) {
+                if (!melhorUpsell || vMes > melhorUpsell.valor) {
+                  melhorUpsell = {
+                    mes:        m,
+                    valor:      vMes,
+                    crescPct:   Math.round(crescPct),
+                    baseValor:  baseValorMeta,
+                    diferenca:  Math.round((vMes - baseValorMeta) * 100) / 100,
+                  };
+                }
+              }
+            }
+          }
+          upsellInfo = melhorUpsell;
+        }
+
+        expanded.push({
+          ...e,
+          _key:   `${e.id}__${cons.id}`,
+          _meta:  metaInfo,
+          _upsell: upsellInfo,   // ← info de upsell detectado
+          vals, totalCreditado, tend,
+          creditou:    totalCreditado > 0,
+          pctPot:      e.potencial_movimentacao > 0 ? (totalCreditado / (e.potencial_movimentacao * (e.peso_categoria||1) * meses.length * fator)) * 100 : null,
+          ultimoValor: vals[vals.length - 1] || 0,
+          depto:       cons.equipe || cons.setor || '—',
+          gestor:      cons.gestor || '—',
+          diretor:     cons.gestor || '—',
+          vendedor:    cons.nome   || '—',
+          produto:     e.produto_contratado || '—',
+          _pct:        pct,
+          _valsBase:   valsBase,
+          _totalBase:  totalBase,
+          previsto:    Math.round((e.potencial_movimentacao||0) * (e.peso_categoria||1) * fator * 100) / 100,
+          mesCadastro: e.data_cadastro ? e.data_cadastro.substring(0,7) : null,
+        });
+      }
+    }
+    return expanded;
+  }, [empresas, meses, libMap, ajusteMap, libsTodasMap]);
+
+  const opcoes = useMemo(() => {
+    const categorias = [...new Set(listaCompleta.map(e => e.categoria).filter(Boolean))].sort();
+    const diretores  = [...new Set(listaCompleta.map(e => e.diretor).filter(v => v !== '—'))].sort();
+    const deptos     = [...new Set(listaCompleta.map(e => e.depto).filter(v => v !== '—'))].sort();
+    const produtos   = [...new Set(listaCompleta.map(e => e.produto).filter(v => v !== '—'))].sort();
+    const baseGest   = filtroDiretor === 'todos' ? listaCompleta : listaCompleta.filter(e => e.diretor === filtroDiretor);
+    const gestores   = [...new Set(baseGest.map(e => e.gestor).filter(v => v !== '—'))].sort();
+    const baseVend   = filtroGestor === 'todos' ? baseGest : baseGest.filter(e => e.gestor === filtroGestor);
+    const vendedores = [...new Set(baseVend.map(e => e.vendedor).filter(v => v !== '—'))].sort();
+    return { categorias, diretores, deptos, gestores, vendedores, produtos };
+  }, [listaCompleta, filtroDiretor, filtroGestor]);
+
+  const listaFiltrada = useMemo(() => {
+    let arr = [...listaCompleta];
+    if (busca.trim())            { const b = norm(busca); arr = arr.filter(e => norm(e.nome).includes(b) || String(e.produto_id).includes(b)); }
+    if (filtroCategoria !== 'todos') arr = arr.filter(e => e.categoria === filtroCategoria);
+    if (filtroDiretor   !== 'todos') arr = arr.filter(e => e.diretor   === filtroDiretor);
+    if (filtroGestor    !== 'todos') arr = arr.filter(e => e.gestor    === filtroGestor);
+    if (filtroDepto     !== 'todos') arr = arr.filter(e => e.depto     === filtroDepto);
+    if (filtroVendedor  !== 'todos') arr = arr.filter(e => e.vendedor  === filtroVendedor);
+    if (filtroProduto   !== 'todos') arr = arr.filter(e => e.produto   === filtroProduto);
+    if (filtroStatus === 'creditou')    arr = arr.filter(e =>  e.creditou);
+    if (filtroStatus === 'sem_credito') arr = arr.filter(e => !e.creditou);
+    if (filtroTend !== 'todos') arr = arr.filter(e => e.tend === filtroTend);
+    // Filtro por mês de cadastro
+    if (filtroMesCadastro !== 'todos') arr = arr.filter(e => e.mesCadastro === filtroMesCadastro);
+    // Filtro upsell
+    if (filtroUpsell) arr = arr.filter(e => e._upsell);
+    // NOVO: filtro por status de meta
+    if (filtroMeta === 'na_meta')   arr = arr.filter(e => e._meta?.elegivel === true);
+    if (filtroMeta === 'pendente')  arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
+    if (filtroMeta === 'fora')      arr = arr.filter(e => !e._meta || e._meta?.regra === null);
+    // Filtro por mês específico da meta — usa mesAlvo calculado OU competencia_meta gravada
+    if (filtroMesMeta !== 'todos') {
+      arr = arr.filter(e => {
+        // Checa meta calculada
+        if (e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === filtroMesMeta) return true;
+        // Checa meta gravada no banco (fallback)
+        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+        const gravado = chaveCalc
+          ? metasGravadas[chaveCalc]
+          : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+        return gravado?.competencia_meta?.substring(0,7) === filtroMesMeta;
+      });
+    }
+    if (ordenar === 'ultimo')    arr.sort((a, b) => b.ultimoValor - a.ultimoValor);
+    if (ordenar === 'total')     arr.sort((a, b) => b.totalCreditado - a.totalCreditado);
+    if (ordenar === 'nome')      arr.sort((a, b) => a.nome.localeCompare(b.nome));
+    if (ordenar === 'potencial') arr.sort((a, b) => (b.potencial_movimentacao || 0) - (a.potencial_movimentacao || 0));
+    if (ordenar === 'sem')       arr.sort((a, b) => Number(a.creditou) - Number(b.creditou));
+    if (ordenar === 'meta')      arr.sort((a, b) => (b._meta?.valorMeta || 0) - (a._meta?.valorMeta || 0));
+    return arr;
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta, filtroMesMeta, filtroMesCadastro, filtroUpsell, ordenar]);
+
+  const kpis = useMemo(() => {
+    const total       = listaFiltrada.length;
+    const creditaram  = listaFiltrada.filter(e => e.creditou).length;
+    const semCredito  = total - creditaram;
+    const totalCred   = listaFiltrada.reduce((s, e) => s + e.totalCreditado, 0);
+    const totalPrevisto = listaFiltrada.reduce((s, e) => s + (e.previsto || 0), 0);
+    const crescendo   = listaFiltrada.filter(e => e.tend === 'up').length;
+    const pctAtivacao = total > 0 ? (creditaram / total) * 100 : 0;
+    // KPIs de meta — usa valor do banco (metasGravadas) quando disponível, senão o calculado
+    function getMetaGravada(e) {
+      const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+      return chaveCalc
+        ? metasGravadas[chaveCalc]
+        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+    }
+    const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
+    const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
+    const totalMetaApurado = listaFiltrada.reduce((s, e) => {
+      const gravado = getMetaGravada(e);
+      const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+      return s + (valor || 0);
+    }, 0);
+    const porMes = meses.map(m => ({
+      mes: m,
+      total:    listaFiltrada.reduce((s, e) => { const mi=meses.indexOf(m); return s+((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)); }, 0),
+      empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0))>0; }).length,
+    }));
+    const totalUpsell = listaFiltrada.filter(e => e._upsell).length;
+    return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado, totalUpsell };
+  }, [listaFiltrada, meses, libMap, metasGravadas]);
+
+  // Meses únicos de cadastro para o filtro
+  // mesesCadastro em cascata: mostra só meses disponíveis com os filtros atuais (exceto o próprio filtro de cadastro)
+  const mesesCadastro = useMemo(() => {
+    let base = [...listaCompleta];
+    if (busca.trim())            { const b = busca.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); base = base.filter(e => e.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(b) || String(e.produto_id).includes(b)); }
+    if (filtroCategoria !== 'todos') base = base.filter(e => e.categoria === filtroCategoria);
+    if (filtroDiretor   !== 'todos') base = base.filter(e => e.diretor   === filtroDiretor);
+    if (filtroGestor    !== 'todos') base = base.filter(e => e.gestor    === filtroGestor);
+    if (filtroDepto     !== 'todos') base = base.filter(e => e.depto     === filtroDepto);
+    if (filtroVendedor  !== 'todos') base = base.filter(e => e.vendedor  === filtroVendedor);
+    if (filtroProduto   !== 'todos') base = base.filter(e => e.produto   === filtroProduto);
+    if (filtroStatus === 'creditou')    base = base.filter(e =>  e.creditou);
+    if (filtroStatus === 'sem_credito') base = base.filter(e => !e.creditou);
+    if (filtroTend  !== 'todos') base = base.filter(e => e.tend === filtroTend);
+    if (filtroMeta === 'na_meta')  base = base.filter(e => e._meta?.elegivel === true);
+    if (filtroMeta === 'pendente') base = base.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
+    return [...new Set(base.map(e => e.mesCadastro).filter(Boolean))].sort().reverse();
+  }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta]);
+
+  function limparFiltros() {
+    setBusca(''); setFiltroCategoria('todos'); setFiltroDiretor('todos');
+    setFiltroGestor('todos'); setFiltroDepto('todos'); setFiltroVendedor('todos');
+    setFiltroProduto('todos'); setFiltroStatus('todos'); setFiltroTend('todos');
+    setFiltroMeta('todos'); setFiltroMesMeta('todos'); setFiltroMesCadastro('todos'); setFiltroUpsell(false); setOrdenar('ultimo');
+  }
+
+  const filtrosAtivos = { diretor: filtroDiretor, gestor: filtroGestor, depto: filtroDepto, vendedor: filtroVendedor, categoria: filtroCategoria, produto: filtroProduto, status: filtroStatus, tend: filtroTend, metaStatus: filtroMeta, mesMeta: filtroMesMeta, upsell: filtroUpsell, busca };
+  const temFiltro = filtroDiretor !== 'todos' || filtroGestor !== 'todos' || filtroDepto !== 'todos' ||
+    filtroVendedor !== 'todos' || filtroCategoria !== 'todos' || filtroProduto !== 'todos' ||
+    filtroStatus !== 'todos' || filtroTend !== 'todos' || filtroMeta !== 'todos' ||
+    filtroMesMeta !== 'todos' || busca.trim();
+
+  function exportarExcel() {
+    if (!xlsxLib) return;
+
+    // Todas as colunas fixas
+    const headers = [
+      'ID Produto', 'Empresa', 'CNPJ', 'Data Cadastro', 'Categoria', 'Produto',
+      'Cidade', 'Estado', 'Vendedor', '% Consultor', 'Gestor', 'Diretor',
+      'Potencial/mês', 'Peso Meta (%)', 'Previsto/mês',
+    ];
+    // Colunas de meses
+    meses.forEach(m => headers.push(fmtMes(m)));
+    // Colunas de totais e meta
+    headers.push(
+      'Total Movimentado', 'Total Previsto', 'Status', 'Tendência',
+      'Meta Regra', 'Meta Mês', 'Valor Bruto Meta', 'Valor Meta Apurado', 'Meta Status'
+    );
+
+    const fmtDate = (d) => { if(!d) return '—'; const [y,m,day]=d.split('-'); return day+'/'+m+'/'+y; };
+
+    const rows = listaFiltrada.map(e => {
+      // Busca meta gravada ou calculada
+      const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+      const metaGrav  = chaveCalc
+        ? metasGravadas[chaveCalc]
+        : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+      const valorMetaFinal = metaGrav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+      const mesMetaRef     = metaGrav?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
+      const metaRegra      = metaGrav?.regra || e._meta?.regra;
+      const temMeta        = !!(metaGrav || e._meta?.elegivel);
+
+      const row = [
+        e.produto_id,
+        e.nome,
+        e.cnpj || '—',
+        fmtDate(e.data_cadastro),
+        e.categoria,
+        e.produto,
+        e.cidade || '—',
+        e.estado || '—',
+        e.vendedor,
+        e._pct,
+        e.gestor,
+        e.diretor || '—',
+        e.potencial_movimentacao || 0,
+        Math.round((e.peso_categoria || 1) * 100),
+        e.previsto || 0,
+      ];
+
+      // Valores por mês
+      let totalMov = 0;
+      meses.forEach(m => {
+        const mi2 = meses.indexOf(m);
+        const v   = (e.vals?.[mi2] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
+        totalMov += v;
+        row.push(v > 0 ? v : 0);
+      });
+
+      row.push(
+        totalMov,
+        e.previsto || 0,
+        e.creditou ? 'Movimentou' : 'Sem movimentação',
+        e.tend === 'up' ? 'Crescendo' : e.tend === 'down' ? 'Caindo' : e.tend === 'flat' ? 'Estável' : e.tend === 'new' ? 'Nova' : 'Sem movimentação',
+        metaRegra === 'beneficio' ? '1ª Recarga' : metaRegra === 'convenio' ? '3º Mês' : metaRegra === 'manual' ? 'Manual' : e._meta?.regra ? 'Pendente' : '—',
+        mesMetaRef ? fmtMes(mesMetaRef + '-01') : '—',
+        e._meta?.valorBruto || 0,
+        valorMetaFinal || 0,
+        temMeta ? 'Na meta' : e._meta?.regra ? 'Pendente' : '—',
+      );
+      return row;
     });
-    setMetaMes(metaMes === comp ? null : comp);
-    setEditandoMes(null);
+
+    // Linha de totais
+    const totRow = new Array(15).fill('');
+    totRow[0] = 'TOTAL'; totRow[1] = `(${listaFiltrada.length} empresas)`;
+    totRow[12] = listaFiltrada.reduce((s,e) => s+(e.potencial_movimentacao||0), 0);
+    totRow[14] = listaFiltrada.reduce((s,e) => s+(e.previsto||0), 0);
+    meses.forEach((m, i) => {
+      const t = listaFiltrada.reduce((s, e) => s+(libMap[`${e.produto_id}__${m}`]||0), 0);
+      totRow.push(t);
+    });
+    const basePos = 15 + meses.length;
+    totRow.push(
+      listaFiltrada.reduce((s,e)=>s+e.totalCreditado,0),
+      listaFiltrada.reduce((s,e)=>s+(e.previsto||0),0),
+      '', '', '', '',
+      0,
+      listaFiltrada.reduce((s,e)=>{
+        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+        const grav = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k])=>k.startsWith(`${e.id}__`))?.[1];
+        return s + ((grav?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
+      }, 0),
+      '',
+    );
+    rows.push(totRow);
+
+    const ws = xlsxLib.utils.aoa_to_sheet([headers, ...rows]);
+    // Larguras de colunas
+    ws['!cols'] = headers.map((h, i) => ({
+      wch: ['Empresa','Vendedor','Gestor'].some(x=>h.includes(x)) ? 28
+         : ['ID','%','Peso'].some(x=>h.includes(x)) ? 10
+         : h.includes('/') ? 14  // meses
+         : 18
+    }));
+    // Linha de cabeçalho em negrito (via estilo)
+    const wb = xlsxLib.utils.book_new();
+    xlsxLib.utils.book_append_sheet(wb, ws, 'Evolucao');
+    xlsxLib.writeFile(wb, `evolucao-novas-empresas-${new Date().toISOString().substring(0,10)}.xlsx`);
   }
 
-  function detectarRegra() {
-    const cat = (empresa?.categoria||'').toLowerCase();
-    return (cat.includes('conv') || cat.includes('mobil')) ? 'convenio' : 'beneficio';
-  }
-
-  if(loading) return (
-    <div style={{...sp.page,display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>
-      <div style={{textAlign:'center'}}><div style={sp.spin}></div><div style={{color:'#8b92b0'}}>Carregando...</div></div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  if (loading) return (
+    <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ textAlign: 'center' }}><div style={s.spin}></div><div style={{ color: '#6b7280' }}>Carregando...</div></div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
-
-  if(!empresa) return (
-    <div style={{...sp.page,textAlign:'center',paddingTop:80}}>
-      <div style={{fontSize:'2.5rem',marginBottom:12}}>🔍</div>
-      <div style={{color:'#f87171',fontWeight:600}}>Empresa não encontrada</div>
-      <button style={{...sp.btnSec,marginTop:20}} onClick={()=>router.push('/gestao')}>← Voltar</button>
-    </div>
-  );
-
-  const cor = COR_CAT[empresa.categoria] || {bg:'#f9fafb',text:'#6b7280',border:'#e4e7ef'};
-  const totalMovimentado = movimentos.reduce((s,m)=>s+m.total_liberado,0);
-  const mesesAtivos = movimentos.filter(m=>m.total_liberado>0).length;
-  const produtos_list = ['Benefícios','Bônus','Convênio','Mobilidade','Taxa Negativa'];
-  const MOTIVOS_LABEL = {upsell:'📈 Up-sell',ajuste:'✏️ Ajuste',negociacao:'🤝 Negociação',correcao:'🔧 Correção',outro:'📌 Outro'};
-  const peso      = empresa.peso_categoria ?? 1;
-  const pctCons   = empresa.pct_principal  ?? 100;
-  const cat       = (empresa.categoria||'').toLowerCase();
-  const elegivel  = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
 
   const abas = [
-    { key:'crm',        label:'📝 CRM',              badge: historico.length },
-    { key:'dados',      label:'✏️ Dados Cadastrais' },
-    { key:'movimentos', label:'📊 Movimentação' },
+    { key: 'evolucao',   label: '📈 Evolução por Empresa' },
+    { key: 'resumo',     label: '🔢 Resumo por Mês' },
+    { key: 'cruzamento', label: '🎯 Potencial vs Creditado' },
   ];
 
   return (
-    <div style={sp.page}>
+    <div style={s.page}>
       <style>{`
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-        input:focus,select:focus,textarea:focus{border-color:#f0b429!important;outline:none;}
-        .crm-item:hover{background:#f0f4ff!important;}
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        select option { background: #1e2435 !important; color: #e8eaf0 !important; }
       `}</style>
 
       {/* Header */}
-      <div style={sp.header}>
-        <div style={{display:'flex',alignItems:'flex-start',gap:16,flexWrap:'wrap'}}>
-          <button style={sp.btnBack} onClick={()=>router.push('/gestao')}>← Gestão</button>
-          <div>
-            <div style={sp.tag}>♠ Vegas Card · Gestão</div>
-            <h1 style={sp.title}>{empresa.nome}</h1>
-            <div style={{display:'flex',gap:8,alignItems:'center',marginTop:6,flexWrap:'wrap'}}>
-              <span style={{color:'#8b92b0',fontSize:'0.8rem'}}>ID {empresa.produto_id}</span>
-              {empresa.cnpj&&<><span style={{color:'#d1d5e8'}}>·</span><span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
-              <span style={{background:cor.bg,color:cor.text,border:`1px solid ${cor.border}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>{empresa.categoria}</span>
-              {/* Badge do peso do produto */}
-              <span style={{background:'rgba(240,180,41,0.1)',color:'#b45309',border:'1px solid rgba(240,180,41,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
-                ⚖️ Peso: {fmtPct(peso*100)}
-              </span>
-              <span style={{background:empresa.ativo?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',color:empresa.ativo?'#16a34a':'#dc2626',border:`1px solid ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
-                {empresa.ativo?'● Ativa':'● Inativa'}
-              </span>
-            </div>
-          </div>
+      <div style={s.header}>
+        <div>
+          <div style={s.tag}>♠ Vegas Card</div>
+          <h1 style={s.title}>Evolução de Novas Empresas</h1>
+          <p style={s.sub}>Todas as categorias — acompanhe quem movimentou e quem ainda não movimentou</p>
         </div>
-        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-          {sucesso&&<span style={{color:'#16a34a',fontSize:'0.85rem',fontWeight:600}}>✅ Salvo!</span>}
-          {abaAtiva==='dados'&&!editando&&<button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
-          {abaAtiva==='dados'&&editando&&<>
-            <button style={sp.btnSec} onClick={()=>{setEditando(false);setErro('');}}>Cancelar</button>
-            <button style={sp.btnPri} onClick={salvar} disabled={salvando}>{salvando?'Salvando...':'💾 Salvar'}</button>
-          </>}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={exportarExcel} disabled={!xlsxLib || listaFiltrada.length===0}
+            style={{ ...s.linkBtnGreen, background:'rgba(52,211,153,0.08)', borderColor:'rgba(52,211,153,0.2)', color:'#34d399', cursor:'pointer', border:'1px solid rgba(52,211,153,0.2)', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
+            📥 Exportar Excel ({listaFiltrada.length})
+          </button>
+          <button onClick={recarregar} disabled={recarregando}
+            style={{ ...s.linkBtnGreen, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid rgba(52,211,153,0.2)', opacity: recarregando ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', animation: recarregando ? 'spin 0.8s linear infinite' : 'none' }}>🔄</span>
+            {recarregando ? 'Atualizando...' : 'Atualizar'}
+          </button>
+          <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
+          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'#60a5fa', borderColor:'rgba(96,165,250,0.2)', background:'rgba(96,165,250,0.08)' }}>💳 Importar Liberações</a>
         </div>
       </div>
 
-      {erro&&<div style={sp.erroBox}>❌ {erro}</div>}
+      {temFiltro && <BannerFiltros filtros={filtrosAtivos} onLimpar={limparFiltros} />}
 
-      {/* Cards resumo */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:24}}>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Potencial Mensal</span>
-          <span style={{...sp.resumoV,color:'#16a34a'}}>{fmt(empresa.potencial_movimentacao)}</span>
+      {/* KPIs */}
+      <div style={s.kpis}>
+        <div style={s.kpi}>
+          <span style={s.kpiLabel}>Total Empresas</span>
+          <span style={s.kpiVal}>{kpis.total}</span>
+          <span style={s.kpiSub}>Todas as categorias</span>
         </div>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Resultado Esperado</span>
-          <span style={{...sp.resumoV,color:'#f0b429'}}>{fmt((empresa.potencial_movimentacao||0)*peso)}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>potencial × {fmtPct(peso*100)}</span>
+        <div style={{ ...s.kpi, borderColor: 'rgba(22,163,74,0.35)' }}>
+          <span style={s.kpiLabel}>Movimentaram</span>
+          <span style={{ ...s.kpiVal, color: '#16a34a' }}>{kpis.creditaram}</span>
+          <span style={s.kpiSub}>{fmtPct(kpis.pctAtivacao)} de ativação</span>
         </div>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Total Movimentado</span>
-          <span style={{...sp.resumoV,color:'#2563eb'}}>{fmt(totalMovimentado)}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{mesesAtivos} meses ativos</span>
+        <div style={{ ...s.kpi, borderColor: 'rgba(220,38,38,0.35)' }}>
+          <span style={s.kpiLabel}>Sem Movimentação</span>
+          <span style={{ ...s.kpiVal, color: '#dc2626' }}>{kpis.semCredito}</span>
+          <span style={s.kpiSub}>ainda não movimentaram</span>
         </div>
-        <div style={{...sp.resumoCard, border: totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef', background: totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff'}}>
-          <span style={sp.resumoL}>🎯 Apurado na Meta</span>
-          <span style={{...sp.resumoV, color: totalMetaApurado>0?'#16a34a':'#d1d5e8'}}>
-            {totalMetaApurado>0?fmt(totalMetaApurado):'—'}
+        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)' }}>
+          <span style={s.kpiLabel}>Total Movimentado</span>
+          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{fmt(kpis.totalCred)}</span>
+          <span style={s.kpiSub}>{meses.length} meses · todas as categorias</span>
+        </div>
+        {/* NOVO: KPI Total Previsto */}
+        <div style={{ ...s.kpi, borderColor: 'rgba(167,139,250,0.35)' }}>
+          <span style={s.kpiLabel}>📊 Total Previsto</span>
+          <span style={{ ...s.kpiVal, color: '#a78bfa' }}>{fmt(kpis.totalPrevisto)}</span>
+          <span style={s.kpiSub}>potencial × peso/mês</span>
+        </div>
+        {/* NOVOS KPIs de meta */}
+        <div style={{ ...s.kpi, borderColor: 'rgba(52,211,153,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('na_meta'); setAba('evolucao'); }}>
+          <span style={s.kpiLabel}>✅ Na Meta</span>
+          <span style={{ ...s.kpiVal, color: '#34d399' }}>{kpis.naMeta}</span>
+          <span style={{ ...s.kpiSub, color: '#34d399' }}>{fmt(kpis.totalMetaApurado)}</span>
+        </div>
+        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
+          <span style={s.kpiLabel}>⏳ Pendente Meta</span>
+          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{kpis.pendenteMeta}</span>
+          <span style={s.kpiSub}>aguardando elegibilidade</span>
+        </div>
+        {/* KPI Upsell */}
+        <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.2)', cursor: 'pointer', background: filtroUpsell ? 'rgba(251,191,36,0.08)' : '#161a26' }}
+          onClick={() => { setFiltroUpsell(f => !f); setAba('evolucao'); }}>
+          <span style={s.kpiLabel}>📈 Possível Upsell</span>
+          <span style={{ ...s.kpiVal, color: '#fbbf24' }}>{kpis.totalUpsell || 0}</span>
+          <span style={{ ...s.kpiSub, color: kpis.totalUpsell > 0 ? '#fbbf24' : '#4b5563' }}>
+            {kpis.totalUpsell > 0 ? `≥45% acima da meta` : 'nenhum detectado'}
+            {filtroUpsell && <span style={{color:'#fbbf24',marginLeft:4,fontWeight:700}}>· ativo</span>}
           </span>
-          <span style={{color:totalMetaApurado>0?'#6b7280':'#b0b7cc',fontSize:'0.68rem'}}>
-            {valorMetas.length>0?`${valorMetas.length} entrada${valorMetas.length>1?'s':''}`:elegivel?'clique Movimentação':'não elegível'}
-          </span>
-        </div>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Consultor</span>
-          <span style={{...sp.resumoV,fontSize:'0.9rem'}}>{empresa.consultor_principal?.nome||'—'}</span>
-          {empresa.consultor_principal?.gestor&&<span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.consultor_principal.gestor}</span>}
-        </div>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Ocorrências CRM</span>
-          <span style={{...sp.resumoV,color:historico.length>0?'#2563eb':'#d1d5e8'}}>{historico.length}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{historico.length===0?'sem registros':'registradas'}</span>
-        </div>
-        <div style={sp.resumoCard}>
-          <span style={sp.resumoL}>Cidade / UF</span>
-          <span style={{...sp.resumoV,fontSize:'0.9rem'}}>{empresa.cidade||'—'}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.estado||''}</span>
         </div>
       </div>
 
       {/* Abas */}
-      <div style={{display:'flex',gap:6,marginBottom:20,borderBottom:'2px solid #e4e7ef'}}>
-        {abas.map(a=>(
-          <button key={a.key}
-            style={{background:'none',border:'none',borderBottom:`3px solid ${abaAtiva===a.key?'#f0b429':'transparent'}`,padding:'10px 18px',color:abaAtiva===a.key?'#b45309':'#8b92b0',fontWeight:abaAtiva===a.key?700:500,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,marginBottom:'-2px'}}
-            onClick={()=>setAbaAtiva(a.key)}>
+      <div style={s.tabs}>
+        {abas.map(a => (
+          <button key={a.key} style={{ ...s.tab, ...(aba === a.key ? s.tabAtiva : {}) }} onClick={() => setAba(a.key)}>
             {a.label}
-            {a.badge>0&&<span style={{background:'#eff6ff',color:'#2563eb',borderRadius:10,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>{a.badge}</span>}
           </button>
         ))}
       </div>
 
-      {/* ── ABA: CRM ── */}
-      {abaAtiva==='crm'&&(
-        <div style={sp.card}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-            <div><div style={sp.cardTitle}>📝 Histórico CRM</div><div style={{color:'#8b92b0',fontSize:'0.78rem',marginTop:2}}>{historico.length} ocorrência{historico.length!==1?'s':''}</div></div>
-            <button style={sp.btnPri} onClick={()=>setAddCRM(a=>!a)}>{addCRM?'✕ Cancelar':'+ Nova Ocorrência'}</button>
+      {/* ═══ ABA: EVOLUÇÃO ═══ */}
+      {aba === 'evolucao' && (
+        <div style={s.card}>
+          {/* Linha 1 de filtros */}
+          <div style={s.filtroRow}>
+            <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e => setBusca(e.target.value)} />
+            <select style={s.sel} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+              <option value="todos">Todas as empresas</option>
+              <option value="creditou">✅ Creditaram</option>
+              <option value="sem_credito">❌ Sem crédito</option>
+            </select>
+            <select style={s.sel} value={filtroTend} onChange={e => setFiltroTend(e.target.value)}>
+              <option value="todos">Todas as tendências</option>
+              <option value="up">↑ Crescendo</option>
+              <option value="down">↓ Caindo</option>
+              <option value="flat">→ Estável</option>
+              <option value="new">✦ Nova</option>
+              <option value="none">— Sem crédito</option>
+            </select>
+            <select style={s.sel} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
+              <option value="todos">Todas as categorias</option>
+              {opcoes.categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroProduto !== 'todos' ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroProduto !== 'todos' ? '#a78bfa' : '#e8eaf0' }}
+              value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)}>
+              <option value="todos">Todos os produtos</option>
+              {opcoes.produtos.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {/* NOVO: filtro por meta */}
+            <select style={{ ...s.sel, borderColor: filtroMeta !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMeta !== 'todos' ? '#34d399' : '#e8eaf0' }}
+              value={filtroMeta} onChange={e => setFiltroMeta(e.target.value)}>
+              <option value="todos">🎯 Todas (meta)</option>
+              <option value="na_meta">✅ Na meta</option>
+              <option value="pendente">⏳ Pendente meta</option>
+              <option value="fora">— Fora da meta</option>
+            </select>
+            {/* Filtro upsell toggle */}
+            <button onClick={() => setFiltroUpsell(f => !f)}
+              style={{ ...s.sel, cursor: 'pointer', fontFamily: 'inherit', background: filtroUpsell ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)', borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.12)', color: filtroUpsell ? '#fbbf24' : '#6b7280', fontWeight: filtroUpsell ? 700 : 400 }}>
+              📈 {filtroUpsell ? '✓ Upsell' : 'Upsell'}
+            </button>
           </div>
-          {addCRM&&(
-            <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:12,padding:20,marginBottom:24}}>
-              <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:12,marginBottom:12}}>
-                <div><label style={sp.label}>Tipo</label>
-                  <select style={sp.select} value={novaOco.tipo} onChange={e=>setNovaOco(n=>({...n,tipo:e.target.value}))}>
-                    <option value="contato">📞 Contato</option><option value="upsell">📈 Up-sell</option>
-                    <option value="negociacao">🤝 Negociação</option><option value="prazo">⏳ Prazo Extra</option>
-                    <option value="juros">💸 Juros / Boleto</option><option value="reclamacao">⚠️ Reclamação</option>
-                    <option value="outro">📌 Outro</option>
+          {/* Linha 2: hierarquia + ordenar */}
+          <div style={s.filtroRow}>
+            <select style={{ ...s.sel, borderColor: 'rgba(167,139,250,0.4)', color: filtroDiretor !== 'todos' ? '#a78bfa' : '#e8eaf0' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
+              <option value="todos">Todos os diretores</option>
+              {opcoes.diretores.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroGestor !== 'todos' ? '#60a5fa' : '#e8eaf0' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
+              <option value="todos">{filtroDiretor === 'todos' ? 'Todos os gestores' : `Gestores de ${filtroDiretor}`}</option>
+              {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+              <option value="todos">Todas as equipes</option>
+              {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
+              <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
+              {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <select style={s.sel} value={ordenar} onChange={e => setOrdenar(e.target.value)}>
+              <option value="ultimo">Ordenar: Último mês</option>
+              <option value="total">Ordenar: Total movimentado</option>
+              <option value="meta">Ordenar: Maior meta apurada</option>
+              <option value="potencial">Ordenar: Potencial</option>
+              <option value="sem">Ordenar: Sem crédito primeiro</option>
+              <option value="nome">Ordenar: Nome A-Z</option>
+            </select>
+          </div>
+
+          {/* ── NOVO: Linha 3 — Filtro mês cadastro + mês da meta + Seletor de colunas ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+
+            {/* Filtro por mês de cadastro — select compacto */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#60a5fa', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>📅 Cadastro em:</span>
+              <select
+                value={filtroMesCadastro}
+                onChange={e => setFiltroMesCadastro(e.target.value)}
+                style={{ ...s.sel, borderColor: filtroMesCadastro !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMesCadastro !== 'todos' ? '#60a5fa' : '#e8eaf0', minWidth: 160 }}>
+                <option value="todos">Todos os meses</option>
+                {mesesCadastro.map(m => {
+                  const qtd = listaCompleta.filter(e => e.mesCadastro === m).length;
+                  return <option key={m} value={m}>{fmtMes(m+'-01')} ({qtd} emp.)</option>;
+                })}
+              </select>
+            </div>
+
+            {/* Linha com filtros de mês + seletor colunas */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {/* Filtros de mês — selects lado a lado */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Filtro por mês da meta — select compacto */}
+            {(() => {
+              const mesesCalc = listaCompleta.filter(e => e._meta?.elegivel).map(e => e._meta.mesAlvo?.substring(0,7)).filter(Boolean);
+              const mesesGrav = Object.values(metasGravadas).map(v => v.competencia_meta?.substring(0,7)).filter(Boolean);
+              const mesesUnicos = [...new Set([...mesesCalc, ...mesesGrav])].sort();
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#34d399', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>🎯 Mês da meta:</span>
+                  <select
+                    value={filtroMesMeta}
+                    onChange={e => setFiltroMesMeta(e.target.value)}
+                    style={{ ...s.sel, borderColor: filtroMesMeta !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMesMeta !== 'todos' ? '#34d399' : '#e8eaf0', minWidth: 200 }}>
+                    <option value="todos">Todos os meses</option>
+                    {mesesUnicos.map(m => {
+                      const totalMes = listaCompleta.reduce((s, e) => {
+                        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                        const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
+                        if (mesRef !== m) return s;
+                        return s + ((gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
+                      }, 0);
+                      const qtd = listaCompleta.filter(e => {
+                        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
+                        return (gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7)) === m;
+                      }).length;
+                      return <option key={m} value={m}>{fmtMes(m+'-01')} — {fmt(totalMes)} ({qtd} emp.)</option>;
+                    })}
                   </select>
                 </div>
-                <div><label style={sp.label}>Título *</label>
-                  <input style={sp.input} placeholder="Ex: Identificado oportunidade de up-sell"
-                    value={novaOco.titulo} onChange={e=>setNovaOco(n=>({...n,titulo:e.target.value}))}
-                    onKeyDown={e=>e.key==='Enter'&&salvarCRM()} />
-                </div>
-              </div>
-              <div style={{marginBottom:14}}><label style={sp.label}>Detalhes / Observações</label>
-                <textarea style={{...sp.input,height:80,resize:'vertical'}}
-                  placeholder="Descreva detalhes, valores, próximos passos..."
-                  value={novaOco.descricao} onChange={e=>setNovaOco(n=>({...n,descricao:e.target.value}))} />
-              </div>
-              <button style={{...sp.btnPri,opacity:!novaOco.titulo.trim()?0.5:1}}
-                onClick={salvarCRM} disabled={salvandoCRM||!novaOco.titulo.trim()}>
-                {salvandoCRM?'Salvando...':'💾 Salvar Ocorrência'}
-              </button>
-            </div>
-          )}
-          {historico.length===0?(
-            <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
-              <div style={{fontWeight:600,marginBottom:4}}>Nenhuma ocorrência ainda</div>
-              <div style={{fontSize:'0.82rem'}}>Clique em "+ Nova Ocorrência" para começar</div>
-            </div>
-          ):(
-            <div style={{position:'relative',paddingLeft:32}}>
-              <div style={{position:'absolute',left:11,top:0,bottom:0,width:2,background:'#e4e7ef',borderRadius:2}}></div>
-              <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                {historico.map((h)=>{
-                  const cfg=TIPO_CRM[h.tipo]||TIPO_CRM.outro;
-                  return(
-                    <div key={h.id} className="crm-item" style={{position:'relative',background:'#ffffff',border:'1px solid #e4e7ef',borderLeft:`3px solid ${cfg.cor}`,borderRadius:10,padding:'14px 18px',transition:'background 0.15s'}}>
-                      <div style={{position:'absolute',left:-27,top:16,width:12,height:12,borderRadius:'50%',background:cfg.cor,border:'2px solid #ffffff',boxShadow:`0 0 0 2px ${cfg.cor}40`}}></div>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                          <span style={{fontSize:'1.1rem'}}>{cfg.icon}</span>
-                          <span style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>{h.titulo}</span>
-                          <span style={{background:`${cfg.cor}15`,color:cfg.cor,border:`1px solid ${cfg.cor}30`,borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,textTransform:'uppercase'}}>{cfg.label}</span>
-                        </div>
-                        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                          <span style={{color:'#8b92b0',fontSize:'0.72rem',whiteSpace:'nowrap'}}>{fmtDT(h.criado_em)}</span>
-                          <button onClick={()=>deletarCRM(h.id)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}>✕</button>
-                        </div>
-                      </div>
-                      {h.descricao&&<p style={{color:'#4a5068',fontSize:'0.83rem',margin:0,lineHeight:1.6,paddingLeft:4}}>{h.descricao}</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+              );
+            })()}
 
-      {/* ── ABA: DADOS ── */}
-      {abaAtiva==='dados'&&(
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-          <div style={sp.card}>
-            <div style={sp.cardTitle}>📋 Informações Cadastrais</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginTop:16}}>
-              {[['CNPJ',empresa.cnpj||'—'],['Data Cadastro',fmtDate(empresa.data_cadastro)],['Cidade',empresa.cidade||'—'],['Estado',empresa.estado||'—'],['Cartões Emitidos',empresa.cartoes_emitidos||0],['Dias de Prazo',empresa.dias_prazo||'—'],['Tipo Boleto',empresa.tipo_boleto||'—']].map(([l,v])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{l}</div><div style={{fontWeight:500,fontSize:'0.88rem'}}>{v}</div></div>
-              ))}
-            </div>
-          </div>
-          <div style={sp.card}>
-            <div style={sp.cardTitle}>💰 Produto & Financeiro</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginTop:16}}>
-              {[
-                ['Categoria',    editando?<select style={sp.select} value={form.categoria} onChange={e=>set('categoria',e.target.value)}>{produtos_list.map(c=><option key={c} value={c}>{c}</option>)}</select>:<span style={{color:cor.text,fontWeight:600}}>{empresa.categoria}</span>],
-                ['Produto',      editando?<select style={sp.select} value={form.produto_contratado} onChange={e=>set('produto_contratado',e.target.value)}><option value="">— Selecione —</option>{produtos.map(p=><option key={p.id} value={p.nome}>{p.nome}</option>)}</select>:empresa.produto_contratado||'—'],
-                ['Peso meta (%)', editando?<input style={sp.input} type="number" step="0.01" min="0" max="1" value={form.peso_categoria} onChange={e=>set('peso_categoria',e.target.value)}/>:<span style={{color:'#f0b429',fontWeight:700}}>{fmtPct((empresa.peso_categoria||1)*100)} <span style={{color:'#8b92b0',fontWeight:400,fontSize:'0.78rem'}}>(da mov. vai para meta)</span></span>],
-                ['Potencial',   editando?<input style={sp.input} type="number" value={form.potencial_movimentacao} onChange={e=>set('potencial_movimentacao',e.target.value)}/>:<span style={{color:'#16a34a',fontWeight:700}}>{fmt(empresa.potencial_movimentacao)}</span>],
-                ['Taxa Positiva',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_positiva} onChange={e=>set('taxa_positiva',e.target.value)}/>:<span style={{color:'#16a34a'}}>{empresa.taxa_positiva>0?`${(empresa.taxa_positiva*100).toFixed(2)}%`:'—'}</span>],
-                ['Taxa Negativa',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_negativa} onChange={e=>set('taxa_negativa',e.target.value)}/>:<span style={{color:empresa.taxa_negativa>0?'#dc2626':'#b0b7cc'}}>{empresa.taxa_negativa>0?`${(empresa.taxa_negativa*100).toFixed(2)}%`:'—'}</span>],
-              ].map(([l,v])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div><div style={{fontSize:'0.9rem'}}>{v}</div></div>
-              ))}
-            </div>
-          </div>
-          <div style={sp.card}>
-            <div style={sp.cardTitle}>👥 Equipe Comercial</div>
-            <div style={{display:'flex',flexDirection:'column',gap:16,marginTop:16}}>
-              {[['Consultor Principal','consultor_principal_id',empresa.consultor_principal?.nome],['Consultor Agregado 1','consultor_agregado_id',empresa.consultor_agregado?.nome],['Consultor Agregado 2','consultor_agregado_2_id',empresa.consultor_agregado_2?.nome]].map(([l,k,nome])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div>
-                  {editando?<select style={sp.select} value={form[k]} onChange={e=>set(k,e.target.value)}><option value="">— Nenhum —</option>{consultores.map(c=><option key={c.id} value={c.id}>{c.nome}{c.gestor?` (${c.gestor})`:''}</option>)}</select>:<span style={{fontWeight:k==='consultor_principal_id'?600:400}}>{nome||'—'}</span>}
-                </div>
-              ))}
-              <div><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Parceiro Comercial</div>
-                {editando?<select style={sp.select} value={form.parceiro_id} onChange={e=>set('parceiro_id',e.target.value)}><option value="">— Nenhum —</option>{parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select>:<span>{empresa.parceiro?.nome||'—'}</span>}
-              </div>
-              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:16,marginTop:4}}>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Divisão de Resultado</div>
-                {editando?(
-                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                    {[{label:'100% Principal',p:100,a1:0,a2:0},{label:'50% / 50%',p:50,a1:50,a2:0},{label:'34% / 33% / 33%',p:34,a1:33,a2:33}].map(opt=>{
-                      const ativo=form.pct_principal===opt.p&&form.pct_agregado_1===opt.a1&&form.pct_agregado_2===opt.a2;
-                      if(opt.a2>0&&!form.consultor_agregado_2_id)return null;
-                      if(opt.a1>0&&!form.consultor_agregado_id)return null;
-                      return(<button key={opt.label} onClick={()=>{set('pct_principal',opt.p);set('pct_agregado_1',opt.a1);set('pct_agregado_2',opt.a2);set('divisao_manual',true);}} style={{background:ativo?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${ativo?'rgba(240,180,41,0.4)':'#e4e7ef'}`,borderRadius:8,padding:'8px 16px',color:ativo?'#f0b429':'#4a5068',cursor:'pointer',fontWeight:ativo?700:500,fontSize:'0.82rem',fontFamily:'inherit'}}>{opt.label}</button>);
-                    })}
-                  </div>
-                ):(
-                  <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-                    {[{nome:empresa.consultor_principal?.nome,pct:empresa.pct_principal??100,label:'Principal'},empresa.consultor_agregado?.nome&&{nome:empresa.consultor_agregado.nome,pct:empresa.pct_agregado_1??0,label:'Agr. 1'},empresa.consultor_agregado_2?.nome&&{nome:empresa.consultor_agregado_2.nome,pct:empresa.pct_agregado_2??0,label:'Agr. 2'}].filter(Boolean).map((item,i)=>(
-                      <div key={i} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',display:'flex',alignItems:'center',gap:8}}>
-                        <span style={{background:'rgba(240,180,41,0.1)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
-                        <span style={{fontSize:'0.82rem',fontWeight:500}}>{item.nome}</span>
-                        <span style={{fontSize:'0.68rem',color:'#8b92b0'}}>{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <div style={sp.card}>
-            <div style={sp.cardTitle}>⚙️ Status da Empresa</div>
-            <div style={{marginTop:16}}>
-              {editando?(
-                <div style={{display:'flex',gap:12}}>
-                  <button onClick={()=>set('ativo',true)} style={{...sp.statusBtn,...(form.ativo?{background:'rgba(22,163,74,0.1)',border:'1px solid rgba(22,163,74,0.3)',color:'#16a34a'}:{})}}>✅ Ativa</button>
-                  <button onClick={()=>set('ativo',false)} style={{...sp.statusBtn,...(!form.ativo?{background:'rgba(220,38,38,0.1)',border:'1px solid rgba(220,38,38,0.3)',color:'#dc2626'}:{})}}>❌ Inativa</button>
-                </div>
-              ):(
-                <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0'}}>
-                  <div style={{width:14,height:14,borderRadius:'50%',background:empresa.ativo?'#16a34a':'#dc2626',boxShadow:`0 0 0 3px ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`}}></div>
-                  <span style={{fontWeight:700,fontSize:'1rem',color:empresa.ativo?'#16a34a':'#dc2626'}}>{empresa.ativo?'Empresa Ativa':'Empresa Inativa'}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+            </div>{/* fecha div filtros de mês */}
+            {/* Seletor de colunas + por página */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 
-      {/* ── ABA: MOVIMENTAÇÃO ── */}
-      {abaAtiva==='movimentos'&&(
-        <div style={sp.card}>
-
-          {/* Banner de meta automática */}
-          {elegivel&&(
-            <div style={{marginBottom:20,animation:'fadeIn 0.3s ease'}}>
-              {metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
-                <div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-                  <div style={{display:'flex',alignItems:'center',gap:12}}>
-                    <span style={{fontSize:'1.4rem'}}>✅</span>
-                    <div>
-                      <div style={{fontWeight:700,color:'#16a34a',fontSize:'0.88rem'}}>
-                        Meta aplicada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
-                      </div>
-                      <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:2}}>
-                        <strong style={{color:'#16a34a'}}>{fmt(metaAuto.valorMeta)}</strong>
-                        {' '}= {fmt(metaAuto.valorConsiderado)}
-                        {metaAuto.peso < 1 && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(metaAuto.peso*100)}% peso VB</span></>}
-                        {' '}× {fmtPct(pctCons)} consultor
-                        {metaAuto.temAjuste&&<span style={{color:'#f0b429'}}> (valor ajustado)</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={()=>removerMeta(metaAuto.comp)} disabled={removendoMeta}
-                    style={{background:'rgba(220,38,38,0.07)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:8,padding:'7px 16px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',fontWeight:600}}>
-                    {removendoMeta?'Removendo...':'🗑 Desmarcar da meta'}
+              {/* Por página */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#6b7280', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Por página:</span>
+                {[12, 24, 50, 100].map(n => (
+                  <button key={n} onClick={() => setPorPagina(n)}
+                    style={{ background: porPagina === n ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${porPagina === n ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '5px 10px', color: porPagina === n ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: porPagina === n ? 700 : 400 }}>
+                    {n}
                   </button>
-                </div>
-              )}
-              {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(()=>{
-                // Meses disponíveis para troca manual (todos com valor > 0)
-                const mesesDisponiveis = movimentos
-                  .filter(m => m.total_liberado > 0)
-                  .sort((a,b) => a.competencia.localeCompare(b.competencia));
-                // Mês efetivo: manual ou automático
-                const mesEfetivo = mesSelecionado
-                  ? mesesDisponiveis.find(m => m.competencia?.substring(0,10) === mesSelecionado) || mesesDisponiveis[0]
-                  : mesesDisponiveis[metaAuto.regra === 'beneficio' ? 0 : 2] || mesesDisponiveis[0];
-                const compEfetivo   = mesEfetivo?.competencia?.substring(0,10);
-                const ajEfetivo     = ajusteMap[compEfetivo];
-                const valorConsidEf = ajEfetivo ? ajEfetivo.valor_considerado : (mesEfetivo?.total_liberado || 0);
-                const valorMetaEf   = Math.round(valorConsidEf * metaAuto.peso * (pctCons/100) * 100) / 100;
-                const isManual      = !!mesSelecionado;
+                ))}
+              </div>
 
-                return (
-                  <div style={{background:'rgba(240,180,41,0.05)',border:'1px solid rgba(240,180,41,0.25)',borderRadius:12,padding:'14px 18px',animation:'fadeIn 0.3s ease'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
-                      <div style={{display:'flex',alignItems:'center',gap:12}}>
-                        <span style={{fontSize:'1.4rem'}}>🎯</span>
-                        <div>
-                          <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                            {isManual
-                              ? <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontSize:'0.72rem',fontWeight:700}}>✏️ Mês alterado manualmente</span>
-                              : <span>Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'}</span>
-                            }
-                            <span style={{color:'#b45309'}}>· {fmtMes(compEfetivo)}</span>
-                          </div>
-                          <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                            <span>{fmt(valorConsidEf)}</span>
-                            {metaAuto.peso < 1 && <>
-                              <span style={{color:'#d1d5db'}}>×</span>
-                              <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
-                            </>}
-                            <span style={{color:'#d1d5db'}}>×</span>
-                            <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
-                            <span style={{color:'#d1d5db'}}>=</span>
-                            <strong style={{color:'#f0b429',fontSize:'0.85rem'}}>{fmt(valorMetaEf)}</strong>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                        {/* Botão trocar mês */}
-                        <button onClick={()=>setTrocandoMes(t=>!t)}
-                          style={{background:trocandoMes?'rgba(96,165,250,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${trocandoMes?'rgba(96,165,250,0.4)':'rgba(107,114,128,0.2)'}`,borderRadius:7,padding:'6px 14px',color:trocandoMes?'#2563eb':'#6b7280',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                          📅 {trocandoMes ? 'Fechar' : 'Trocar mês'}
-                        </button>
-                        {isManual && (
-                          <button onClick={()=>{setMesSelecionado(null);setTrocandoMes(false);}}
-                            style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'6px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>
-                            ✕ Desfazer
-                          </button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            setAplicandoAuto(true);
-                            setErroMeta('');
-                            await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
-                            const { error } = await supabase.from('valor_meta_empresa').insert({
-                              empresa_id: empresa.id, produto_id: empresa.produto_id,
-                              consultor_id: empresa.consultor_principal_id || null,
-                              competencia_meta: compEfetivo,
-                              valor_bruto: mesEfetivo?.total_liberado || 0,
-                              valor_considerado: valorConsidEf,
-                              valor_meta: valorMetaEf,
-                              pct_consultor: pctCons,
-                              regra: isManual ? 'manual' : metaAuto.regra,
-                              mes_sequencia: isManual ? 0 : (metaAuto.regra === 'beneficio' ? 1 : 3),
-                            });
-                            if (error) { setErroMeta('Erro: ' + error.message); }
-                            else { await carregarEmpresa(); setMesSelecionado(null); setTrocandoMes(false); }
-                            setAplicandoAuto(false);
-                          }}
-                          disabled={aplicandoAuto}
-                          style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                          {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
-                        </button>
-                      </div>
-                    </div>
+              {/* Seletor de colunas */}
+              <div style={{ position: 'relative' }}>
+              <button onClick={() => setPainelColunas(p => !p)}
+                style={{ background: painelColunas ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${painelColunas ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '7px 14px', color: painelColunas ? '#f0b429' : '#9ca3af', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                ⚙️ Colunas selecionadas: {colunasVisiveis.size} de {COLUNAS_DEF.length}
+                <span style={{ fontSize: '0.65rem' }}>{painelColunas ? '▲' : '▼'}</span>
+              </button>
 
-                    {/* Seletor de mês expandível */}
-                    {trocandoMes && (
-                      <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(240,180,41,0.15)'}}>
-                        <div style={{color:'#6b7280',fontSize:'0.72rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
-                          Escolha o mês para considerar na meta:
-                        </div>
-                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                          {mesesDisponiveis.map((mv,idx) => {
-                            const comp = mv.competencia?.substring(0,10);
-                            const aj   = ajusteMap[comp];
-                            const val  = aj ? aj.valor_considerado : mv.total_liberado;
-                            const metaVal = Math.round(val * metaAuto.peso * (pctCons/100) * 100) / 100;
-                            const isAuto   = !mesSelecionado && comp === compEfetivo;
-                            const isSelected = mesSelecionado === comp || isAuto;
+              {painelColunas && (
+                <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 100, background: '#161a26', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 16, minWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+                  {/* Presets */}
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                    {[['padrao','Padrão'],['minimo','Mínimo'],['todas','Todas']].map(([key,label]) => (
+                      <button key={key} onClick={() => setColunasVisiveis(new Set(PRESETS[key]))}
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 12px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: 600 }}>
+                        {label}
+                      </button>
+                    ))}
+                    <span style={{ color: '#4b5563', fontSize: '0.7rem', marginLeft: 4, display: 'flex', alignItems: 'center' }}>ou escolha:</span>
+                  </div>
+                  {/* Checkboxes por grupo */}
+                  {['Identificação','Comercial','Movimentação','Meta'].map(grupo => {
+                    const cols = COLUNAS_DEF.filter(c => c.grupo === grupo);
+                    return (
+                      <div key={grupo} style={{ marginBottom: 10 }}>
+                        <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>{grupo}</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {cols.map(col => {
+                            const ativo = colunasVisiveis.has(col.key);
                             return (
-                              <button key={comp} onClick={()=>{setMesSelecionado(comp);setTrocandoMes(false);}}
-                                style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,background:isSelected?'rgba(16,163,74,0.12)':'#f9fafb',border:`2px solid ${isSelected?'#16a34a':'#e4e7ef'}`,borderRadius:10,padding:'8px 14px',cursor:'pointer',fontFamily:'inherit',minWidth:110,transition:'all 0.15s'}}>
-                                <span style={{fontWeight:700,fontSize:'0.82rem',color:isSelected?'#16a34a':'#1a1d2e'}}>{fmtMes(comp)}</span>
-                                <span style={{fontSize:'0.72rem',color:'#4b5563'}}>{fmt(val)}</span>
-                                <span style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:700}}>meta: {fmt(metaVal)}</span>
-                                {!mesSelecionado && idx === (metaAuto.regra === 'beneficio' ? 0 : 2) && (
-                                  <span style={{fontSize:'0.6rem',color:'#16a34a',fontWeight:700,background:'rgba(16,163,74,0.1)',borderRadius:3,padding:'1px 5px'}}>automático</span>
-                                )}
+                              <button key={col.key}
+                                onClick={() => {
+                                  const next = new Set(colunasVisiveis);
+                                  if (ativo) next.delete(col.key); else next.add(col.key);
+                                  setColunasVisiveis(next);
+                                }}
+                                style={{ background: ativo ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${ativo ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: ativo ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: ativo ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {ativo ? '✓' : '○'} {col.label}
                               </button>
                             );
                           })}
                         </div>
                       </div>
-                    )}
+                    );
+                  })}
+                  <button onClick={() => setPainelColunas(false)}
+                    style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 14px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', width: '100%' }}>
+                    ✕ Fechar
+                  </button>
+                </div>
+              )}
+              </div> {/* fecha: div position:relative do seletor colunas */}
+            </div> {/* fecha: div flex do wrapper colunas+paginacao */}
+            </div> {/* fecha: linha com filtro mês meta + seletor colunas */}
+          </div> {/* fecha: div flexDirection:column linha 3 */}
+
+          <TabelaEvolucao
+            lista={listaFiltrada} meses={meses} libMap={libMap}
+            colunas={colunasVisiveis} porPagina={porPagina}
+            metasGravadas={metasGravadas}
+            onSalvarMeta={async (empresa, form) => {
+              // Para upsell usa mesAlvoOverride; senão usa mesAlvo da meta normal
+              const comp = form.mesAlvoOverride
+                ? String(form.mesAlvoOverride).substring(0,10)
+                : empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
+              if (!comp) return { error: 'Mês da meta não identificado' };
+
+              // Para upsell NÃO deleta a meta anterior — só insere nova
+              if (!form.mesAlvoOverride) {
+                await supabase.from('valor_meta_empresa')
+                  .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+              }
+
+              const { error } = await supabase.from('valor_meta_empresa').insert({
+                empresa_id:        empresa.id,
+                produto_id:        empresa.produto_id,
+                consultor_id:      empresa._cons?.id || null,
+                competencia_meta:  comp,
+                valor_bruto:       empresa._meta?.valorBruto || 0,
+                valor_considerado: empresa._meta?.valorConsid || 0,
+                valor_meta:        parseFloat(form.valor),
+                pct_consultor:     empresa._pct ?? 100,
+                regra:             form.regra,
+                mes_sequencia:     form.regra === 'beneficio' ? 1 : form.regra === 'convenio' ? 3 : 0,
+              });
+
+              if (error) {
+                // Tenta sem consultor_id
+                const { error: err2 } = await supabase.from('valor_meta_empresa').insert({
+                  empresa_id:        empresa.id,
+                  produto_id:        empresa.produto_id,
+                  consultor_id:      null,
+                  competencia_meta:  comp,
+                  valor_bruto:       empresa._meta?.valorBruto || 0,
+                  valor_considerado: empresa._meta?.valorConsid || 0,
+                  valor_meta:        parseFloat(form.valor),
+                  pct_consultor:     empresa._pct ?? 100,
+                  regra:             form.regra,
+                  mes_sequencia:     form.regra === 'beneficio' ? 1 : form.regra === 'convenio' ? 3 : 0,
+                });
+                if (err2) return { error: err2.message };
+              }
+
+              // Atualiza mapa local
+              const metaKey = `${empresa.id}__${comp}`;
+              const allKey = `all__${empresa.id}`;
+              setMetasGravadas(prev => {
+                const novaEntrada = { valor_meta: parseFloat(form.valor), regra: form.regra, competencia_meta: comp };
+                const listaAtual = (prev[allKey] || []).filter(x => x.competencia_meta !== comp);
+                return {
+                  ...prev,
+                  [metaKey]: novaEntrada,
+                  [allKey]: [...listaAtual, novaEntrada],
+                };
+              });
+              return { ok: true };
+            }}
+            onRemoverMeta={async (empresa) => {
+              const comp = empresa._meta?.mesAlvo ? String(empresa._meta.mesAlvo).substring(0,10) : null;
+              if (!comp) return;
+              await supabase.from('valor_meta_empresa')
+                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
+              const delKey = `${empresa.id}__${comp}`;
+              setMetasGravadas(prev => { const n={...prev}; delete n[delKey]; return n; });
+            }}
+          />
+        </div>
+      )}
+
+      {/* ═══ ABA: RESUMO POR MÊS ═══ */}
+      {aba === 'resumo' && (
+        <div style={s.card}>
+          <div style={s.cardTitle}>🔢 Resumo por Mês</div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 24, flexWrap: 'wrap' }}>
+            {kpis.porMes.map(m => (
+              <div key={m.mes} style={s.mesCard}>
+                <div style={s.mesBadge}>{fmtMes(m.mes)}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#34d399', margin: '12px 0 4px' }}>{fmt(m.total)}</div>
+                <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{m.empresas} empresas creditando</div>
+                <div style={{ color: '#4b5563', fontSize: '0.75rem', marginTop: 2 }}>{kpis.total - m.empresas} sem crédito neste mês</div>
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                    <div style={{ background: '#34d399', height: '100%', width: `${kpis.total > 0 ? (m.empresas / kpis.total) * 100 : 0}%` }} />
+                  </div>
+                  <div style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>{kpis.total > 0 ? fmtPct((m.empresas / kpis.total) * 100) : '0%'} de ativação</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontWeight: 700, marginBottom: 16, color: '#e8eaf0' }}>Distribuição de Tendências</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {['up','down','flat','new','none'].map(t => {
+                const count = listaFiltrada.filter(e => e.tend === t).length;
+                const ts = TEND[t];
+                return (
+                  <div key={t} style={{ ...s.mesCard, flex: '0 0 auto', minWidth: 140, cursor: 'pointer' }}
+                    onClick={() => { setFiltroTend(t); setAba('evolucao'); }}>
+                    <div style={{ color: ts.color, fontWeight: 700, fontSize: '1.6rem' }}>{count}</div>
+                    <div style={{ color: ts.color, fontSize: '0.85rem', marginTop: 6 }}>{ts.label}</div>
+                    <div style={{ color: '#4b5563', fontSize: '0.72rem', marginTop: 4 }}>clique para filtrar</div>
                   </div>
                 );
-              })()}
-              {metaAuto?.pendente&&(
-                <div style={{background:'rgba(107,114,128,0.06)',border:'1px solid rgba(107,114,128,0.15)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:12}}>
-                  <span style={{fontSize:'1.2rem'}}>⏳</span>
-                  <div>
-                    <div style={{fontWeight:600,color:'#4b5563',fontSize:'0.85rem'}}>Aguardando {metaAuto.precisam}º mês com movimentação</div>
-                    <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:3,display:'flex',alignItems:'center',gap:6}}>
-                      {metaAuto.progresso} de {metaAuto.precisam} meses
-                      <span style={{display:'inline-flex',gap:3,marginLeft:4}}>
-                        {Array.from({length:metaAuto.precisam}).map((_,i)=>(
-                          <span key={i} style={{width:10,height:10,borderRadius:'50%',background:i<metaAuto.progresso?'#16a34a':'#e4e7ef',display:'inline-block'}}></span>
-                        ))}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {!metaAuto&&(
-                <div style={{background:'rgba(107,114,128,0.04)',border:'1px solid rgba(107,114,128,0.12)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:10}}>
-                  <span>📭</span>
-                  <div style={{color:'#6b7280',fontSize:'0.82rem'}}>
-                    Nenhuma movimentação ainda — meta calculada automaticamente após a {detectarRegra()==='beneficio'?'1ª recarga':'3ª liberação'}.
-                  </div>
-                </div>
-              )}
+              })}
             </div>
-          )}
-
-          {erroMeta&&<div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'#dc2626',fontSize:'0.82rem'}}>❌ {erroMeta}</div>}
-
-          {/* Header */}
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
-            <div style={sp.cardTitle}>📊 HISTÓRICO DE MOVIMENTAÇÃO</div>
-            <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>✏️ ajustar valor · 🎯 entrada manual na meta</div>
           </div>
+        </div>
+      )}
 
-          {movimentos.length===0?(
-            <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
-              <div style={{fontWeight:600}}>Nenhuma movimentação registrada</div>
-            </div>
-          ):(
-            <>
-              {/* Verifica se é Vegas Benefícios para aplicar peso na meta */}
-              {(() => {
-              const isVegasBeneficios = ((empresa?.produto_contratado||'').toLowerCase().trim()==='vegas benefícios'||
-                                        (empresa?.produto_contratado||'').toLowerCase().trim()==='vegas beneficios');
-              return (
-              <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
-                {[
-                  {label:'Total Bruto',      val:fmt(totalMovimentado),bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
-                  {label:'Total Considerado',val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
-                  {label:'Ajustes Ativos',   val:ajustes.length,bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
-                  {label:'Meses Ativos',     val:`${mesesAtivos} de ${movimentos.length}`,bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
-                  {label:isVegasBeneficios?`🎯 Meta (${fmtPct(peso*100)}% peso)`:'🎯 Apurado Meta',val:totalMetaApurado>0?fmt(totalMetaApurado):'—',bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
-                ].map(({label,val,bg,border,cor})=>(
-                  <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
-                    <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
-                    <div style={{fontWeight:800,fontSize:'1.1rem',color:cor}}>{val}</div>
-                  </div>
-                ))}
-              </div>
-              );})()}
-
-              <div style={{border:'1px solid #e4e7ef',borderRadius:10,overflow:'hidden'}}>
-                <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
-                  <thead>
-                    <tr style={{background:'#f9fafb'}}>
-                      {['Mês','Valor Bruto','Valor Considerado','Motivo / Obs.','Ação'].map(h=>(
-                        <th key={h} style={{padding:'10px 16px',textAlign:h==='Valor Bruto'||h==='Valor Considerado'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.7rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {movimentos.map((m,i)=>{
-                      const comp           = m.competencia?.substring(0,10);
-                      const ajuste         = ajusteMap[comp];
-                      const valConsiderado = ajuste?ajuste.valor_considerado:m.total_liberado;
-                      const temAjuste      = !!ajuste;
-                      const eEditando      = editandoMes===comp;
-                      const eMetaAberta    = metaMes===comp;
-                      const metaGravada    = metaMap[comp];
-                      const temMeta        = !!metaGravada;
-                      const ehMesMetaAuto  = metaAuto&&!metaAuto.pendente&&metaAuto.comp===comp;
-                      // Peso só aplica na meta para Vegas Benefícios; demais produtos usam 100%
-                      const _prodNorm  = (empresa?.produto_contratado||'').toLowerCase().trim();
-                      const _isVB      = _prodNorm==='vegas benefícios'||_prodNorm==='vegas beneficios';
-                      const _pesoMeta  = _isVB ? peso : 1;
-                      const valorMetaCalc = Math.round(valConsiderado*_pesoMeta*(pctCons/100)*100)/100;
-
-                      return(
-                        <>
-                          <tr key={comp} style={{borderTop:'1px solid #f0f2f8',
-                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(240,180,41,0.04)':temAjuste?'#fffbeb':i%2===0?'#ffffff':'#fafafa'}}>
-                            <td style={{padding:'12px 16px',fontWeight:600}}>
-                              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                                {fmtMes(m.competencia)}
-                                {temMeta&&(
-                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,whiteSpace:'nowrap'}}>
-                                    ✅ {fmt(metaGravada.valor_meta)}
-                                  </span>
-                                )}
-                                {ehMesMetaAuto&&!temMeta&&(
-                                  <span style={{background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.25)',color:'#b45309',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
-                                    🎯 elegível
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',color:'#6b7280',fontWeight:temAjuste?400:700}}>
-                              {m.total_liberado>0?<span style={{textDecoration:temAjuste?'line-through':''}}>{fmt(m.total_liberado)}</span>:'—'}
-                            </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',fontWeight:700,color:temAjuste?'#f0b429':'#16a34a',fontSize:'1rem'}}>
-                              {valConsiderado>0?fmt(valConsiderado):'—'}
-                              {temAjuste&&<div style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:400}}>ajustado</div>}
-                            </td>
-                            <td style={{padding:'12px 16px',maxWidth:220}}>
-                              {temAjuste&&(
-                                <div>
-                                  <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.7rem',fontWeight:600}}>{MOTIVOS_LABEL[ajuste.motivo]||ajuste.motivo}</span>
-                                  {ajuste.observacao&&<div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:180}}>{ajuste.observacao}</div>}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{padding:'12px 16px'}}>
-                              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:m.total_liberado,motivo:ajuste?.motivo||'upsell',observacao:ajuste?.observacao||''});setMetaMes(null);}}
-                                  style={{background:eEditando?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${eEditando?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'#f0b429':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                  {eEditando?'✕':'✏️ Ajustar'}
-                                </button>
-                                {m.total_liberado>0&&(
-                                  <button onClick={()=>abrirMetaManual(comp,valConsiderado)}
-                                    style={{background:eMetaAberta?'rgba(52,211,153,0.15)':temMeta?'rgba(52,211,153,0.08)':'#f5f6fa',border:`1px solid ${eMetaAberta?'rgba(52,211,153,0.4)':temMeta?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eMetaAberta?'#16a34a':temMeta?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                    {eMetaAberta?'✕':temMeta?'✅ Meta':'🎯 Meta'}
-                                  </button>
-                                )}
-                                {temAjuste&&!eEditando&&(
-                                  <button onClick={()=>removerAjuste(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Aj.</button>
-                                )}
-                                {temMeta&&!eMetaAberta&&(
-                                  <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-
-                          {/* Painel: Ajuste */}
-                          {eEditando&&(
-                            <tr key={comp+'-adj'} style={{background:'#fffbeb'}}>
-                              <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{background:'#ffffff',border:'1px solid #fde68a',borderRadius:10,padding:16}}>
-                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</div>
-                                  <div style={{display:'grid',gridTemplateColumns:'180px 200px 1fr',gap:12,alignItems:'end'}}>
-                                    <div><label style={sp.labelSm}>Valor Considerado *</label>
-                                      <input type="number" step="0.01" value={ajusteForm.valor} onChange={e=>setAjusteForm(f=>({...f,valor:e.target.value}))} style={sp.inputInline} placeholder="Ex: 5000.00" />
-                                    </div>
-                                    <div><label style={sp.labelSm}>Motivo *</label>
-                                      <select value={ajusteForm.motivo} onChange={e=>setAjusteForm(f=>({...f,motivo:e.target.value}))} style={sp.selectInline}>
-                                        <option value="upsell">📈 Up-sell</option><option value="ajuste">✏️ Ajuste de valor</option>
-                                        <option value="negociacao">🤝 Negociação</option><option value="correcao">🔧 Correção</option><option value="outro">📌 Outro</option>
-                                      </select>
-                                    </div>
-                                    <div><label style={sp.labelSm}>Observação</label>
-                                      <input value={ajusteForm.observacao} onChange={e=>setAjusteForm(f=>({...f,observacao:e.target.value}))} style={sp.inputInline} placeholder="Ex: Valor negociado em reunião" />
-                                    </div>
-                                  </div>
-                                  <div style={{display:'flex',gap:10,marginTop:14,alignItems:'center'}}>
-                                    <button onClick={()=>salvarAjuste(m.competencia,m.total_liberado)} disabled={salvandoAjuste||!ajusteForm.valor}
-                                      style={{background:'#f0b429',color:'#000',border:'none',borderRadius:8,padding:'9px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!ajusteForm.valor?0.5:1}}>
-                                      {salvandoAjuste?'Salvando...':'💾 Salvar Ajuste'}
-                                    </button>
-                                    <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>O valor bruto será mantido no histórico</span>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-
-                          {/* Painel: Meta manual */}
-                          {eMetaAberta&&(
-                            <tr key={comp+'-meta'} style={{background:'rgba(52,211,153,0.02)'}}>
-                              <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{background:'#ffffff',border:'1px solid rgba(52,211,153,0.3)',borderRadius:10,padding:20,animation:'fadeIn 0.2s ease'}}>
-                                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-                                    <div>
-                                      <div style={{fontSize:'0.82rem',fontWeight:700,color:'#16a34a',marginBottom:3}}>
-                                        🎯 {temMeta?'Editar entrada na meta':'Marcar na meta'} — {fmtMes(m.competencia)}
-                                      </div>
-                                      <div style={{fontSize:'0.72rem',color:'#6b7280'}}>
-                                        Mov.: <strong>{fmt(valConsiderado)}</strong>
-                                        {temAjuste&&<span style={{color:'#f0b429'}}> (ajustado)</span>}
-                                        {_isVB && <>{' · '}Peso VB: <strong style={{color:'#f0b429'}}>{fmtPct(peso*100)}</strong></>}
-                                        {' · '}Consultor: <strong>{empresa.consultor_principal?.nome||'—'}</strong> ({fmtPct(pctCons)})
-                                        {' · '}Sugerido: <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
-                                      </div>
-                                    </div>
-                                    {temMeta&&<div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'6px 14px',textAlign:'right'}}>
-                                      <div style={{fontSize:'0.6rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Meta atual</div>
-                                      <div style={{fontWeight:700,color:'#16a34a'}}>{fmt(metaGravada.valor_meta)}</div>
-                                    </div>}
-                                  </div>
-                                  <div style={{display:'grid',gridTemplateColumns:'220px 220px 1fr',gap:12,alignItems:'end',marginBottom:14}}>
-                                    <div>
-                                      <label style={sp.labelSm}>Valor que entra na meta *</label>
-                                      <input type="number" step="0.01" value={metaForm.valor} onChange={e=>setMetaForm(f=>({...f,valor:e.target.value}))}
-                                        style={{...sp.inputInline,border:'1px solid rgba(52,211,153,0.4)',fontWeight:700}} placeholder="Ex: 3000.00" />
-                                      {/* Atalhos de cálculo */}
-                                      <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
-                                        {[
-                                          // Só mostra atalho de peso se for Vegas Benefícios
-                                          ...(_isVB ? [{label:`${fmtPct(peso*100)}% peso`, val: valorMetaCalc}] : []),
-                                          {label:'Movimentação', val: valConsiderado},
-                                          {label:'Bruto',        val: m.total_liberado},
-                                        ].filter((v,i,a)=>a.findIndex(x=>x.val===v.val)===i).map(opt=>(
-                                          <button key={opt.label} onClick={()=>setMetaForm(f=>({...f,valor:opt.val}))}
-                                            style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'#16a34a',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
-                                            {opt.label}: {fmt(opt.val)}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <label style={sp.labelSm}>Regra aplicada</label>
-                                      <select value={metaForm.regra} onChange={e=>setMetaForm(f=>({...f,regra:e.target.value}))}
-                                        style={{...sp.selectInline,border:'1px solid rgba(52,211,153,0.3)'}}>
-                                        <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
-                                        <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
-                                        <option value="manual">✏️ Inclusão Manual</option>
-                                      </select>
-                                    </div>
-                                    <div style={{display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
-                                      <div style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8,padding:'10px 14px'}}>
-                                        <div style={{fontSize:'0.65rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Fórmula aplicada</div>
-                                        <div style={{fontSize:'0.78rem',color:'#4b5563'}}>
-                                          {fmt(valConsiderado)}
-                                          {_isVB && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(peso*100)} peso</span></>}
-                                          {' '}× <span style={{color:'#2563eb',fontWeight:700}}>{fmtPct(pctCons)} cons.</span> = <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div style={{display:'flex',gap:10,alignItems:'center'}}>
-                                    <button onClick={()=>salvarMetaManual(comp,valConsiderado)} disabled={salvandoMeta||!metaForm.valor}
-                                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!metaForm.valor?0.5:1}}>
-                                      {salvandoMeta?'Salvando...':temMeta?'💾 Atualizar':'🎯 Confirmar na Meta'}
-                                    </button>
-                                    <button onClick={()=>setMetaMes(null)} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'10px 18px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
-                                    <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>Aparecerá no dashboard como "Apurado na Meta"</span>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+      {/* ═══ ABA: POTENCIAL VS CREDITADO ═══ */}
+      {aba === 'cruzamento' && (
+        <div style={s.card}>
+          <div style={s.cardTitle}>🎯 Potencial vs Creditado</div>
+          <div style={{ color: '#6b7280', fontSize: '0.82rem', marginTop: 6, marginBottom: 16 }}>
+            Empresas com potencial cadastrado · {meses.length} meses de referência
+          </div>
+          <div style={{ ...s.filtroRow, marginBottom: 16 }}>
+            <select style={{ ...s.sel, borderColor: filtroDiretor !== 'todos' ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.12)', color: filtroDiretor !== 'todos' ? '#a78bfa' : '#e8eaf0' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
+              <option value="todos">Todos os diretores</option>
+              {opcoes.diretores.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroGestor !== 'todos' ? '#60a5fa' : '#e8eaf0' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
+              <option value="todos">{filtroDiretor === 'todos' ? 'Todos os gestores' : `Gestores de ${filtroDiretor}`}</option>
+              {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+              <option value="todos">Todas as equipes</option>
+              {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
+              <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
+              {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <TabelaCruzamento lista={listaFiltrada} meses={meses} />
         </div>
       )}
     </div>
   );
 }
 
-const sp = {
-  page:        {maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'},
-  header:      {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24,flexWrap:'wrap',gap:16},
-  tag:         {color:'#b45309',fontWeight:800,fontSize:'0.8rem',letterSpacing:2,marginBottom:6,textTransform:'uppercase'},
-  title:       {fontSize:'1.6rem',fontWeight:700,margin:0},
-  btnBack:     {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',color:'#4a5068',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',whiteSpace:'nowrap'},
-  btnPri:      {background:'#f0b429',color:'#000',border:'none',borderRadius:10,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'},
-  btnSec:      {background:'#eaecf2',color:'#1a1d2e',border:'1px solid #e4e7ef',borderRadius:10,padding:'10px 18px',fontWeight:600,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'},
-  erroBox:     {background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'12px 16px',marginBottom:20,color:'#dc2626',fontSize:'0.85rem'},
-  resumoCard:  {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:4},
-  resumoL:     {color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1},
-  resumoV:     {fontSize:'1.1rem',fontWeight:700,color:'#1a1d2e'},
-  card:        {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:16,padding:24},
-  cardTitle:   {fontSize:'0.72rem',fontWeight:700,color:'#8b92b0',textTransform:'uppercase',letterSpacing:1},
-  label:       {display:'block',color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontWeight:600},
-  labelSm:     {display:'block',color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
-  input:       {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',color:'#1a1d2e',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',boxSizing:'border-box'},
-  select:      {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',color:'#1a1d2e',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',cursor:'pointer',boxSizing:'border-box'},
-  inputInline: {width:'100%',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',fontSize:'0.9rem',fontFamily:'inherit',boxSizing:'border-box',color:'#1a1d2e'},
-  selectInline:{width:'100%',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',fontSize:'0.88rem',fontFamily:'inherit',boxSizing:'border-box',color:'#1a1d2e',cursor:'pointer'},
-  statusBtn:   {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 24px',color:'#8b92b0',cursor:'pointer',fontWeight:600,fontSize:'0.88rem',fontFamily:'inherit',flex:1},
-  spin:        {width:36,height:36,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
+const ps = {
+  btn:      { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 10px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', minWidth: 32 },
+  ativo:    { background: 'rgba(240,180,41,0.2)', borderColor: 'rgba(240,180,41,0.5)', color: '#f0b429', fontWeight: 700 },
+  disabled: { opacity: 0.3, cursor: 'default' },
+  dots:     { color: '#4b5563', fontSize: '0.82rem', padding: '0 2px' },
+};
+
+const s = {
+  page:         { maxWidth: 1400, margin: '0 auto', padding: '32px 24px', fontFamily: "'DM Sans', sans-serif", color: '#e8eaf0', background: '#0a0c10', minHeight: '100vh' },
+  header:       { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 16 },
+  tag:          { color: '#34d399', fontWeight: 800, fontSize: '0.9rem', letterSpacing: 2, marginBottom: 12, textTransform: 'uppercase' },
+  title:        { fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px' },
+  sub:          { color: '#6b7280', fontSize: '0.9rem' },
+  linkBtnGreen: { background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 10, padding: '10px 20px', color: '#34d399', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 },
+  kpis:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 20 },
+  kpi:          { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 4 },
+  kpiLabel:     { color: '#6b7280', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1 },
+  kpiVal:       { fontSize: '1.4rem', fontWeight: 700 },
+  kpiSub:       { color: '#4b5563', fontSize: '0.72rem' },
+  tabs:         { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
+  tab:          { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 16px', color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
+  tabAtiva:     { background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' },
+  card:         { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 28, marginBottom: 24 },
+  cardTitle:    { fontSize: '1rem', fontWeight: 700 },
+  filtroRow:    { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 },
+  busca:        { flex: '1 1 220px', background: '#1e2435', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '9px 14px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' },
+  sel:          { background: '#1e2435', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '9px 14px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' },
+  table:        { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
+  th:           { padding: '8px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 0.5 },
+  td:           { padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' },
+  badgeGreen:   { background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.3)', color: '#16a34a', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  badgeRed:     { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', color: '#f87171', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  mesCard:      { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', flex: '1 1 180px', minWidth: 180 },
+  mesBadge:     { display: 'inline-block', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', borderRadius: 8, padding: '4px 12px', fontSize: '0.85rem', fontWeight: 700 },
+  spin:         { width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #34d399', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
 };
