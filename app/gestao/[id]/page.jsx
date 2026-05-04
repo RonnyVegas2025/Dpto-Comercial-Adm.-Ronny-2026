@@ -773,7 +773,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               mes_sequencia: isManual ? 0 : (metaAuto.regra === 'beneficio' ? 1 : 3),
                             });
                             if (error) { setErroMeta('Erro: ' + error.message); }
-                            else { await carregarEmpresa(); setMesSelecionado(null); setTrocandoMes(false); }
+                            else { await carregar(); setMesSelecionado(null); setTrocandoMes(false); }
                             setAplicandoAuto(false);
                           }}
                           disabled={aplicandoAuto}
@@ -916,7 +916,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     ✅ {fmt(metaGravada.valor_meta)}
                                   </span>
                                 )}
-                                {ehMesMetaAuto&&!temMeta&&(
+                                {ehMesMetaAuto && !temMeta && valorMetas.length === 0 && (
                                   <span style={{background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.25)',color:'#b45309',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
                                     🎯 elegível
                                   </span>
