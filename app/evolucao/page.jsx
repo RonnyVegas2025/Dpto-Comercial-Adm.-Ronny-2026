@@ -837,8 +837,41 @@ export default function Evolucao() {
         const vals  = valsBase.map(v => Math.round(v * fator * 100) / 100);
         const totalCreditado = vals.reduce((s, v) => s + v, 0);
 
-        // NOVO: calcula meta para este par empresa/consultor
-        const metaInfo = calcularMeta(e, libsTodasMap, ajusteMap, pct);
+        // Calcula meta automática como base
+        const metaInfoCalc = calcularMeta(e, libsTodasMap, ajusteMap, pct);
+
+        // Verifica se há meta GRAVADA no banco para esta empresa
+        // (carregada em metasGravadas como all__empresa_id)
+        // Se sim, usa o mês gravado como referência para o _meta
+        const entradasBanco = (metasGravadas[`all__${e.id}`] || [])
+          .filter(x => x.regra !== 'upsell') // ignora upsells para o _meta principal
+          .sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
+
+        let metaInfo;
+        if (entradasBanco.length > 0) {
+          // Usa a primeira entrada não-upsell do banco
+          const entrada = entradasBanco[0];
+          const comp    = entrada.competencia_meta?.substring(0,10);
+          // Busca valor bruto no libsTodasMap
+          const libsEmp = (libsTodasMap[e.produto_id] || []).find(l => l.comp === comp);
+          const aj      = ajusteMap[`${e.id}__${comp}`];
+          const valorBruto   = libsEmp?.val || 0;
+          const valorConsid  = aj !== undefined ? aj : valorBruto;
+          metaInfo = {
+            elegivel:        true,
+            regra:           entrada.regra || 'manual',
+            mesAlvo:         comp,
+            valorMeta:       entrada.valor_meta,
+            valorBruto,
+            valorConsid,
+            peso:            metaInfoCalc?.peso ?? 1,
+            progresso:       1,
+            precisam:        1,
+            _fromBanco:      true, // flag para saber que veio do banco
+          };
+        } else {
+          metaInfo = metaInfoCalc;
+        }
 
         // ── Detecta upsell: meses após a meta com crescimento ≥ 45% ──
         let upsellInfo = null;
@@ -892,7 +925,7 @@ export default function Evolucao() {
       }
     }
     return expanded;
-  }, [empresas, meses, libMap, ajusteMap, libsTodasMap]);
+  }, [empresas, meses, libMap, ajusteMap, libsTodasMap, metasGravadas]);
 
   const opcoes = useMemo(() => {
     const categorias = [...new Set(listaCompleta.map(e => e.categoria).filter(Boolean))].sort();
