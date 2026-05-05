@@ -949,57 +949,104 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </div>
                             </td>
                           </tr>
-                          {/* Form de inserção de valor manual */}
-                          {eInserindo && (
-                            <tr style={{background:'rgba(96,165,250,0.04)',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
-                              <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                                  <div style={{color:'#2563eb',fontWeight:700,fontSize:'0.82rem'}}>📝 Inserir valor para {fmtMes(comp+'-01')}:</div>
-                                  <div style={{color:'#6b7280',fontSize:'0.75rem'}}>
-                                    Este valor será usado como referência para o cálculo da meta (3º mês corrido).
+                          {/* Painel: aplicar meta usando mês anterior com valor */}
+                          {eInserindo && (()=>{
+                            // Acha o último mês com valor dentro dos 3 corridos
+                            const comValorOrdenados = movimentos
+                              .filter(m => m.total_liberado > 0)
+                              .sort((a,b) => a.competencia.localeCompare(b.competencia));
+                            const primeiroCom = comValorOrdenados[0];
+                            const [y0,m0] = (primeiroCom?.competencia||'').substring(0,7).split('-').map(Number);
+                            const tresMeses = [0,1,2].map(i=>{
+                              const d = new Date(y0, m0-1+i, 1);
+                              const c2 = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                              const lib = movimentos.find(m => m.competencia?.substring(0,7)===c2);
+                              const aj  = ajusteMap[c2+'-01'] || ajusteMap[c2];
+                              const val = aj ? aj.valor_considerado : (lib?.total_liberado||0);
+                              return {comp:c2, val, label:fmtMes(c2+'-01')};
+                            });
+                            // Usa o 3º se tiver valor; senão o último com valor
+                            const mesParaMeta = tresMeses[2].val > 0
+                              ? tresMeses[2]
+                              : [...tresMeses].reverse().find(m=>m.val>0);
+                            const _prodNorm = (empresa?.produto_contratado||'').toLowerCase().trim();
+                            const _isVB = _prodNorm==='vegas benefícios'||_prodNorm==='vegas beneficios';
+                            const _pesoMeta = _isVB ? peso : 1;
+                            const valorMetaCalc = mesParaMeta
+                              ? Math.round(mesParaMeta.val * _pesoMeta * (pctCons/100) * 100) / 100
+                              : 0;
+                            return (
+                              <tr style={{background:'rgba(96,165,250,0.04)',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
+                                <td colSpan={5} style={{padding:'16px 20px'}}>
+                                  <div style={{marginBottom:10}}>
+                                    <div style={{color:'#2563eb',fontWeight:700,fontSize:'0.85rem',marginBottom:4}}>
+                                      🎯 Aplicar meta para {fmtMes(comp+'-01')} (3º mês corrido zerado)
+                                    </div>
+                                    <div style={{color:'#6b7280',fontSize:'0.75rem'}}>
+                                      Fev/{comp.split('-')[0]} não teve movimentação. O sistema usará o valor de <strong style={{color:'#1a1d2e'}}>{mesParaMeta?.label||'—'}</strong> como base da meta.
+                                    </div>
                                   </div>
-                                </div>
-                                <div style={{display:'flex',alignItems:'center',gap:10,marginTop:12,flexWrap:'wrap'}}>
-                                  <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 12px'}}>
-                                    <span style={{color:'#9ca3af',fontSize:'0.85rem'}}>R$</span>
-                                    <input
-                                      type="number" step="0.01" placeholder="0,00"
-                                      value={valorInserir}
-                                      onChange={e=>setValorInserir(e.target.value)}
-                                      style={{border:'none',outline:'none',width:120,fontSize:'0.95rem',fontWeight:700,color:'#1a1d2e',fontFamily:'inherit'}}
-                                    />
-                                  </div>
-                                  <button
-                                    disabled={!valorInserir || salvandoInserir}
-                                    onClick={async () => {
-                                      setSalvandoInserir(true);
-                                      const val = parseFloat(String(valorInserir).replace(',','.')) || 0;
-                                      const { error } = await supabase.from('liberacoes').insert({
-                                        empresa_id:    empresa.id,
-                                        empresa_nome:  empresa.nome,
-                                        produto_id:    empresa.produto_id,
-                                        competencia:   comp+'-01',
-                                        total_liberado: val,
-                                      });
-                                      if (!error) {
-                                        await carregar();
-                                        setInserindoValor(null);
-                                        setValorInserir('');
-                                      } else {
-                                        alert('Erro: ' + error.message);
-                                      }
-                                      setSalvandoInserir(false);
-                                    }}
-                                    style={{background:'#2563eb',color:'white',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',opacity:!valorInserir?0.5:1}}>
-                                    {salvandoInserir?'Salvando...':'💾 Salvar'}
-                                  </button>
-                                  <span style={{color:'#9ca3af',fontSize:'0.72rem'}}>
-                                    Se valor = 0, o sistema usará o mês anterior com valor para a meta
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                                  {mesParaMeta ? (
+                                    <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px'}}>
+                                      <div>
+                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Mês de referência</div>
+                                        <div style={{fontWeight:700,color:'#2563eb'}}>{mesParaMeta.label}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor movimentado</div>
+                                        <div style={{fontWeight:700,color:'#1a1d2e'}}>{fmt(mesParaMeta.val)}</div>
+                                      </div>
+                                      {_pesoMeta < 1 && <div>
+                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso</div>
+                                        <div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoMeta*100)}</div>
+                                      </div>}
+                                      <div>
+                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div>
+                                        <div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div>
+                                      </div>
+                                      <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
+                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta</div>
+                                        <div style={{fontWeight:800,color:'#16a34a',fontSize:'1.1rem'}}>{fmt(valorMetaCalc)}</div>
+                                      </div>
+                                      <button
+                                        disabled={salvandoInserir}
+                                        onClick={async () => {
+                                          setSalvandoInserir(true);
+                                          // Salva direto na valor_meta_empresa com o mês zerado como competencia_meta
+                                          // e o valor calculado do mês de referência
+                                          await supabase.from('valor_meta_empresa')
+                                            .delete().eq('empresa_id', empresa.id);
+                                          const { error } = await supabase.from('valor_meta_empresa').insert({
+                                            empresa_id:       empresa.id,
+                                            produto_id:       empresa.produto_id,
+                                            consultor_id:     empresa.consultor_principal_id || null,
+                                            competencia_meta: comp+'-01',
+                                            valor_bruto:      mesParaMeta.val,
+                                            valor_considerado: mesParaMeta.val,
+                                            valor_meta:       valorMetaCalc,
+                                            pct_consultor:    pctCons,
+                                            regra:            'convenio',
+                                            mes_sequencia:    3,
+                                          });
+                                          if (!error) {
+                                            await carregar();
+                                            setInserindoValor(null);
+                                          } else {
+                                            alert('Erro: ' + error.message);
+                                          }
+                                          setSalvandoInserir(false);
+                                        }}
+                                        style={{background:'#16a34a',color:'white',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',marginLeft:'auto'}}>
+                                        {salvandoInserir?'Aplicando...':'✅ Aplicar meta'}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{color:'#f87171',fontSize:'0.82rem'}}>Nenhum mês com valor encontrado dentro dos 3 corridos.</div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })()}
                         </React.Fragment>
                       );
                     })}
