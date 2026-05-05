@@ -362,7 +362,12 @@ export default function DashboardVendedor() {
       const totalMovReal=lista.reduce((s,e)=>s+e.totalMov,0);
       const totalEsperado=lista.reduce((s,e)=>s+e.esperadoMes*(mesesDisp.length||1),0);
       const totalValorMeta=lista.reduce((s,e)=>s+(e.valorMeta||0),0);
-      const meta=consultoresDaVisao.reduce((s,c)=>s+(c.meta_mensal||0),0);
+      // Meta total = meta mensal × número de meses no período selecionado
+      // Se filtro "Todos" → multiplica por todos os meses disponíveis
+      // Se filtro de mês específico → meta de 1 mês
+      const metaMensal=consultoresDaVisao.reduce((s,c)=>s+(c.meta_mensal||0),0);
+      const qtdMesesPeriodo = mesSelecionado ? 1 : (mesesDisp.length || 1);
+      const meta = metaMensal * qtdMesesPeriodo;
       const comMov=lista.filter(e=>e.totalMov>0).length;
       const crescendo=lista.filter(e=>{
         const vals=mesesDisp.map(m=>e.movPorMes[m]||0);
@@ -427,7 +432,7 @@ export default function DashboardVendedor() {
 
       setDados({
         consultor,consultoresDaVisao,mesesDisp,lista,
-        kpis:{totalMovReal,totalEsperado,meta,totalValorMeta,comMov,crescendo,naMeta,empresas:lista.length},
+        kpis:{totalMovReal,totalEsperado,meta,metaMensal,qtdMesesPeriodo,totalValorMeta,comMov,crescendo,naMeta,empresas:lista.length},
         porMes,
         porProduto:Object.entries(prodMap).map(([nome,v])=>({nome,...v})).sort((a,b)=>b.movReal-a.movReal),
         ranking,
@@ -524,6 +529,7 @@ export default function DashboardVendedor() {
         const pctApurado=kpis.meta>0?(apurado/kpis.meta)*100:0;
         const corAp=corPct(pctApurado);
         const pctMov=kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0;
+        const qtdMesesPeriodo = kpis.qtdMesesPeriodo || 1;
 
         return (
           <>
@@ -547,7 +553,7 @@ export default function DashboardVendedor() {
               <KPI label="Empresas" val={kpis.empresas} sub={`${kpis.comMov} movimentando`}/>
               <KPI label="Mov. Real Acumulada" val={fmtK(kpis.totalMovReal)} sub={`${mesesDisp.length} meses`} cor="#f0b429" destaque/>
               <KPI label="Valor Apurado Meta" val={fmtK(apurado)} sub={`${kpis.naMeta} empresas na meta`} cor={COR.ok} destaque/>
-              <KPI label="Meta Mensal" val={kpis.meta>0?fmtK(kpis.meta):'—'} sub="total da equipe"/>
+              <KPI label={qtdMesesPeriodo > 1 ? `Meta (${qtdMesesPeriodo} meses)` : 'Meta Mensal'} val={kpis.meta>0?fmtK(kpis.meta):'—'} sub={qtdMesesPeriodo > 1 ? `${fmtK(kpis.metaMensal)}/mês × ${qtdMesesPeriodo}` : 'total da equipe'}/>
               <KPI label="% Meta Atingida" val={kpis.meta>0?fmtPct(pctApurado):'—'} sub="apurado / meta" cor={corAp} destaque/>
               <KPI label="↑ Crescendo" val={kpis.crescendo} sub="empresas em alta" cor={COR.blue}/>
             </div>
@@ -583,7 +589,7 @@ export default function DashboardVendedor() {
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',color:'#4b5563'}}>
                     <span style={{color:corAp,fontWeight:700}}>{fmt(apurado)} · {fmtPct(pctApurado)}</span>
-                    <span>meta: {fmt(kpis.meta)}/mês</span>
+                    <span>meta: {fmt(kpis.meta)}{qtdMesesPeriodo > 1 ? ` (${qtdMesesPeriodo}×${fmtK(kpis.metaMensal)}/mês)` : '/mês'}</span>
                   </div>
                   <div style={{marginTop:6,fontSize:'0.65rem',color:'#374151'}}>
                     Benefícios/Bônus: 1ª recarga · Convênio/Mobilidade: 3º mês
