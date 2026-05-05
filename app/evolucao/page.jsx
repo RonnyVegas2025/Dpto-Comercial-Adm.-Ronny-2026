@@ -903,9 +903,9 @@ export default function Evolucao() {
             valorBruto,
             valorConsid,
             peso:            metaInfoCalc?.peso ?? 1,
-            progresso:       1,
-            precisam:        1,
-            _fromBanco:      true, // flag para saber que veio do banco
+            progresso:       metaInfoCalc?.progresso ?? 3,
+            precisam:        metaInfoCalc?.precisam  ?? (entrada.regra === 'beneficio' ? 1 : 3),
+            _fromBanco:      true,
           };
         } else {
           metaInfo = metaInfoCalc;
