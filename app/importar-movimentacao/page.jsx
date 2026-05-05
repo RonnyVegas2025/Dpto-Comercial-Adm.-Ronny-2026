@@ -188,14 +188,33 @@ export default function ImportarMovimentacao() {
 
       let inserted = 0;
       const errors = [];
-      for (let i = 0; i < records.length; i += 50) {
-        const batch = records.slice(i, i+50);
-        const { data, error } = await supabase
+
+      // Agrupa por competência para fazer delete+insert por mês
+      const porCompetencia = {};
+      for (const r of records) {
+        if (!porCompetencia[r.competencia]) porCompetencia[r.competencia] = [];
+        porCompetencia[r.competencia].push(r);
+      }
+
+      for (const [comp, batch] of Object.entries(porCompetencia)) {
+        const empIds = batch.map(r => r.empresa_id);
+        // Remove registros existentes desses empresa_ids nessa competência
+        const { error: delErr } = await supabase
           .from('liberacoes')
-          .upsert(batch, { onConflict: 'empresa_id,competencia' })
-          .select('empresa_id');
-        if (error) errors.push(`Lote ${Math.floor(i/50)+1}: ${error.message}`);
-        else inserted += data?.length || 0;
+          .delete()
+          .eq('competencia', comp)
+          .in('empresa_id', empIds);
+        if (delErr) { errors.push('Delete ' + comp + ': ' + delErr.message); continue; }
+        // Insere em fatias de 50
+        for (let i = 0; i < batch.length; i += 50) {
+          const slice = batch.slice(i, i+50);
+          const { data, error } = await supabase
+            .from('liberacoes')
+            .insert(slice)
+            .select('empresa_id');
+          if (error) errors.push('Insert ' + comp + ' lote ' + (Math.floor(i/50)+1) + ': ' + error.message);
+          else inserted += data?.length || 0;
+        }
       }
       setResult({ inserted, errors });
       setStatus('done');
