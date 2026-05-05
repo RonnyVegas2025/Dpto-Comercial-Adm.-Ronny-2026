@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 
@@ -118,6 +118,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [aplicandoAuto,     setAplicandoAuto]     = useState(false);
   const [mesSelecionado,    setMesSelecionado]    = useState(null);   // troca manual do mês da meta
   const [trocandoMes,       setTrocandoMes]       = useState(false);  // mostra o select de troca
+  const [inserindoValor,    setInserindoValor]    = useState(null);   // comp do mês zerado sendo editado
+  const [valorInserir,      setValorInserir]      = useState('');     // valor digitado
+  const [salvandoInserir,   setSalvandoInserir]   = useState(false);
   const [removendoMeta, setRemovendoMeta] = useState(false);
 
   const [loading,   setLoading]   = useState(true);
@@ -216,6 +219,30 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
   const metaMap   = Object.fromEntries(valorMetas.map(v => [v.competencia_meta?.substring(0,10), v]));
+
+  // Calcula meses zerados esperados para Convênio/Mobilidade
+  // São os 3 meses corridos que deveriam aparecer mas não têm registro
+  const mesesZeradosEsperados = useMemo(() => {
+    const isConvMob = (empresa?.categoria||'').toLowerCase().match(/conv|mobil/);
+    if (!isConvMob) return [];
+    const comValor = movimentos.filter(m => m.total_liberado > 0).sort((a,b) => a.competencia.localeCompare(b.competencia));
+    if (comValor.length === 0) return [];
+    // 3 meses corridos a partir do 1º com valor
+    const [y0,m0] = comValor[0].competencia.substring(0,7).split('-').map(Number);
+    const compsMov = new Set(movimentos.map(m => m.competencia?.substring(0,7)));
+    const zerados = [];
+    for (let i = 0; i < 3; i++) {
+      const d    = new Date(y0, m0-1+i, 1);
+      const comp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      if (!compsMov.has(comp)) {
+        // Só mostra se o mês já passou
+        const hoje = new Date();
+        const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+        if (comp < mesAtual) zerados.push(comp);
+      }
+    }
+    return zerados;
+  }, [empresa, movimentos]);
   const totalMetaApurado = valorMetas.reduce((s,v) => s+(v.valor_meta||0), 0);
 
   async function salvar() {
@@ -888,6 +915,94 @@ export default function GestaoEmpresaDetalhe({ params }) {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Meses zerados esperados (Convênio/Mobilidade sem registro) */}
+                    {mesesZeradosEsperados.map(comp => {
+                      const eInserindo = inserindoValor === comp;
+                      const metaGravada = metaMap[comp];
+                      return (
+                        <React.Fragment key={'zero-'+comp}>
+                          <tr style={{borderTop:'1px solid #f0f2f8',background:'rgba(248,113,113,0.03)'}}>
+                            <td style={{padding:'12px 16px',fontWeight:600}}>
+                              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                                <span style={{color:'#9ca3af'}}>{fmtMes(comp+'-01')}</span>
+                                <span style={{background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',color:'#f87171',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:700}}>
+                                  sem registro
+                                </span>
+                                {metaGravada && (
+                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>
+                                    ✅ {fmt(metaGravada.valor_meta)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
+                            <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
+                            <td style={{padding:'12px 16px',color:'#9ca3af',fontSize:'0.75rem',fontStyle:'italic'}}>
+                              mês sem movimentação
+                            </td>
+                            <td style={{padding:'12px 16px'}}>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                                <button onClick={()=>{setInserindoValor(eInserindo?null:comp);setValorInserir('');}}
+                                  style={{background:eInserindo?'rgba(96,165,250,0.12)':'#f5f6fa',border:`1px solid ${eInserindo?'rgba(96,165,250,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eInserindo?'#2563eb':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                  {eInserindo?'✕':'📝 Inserir valor'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {/* Form de inserção de valor manual */}
+                          {eInserindo && (
+                            <tr style={{background:'rgba(96,165,250,0.04)',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
+                              <td colSpan={5} style={{padding:'16px 20px'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                                  <div style={{color:'#2563eb',fontWeight:700,fontSize:'0.82rem'}}>📝 Inserir valor para {fmtMes(comp+'-01')}:</div>
+                                  <div style={{color:'#6b7280',fontSize:'0.75rem'}}>
+                                    Este valor será usado como referência para o cálculo da meta (3º mês corrido).
+                                  </div>
+                                </div>
+                                <div style={{display:'flex',alignItems:'center',gap:10,marginTop:12,flexWrap:'wrap'}}>
+                                  <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 12px'}}>
+                                    <span style={{color:'#9ca3af',fontSize:'0.85rem'}}>R$</span>
+                                    <input
+                                      type="number" step="0.01" placeholder="0,00"
+                                      value={valorInserir}
+                                      onChange={e=>setValorInserir(e.target.value)}
+                                      style={{border:'none',outline:'none',width:120,fontSize:'0.95rem',fontWeight:700,color:'#1a1d2e',fontFamily:'inherit'}}
+                                    />
+                                  </div>
+                                  <button
+                                    disabled={!valorInserir || salvandoInserir}
+                                    onClick={async () => {
+                                      setSalvandoInserir(true);
+                                      const val = parseFloat(String(valorInserir).replace(',','.')) || 0;
+                                      const { error } = await supabase.from('liberacoes').insert({
+                                        empresa_id:    empresa.id,
+                                        empresa_nome:  empresa.nome,
+                                        produto_id:    empresa.produto_id,
+                                        competencia:   comp+'-01',
+                                        total_liberado: val,
+                                      });
+                                      if (!error) {
+                                        await carregar();
+                                        setInserindoValor(null);
+                                        setValorInserir('');
+                                      } else {
+                                        alert('Erro: ' + error.message);
+                                      }
+                                      setSalvandoInserir(false);
+                                    }}
+                                    style={{background:'#2563eb',color:'white',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',opacity:!valorInserir?0.5:1}}>
+                                    {salvandoInserir?'Salvando...':'💾 Salvar'}
+                                  </button>
+                                  <span style={{color:'#9ca3af',fontSize:'0.72rem'}}>
+                                    Se valor = 0, o sistema usará o mês anterior com valor para a meta
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                     {movimentos.map((m,i)=>{
                       const comp           = m.competencia?.substring(0,10);
                       const ajuste         = ajusteMap[comp];
