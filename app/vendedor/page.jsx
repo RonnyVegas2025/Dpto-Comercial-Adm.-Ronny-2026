@@ -194,7 +194,8 @@ export default function DashboardVendedor() {
   async function carregarDados() {
     setLoading(true); setDados(null);
     try {
-      let empQuery = supabase.from('empresas').select(`
+      // Busca empresas
+      let empQ = supabase.from('empresas').select(`
         id, produto_id, nome, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, data_cadastro,
         pct_principal, pct_agregado_1, pct_agregado_2,
@@ -204,26 +205,39 @@ export default function DashboardVendedor() {
       `).eq('ativo',true);
 
       if(consultorId) {
-        empQuery=empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
-      } else if(gestorFiltro!=='Geral') {
+        empQ=empQ.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
+      } else if(gestorFiltro && gestorFiltro!=='Geral') {
         const ids=consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id);
-        if(!ids.length){setLoading(false);return;}
-        empQuery=empQuery.in('consultor_principal_id',ids);
+        if(!ids.length){setLoading(false);setDados(null);return;}
+        empQ=empQ.in('consultor_principal_id',ids);
       }
 
-      const empresas = await fetchAll(empQuery);
-      const prodIds  = empresas.map(e=>e.produto_id);
-      const empIds   = empresas.map(e=>e.id);
+      const {data:empData, error:empError} = await empQ.limit(2000);
+      if(empError) throw new Error('Erro empresas: '+empError.message);
+      const empresas = empData||[];
 
-      const mesInicio = mesSelecionado?mesSelecionado+'-01':'2000-01-01';
-      const mesFim    = mesSelecionado?mesSelecionado+'-28':'2099-12-31';
+      // Filtra categorias em JS
+      const _catOk = ['benefi','bonus','bônus','conv','mobil'];
+      const empresasFiltradas = empresas.filter(e => {
+        const cat=(e.categoria||'').toLowerCase();
+        const prod=(e.produto_contratado||'').toLowerCase();
+        return _catOk.some(v=>cat.includes(v)) && !prod.includes('desconto condicional') && cat!=='taxa negativa';
+      });
+
+      const prodIds = [...new Set(empresasFiltradas.map(e=>e.produto_id).filter(Boolean))];
+      const empIds  = empresasFiltradas.map(e=>e.id).filter(Boolean);
+
+      const mesFiltro = mesSelecionado && mesSelecionado.length >= 7 ? mesSelecionado : null;
+      const mesInicio = mesFiltro ? mesFiltro+'-01' : '2000-01-01';
+      const mesFim    = mesFiltro ? mesFiltro+'-28' : '2099-12-31';
 
       const [libsFiltradas,ajustes,vmetas,libsTodas] = await Promise.all([
-        prodIds.length ? fetchAll(supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).gte('competencia',mesInicio).lte('competencia',mesFim)) : Promise.resolve([]),
-        empIds.length  ? fetchAll(supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado').in('empresa_id',empIds)) : Promise.resolve([]),
-        empIds.length  ? fetchAll(supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra,mes_sequencia').in('empresa_id',empIds)) : Promise.resolve([]),
-        prodIds.length ? fetchAll(supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).order('competencia')) : Promise.resolve([]),
+        prodIds.length ? supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).gte('competencia',mesInicio).lte('competencia',mesFim).limit(5000).then(r=>r.data||[]) : Promise.resolve([]),
+        empIds.length  ? supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado').in('empresa_id',empIds).limit(5000).then(r=>r.data||[]) : Promise.resolve([]),
+        empIds.length  ? supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra,mes_sequencia').in('empresa_id',empIds).limit(5000).then(r=>r.data||[]) : Promise.resolve([]),
+        prodIds.length ? supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id',prodIds).order('competencia').limit(5000).then(r=>r.data||[]) : Promise.resolve([]),
       ]);
+
 
       const libMap={};
       for(const l of libsFiltradas){const k=`${l.produto_id}__${l.competencia?.substring(0,10)}`;libMap[k]=(libMap[k]||0)+l.total_liberado;}
@@ -316,13 +330,6 @@ export default function DashboardVendedor() {
 
       // ── Processa empresas ──────────────────────────────────────────────
       const lista=[];
-      // Filtra categorias em JS (evita erro no Supabase)
-      const _catValidas = ['benefi','bonus','bônus','conv','mobil'];
-      const empresasFiltradas = empresas.filter(e => {
-        const cat = (e.categoria||'').toLowerCase();
-        const prod = (e.produto_contratado||'').toLowerCase();
-        return _catValidas.some(v => cat.includes(v)) && !prod.includes('desconto condicional') && cat !== 'taxa negativa';
-      });
       for(const e of empresasFiltradas){
         const pctP=e.pct_principal??100, pctA1=e.pct_agregado_1??0, pctA2=e.pct_agregado_2??0;
         const consultoresEmp=[
