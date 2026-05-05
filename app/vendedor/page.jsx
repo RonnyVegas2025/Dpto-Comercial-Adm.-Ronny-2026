@@ -277,7 +277,10 @@ export default function DashboardVendedor() {
             const lib=libs.find(l=>l.comp===comp);
             return {comp,val:lib?.val||0};
           });
-          const temTerceiro=libs.some(l=>l.comp===tresMeses[2].comp);
+          const hoje=new Date();
+          const mesAtual=`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+          const terceiroJaPassou=tresMeses[2].comp < mesAtual;
+          const temTerceiro=libs.some(l=>l.comp===tresMeses[2].comp)||terceiroJaPassou;
           if(!temTerceiro) return {valorMeta:0,metaComp:null,metaRegra:null};
           // 3º mês com valor → usa; senão usa último com valor dentro dos 3
           mesAlvoObj=tresMeses[2].val>0
