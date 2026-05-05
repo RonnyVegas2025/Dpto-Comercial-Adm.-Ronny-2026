@@ -181,7 +181,7 @@ export default function DashboardVendedor() {
 
   async function carregarBase() {
     const [{data:cons},{data:libs}] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,meta_valida_desde,setor,gestor,equipe').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
     ]);
     setConsultores(cons||[]);
@@ -198,7 +198,7 @@ export default function DashboardVendedor() {
         id, produto_id, nome, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, data_cadastro,
         pct_principal, pct_agregado_1, pct_agregado_2,
-        consultor_principal:consultor_principal_id(id,nome,gestor,equipe,meta_mensal),
+        consultor_principal:consultor_principal_id(id,nome,gestor,equipe,meta_mensal,meta_valida_desde),
         consultor_agregado:consultor_agregado_id(id,nome),
         consultor_agregado_2:consultor_agregado_2_id(id,nome)
       `).eq('ativo',true)
@@ -247,7 +247,16 @@ export default function DashboardVendedor() {
       function calcMetaInline(emp, consId, pct) {
         // Primeiro tenta usar o valor gravado na tabela
         const gravado = vmetaMap[`${emp.id}__${consId}`];
-        if(gravado) return {valorMeta:gravado.valor_meta||0, metaComp:gravado.competencia_meta, metaRegra:gravado.regra};
+        if(gravado) {
+          // Verifica se o mês da meta gravada é >= meta_valida_desde do consultor
+          const cons = consultores.find(c => c.id === consId);
+          const validaDesdeMes = cons?.meta_valida_desde?.substring(0,7);
+          const metaMes = gravado.competencia_meta?.substring(0,7);
+          if(validaDesdeMes && metaMes && metaMes < validaDesdeMes) {
+            return {valorMeta:0, metaComp:null, metaRegra:null}; // meta fora do período válido
+          }
+          return {valorMeta:gravado.valor_meta||0, metaComp:gravado.competencia_meta, metaRegra:gravado.regra};
+        }
 
         // Senão calcula automaticamente
         const cat=(emp.categoria||'').toLowerCase();
@@ -255,20 +264,25 @@ export default function DashboardVendedor() {
         const isConv=cat.includes('conv')||cat.includes('mobil');
         if(!isBenef&&!isConv) return {valorMeta:0,metaComp:null,metaRegra:null};
 
+        // Respeita meta_valida_desde: só considera movimentações a partir desse mês
+        const cons = consultores.find(c => c.id === consId);
+        const validaDesdeMes = cons?.meta_valida_desde?.substring(0,7) || '2000-01';
+
         const prodNorm=(emp.produto_contratado||'').toLowerCase().trim();
         const isVB=prodNorm==='vegas benefícios'||prodNorm==='vegas beneficios';
         const peso=isVB?(emp.peso_categoria??1):1;
 
         const libs=(libsTodasMap[emp.produto_id]||[])
           .sort((a,b)=>a.comp.localeCompare(b.comp));
-        const libsComMov=libs.filter(l=>l.val>0);
+        // Filtra movimentações ANTERIORES à data de validade da meta
+        const libsComMov=libs.filter(l=>l.val>0 && l.comp >= validaDesdeMes);
 
         if(libsComMov.length===0) return {valorMeta:0,metaComp:null,metaRegra:null};
 
         let mesAlvoObj=null, regra=null;
         if(isBenef){ mesAlvoObj=libsComMov[0]; regra='beneficio'; }
         else {
-          // 3 meses CORRIDOS a partir do 1º com movimentação
+          // 3 meses CORRIDOS a partir do 1º com movimentação VÁLIDA
           const primeiro=libsComMov[0];
           const [y0,m0]=primeiro.comp.split('-').map(Number);
           const tresMeses=[0,1,2].map(i=>{
@@ -282,13 +296,15 @@ export default function DashboardVendedor() {
           const terceiroJaPassou=tresMeses[2].comp < mesAtual;
           const temTerceiro=libs.some(l=>l.comp===tresMeses[2].comp)||terceiroJaPassou;
           if(!temTerceiro) return {valorMeta:0,metaComp:null,metaRegra:null};
-          // 3º mês com valor → usa; senão usa último com valor dentro dos 3
           mesAlvoObj=tresMeses[2].val>0
             ? tresMeses[2]
             : [...tresMeses].reverse().find(m=>m.val>0);
           if(!mesAlvoObj) return {valorMeta:0,metaComp:null,metaRegra:null};
           regra='convenio';
         }
+
+        // O mês alvo também precisa ser >= meta_valida_desde
+        if(mesAlvoObj.comp < validaDesdeMes) return {valorMeta:0,metaComp:null,metaRegra:null};
 
         const comp=mesAlvoObj.comp;
         const aj=ajusteMap[`${emp.id}__${comp}`];
@@ -365,6 +381,10 @@ export default function DashboardVendedor() {
       // Meta total = meta mensal × número de meses no período selecionado
       // Se filtro "Todos" → multiplica por todos os meses disponíveis
       // Se filtro de mês específico → meta de 1 mês
+      // Última movimentação (último mês com dados)
+      const ultimoMes = mesesDisp.length > 0 ? mesesDisp[mesesDisp.length-1] : null;
+      const ultimaMov = ultimoMes ? lista.reduce((s,e)=>s+(e.movPorMes[ultimoMes]||0),0) : 0;
+
       const metaMensal=consultoresDaVisao.reduce((s,c)=>s+(c.meta_mensal||0),0);
       const qtdMesesPeriodo = mesSelecionado ? 1 : (mesesDisp.length || 1);
       const meta = metaMensal * qtdMesesPeriodo;
@@ -432,7 +452,7 @@ export default function DashboardVendedor() {
 
       setDados({
         consultor,consultoresDaVisao,mesesDisp,lista,
-        kpis:{totalMovReal,totalEsperado,meta,metaMensal,qtdMesesPeriodo,totalValorMeta,comMov,crescendo,naMeta,empresas:lista.length},
+        kpis:{totalMovReal,totalEsperado,meta,metaMensal,qtdMesesPeriodo,ultimaMov,ultimoMes,totalValorMeta,comMov,crescendo,naMeta,empresas:lista.length},
         porMes,
         porProduto:Object.entries(prodMap).map(([nome,v])=>({nome,...v})).sort((a,b)=>b.movReal-a.movReal),
         ranking,
@@ -551,7 +571,7 @@ export default function DashboardVendedor() {
             {/* ── KPIs ── */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(165px,1fr))',gap:12,marginBottom:16,animation:'fadeUp 0.5s ease'}}>
               <KPI label="Empresas" val={kpis.empresas} sub={`${kpis.comMov} movimentando`}/>
-              <KPI label="Mov. Real Acumulada" val={fmtK(kpis.totalMovReal)} sub={`${mesesDisp.length} meses`} cor="#f0b429" destaque/>
+              <KPI label={mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação'} val={fmtK(mesSelecionado ? kpis.totalMovReal : (kpis.ultimaMov||kpis.totalMovReal))} sub={mesSelecionado ? fmtMes(mesSelecionado+'-01') : (kpis.ultimoMes ? fmtMes(kpis.ultimoMes+'-01') : `${mesesDisp.length} meses`)} cor="#f0b429" destaque/>
               <KPI label="Valor Apurado Meta" val={fmtK(apurado)} sub={`${kpis.naMeta} empresas na meta`} cor={COR.ok} destaque/>
               <KPI label={qtdMesesPeriodo > 1 ? `Meta (${qtdMesesPeriodo} meses)` : 'Meta Mensal'} val={kpis.meta>0?fmtK(kpis.meta):'—'} sub={qtdMesesPeriodo > 1 ? `${fmtK(kpis.metaMensal)}/mês × ${qtdMesesPeriodo}` : 'total da equipe'}/>
               <KPI label="% Meta Atingida" val={kpis.meta>0?fmtPct(pctApurado):'—'} sub="apurado / meta" cor={corAp} destaque/>
@@ -935,6 +955,27 @@ export default function DashboardVendedor() {
                         })}
                         {listaPage.length===0&&<tr><td colSpan={8+mesesDisp.length} style={{...s.td,textAlign:'center',color:'#4b5563',padding:32}}>Nenhuma empresa encontrada</td></tr>}
                       </tbody>
+                      <tfoot>
+                        <tr style={{borderTop:'2px solid rgba(255,255,255,0.1)',background:'rgba(240,180,41,0.04)'}}>
+                          <td colSpan={4} style={{...s.td,fontWeight:700,color:'#f0b429',fontSize:'0.78rem',paddingTop:12}}>
+                            TOTAL ({analise.lista.length} empresas)
+                          </td>
+                          {mesesDisp.map(m=>{
+                            const totalMes=analise.lista.reduce((s,e)=>s+(e.movPorMes[m]||0),0);
+                            return(
+                              <td key={m} style={{...s.td,textAlign:'right',fontWeight:700,paddingTop:12}}>
+                                {totalMes>0?<span style={{color:'#f0b429',fontSize:'0.78rem'}}>{fmt(totalMes)}</span>:<span style={{color:'#374151'}}>—</span>}
+                              </td>
+                            );
+                          })}
+                          <td style={{...s.td,paddingTop:12}}/>
+                          <td style={{...s.td,paddingTop:12}}/>
+                          <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#34d399',fontSize:'0.78rem',paddingTop:12}}>
+                            {fmt(analise.lista.reduce((s,e)=>s+(e.valorMeta||0),0))}
+                          </td>
+                          <td style={{...s.td,paddingTop:12}}/>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                   {/* Paginação */}
