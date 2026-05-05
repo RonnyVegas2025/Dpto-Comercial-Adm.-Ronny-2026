@@ -75,48 +75,48 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct) {
 
   if (isConv) {
     // Regra: 3 meses CORRIDOS a partir do 1º mês com movimentação
-    // Todos os meses (com e sem mov), ordenados
     const todosOsMeses = (libsTodasMap[empresa.produto_id] || [])
       .sort((a, b) => a.comp.localeCompare(b.comp));
 
-    // Considera também o mês de cadastro como ponto de partida
-    // O "1º mês" é o 1º mês com movimentação
     const primeiroCom = todosOsMeses.find(l => l.val > 0);
     if (!primeiroCom) return { elegivel: false, regra: 'convenio', progresso: 0, precisam: 3 };
 
     // Monta os 3 meses corridos a partir do 1º com movimentação
     const [y0, m0] = primeiroCom.comp.split('-').map(Number);
     const tresMeses = [0, 1, 2].map(i => {
-      const d   = new Date(y0, m0 - 1 + i, 1);
+      const d    = new Date(y0, m0 - 1 + i, 1);
       const comp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const lib  = todosOsMeses.find(l => l.comp === comp);
       return { comp, val: lib?.val || 0 };
     });
 
-    // Verifica quantos dos 3 meses corridos existem no banco (com ou sem valor)
-    // Para saber se o período já fechou: o 3º mês já tem registro no banco
     const terceiro = tresMeses[2];
-    const temTerceiro = todosOsMeses.some(l => l.comp === terceiro.comp);
+
+    // 3º mês "chegou" se:
+    // (a) existe registro no banco, OU
+    // (b) a data atual já passou esse mês (mês corrido já fechou)
+    const hoje       = new Date();
+    const mesAtual   = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const terceiroJaPassou = terceiro.comp < mesAtual; // comparação lexicográfica YYYY-MM funciona
+    const temTerceiro = todosOsMeses.some(l => l.comp === terceiro.comp) || terceiroJaPassou;
 
     if (!temTerceiro) {
-      // 3º mês ainda não chegou — mostra progresso
       const mesesComMov = tresMeses.filter(m => m.val > 0).length;
       return { elegivel: false, regra: 'convenio', progresso: mesesComMov, precisam: 3 };
     }
 
-    // 3º mês já existe no banco — calcula a meta
-    // Se 3º mês tem valor → usa ele; senão usa o último com valor dentro dos 3
+    // 3º mês fechou — usa 3º se tem valor, senão usa último com valor dentro dos 3
     let mesAlvoObj = terceiro.val > 0
       ? terceiro
       : [...tresMeses].reverse().find(m => m.val > 0);
 
     if (!mesAlvoObj) return { elegivel: false, regra: 'convenio', progresso: 0, precisam: 3 };
 
-    const mesAlvo    = mesAlvoObj.comp;
-    const ajuste     = ajusteMap[`${empresa.id}__${mesAlvo}`];
-    const valorBruto = mesAlvoObj.val;
+    const mesAlvo     = mesAlvoObj.comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = mesAlvoObj.val;
     const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
-    const valorMeta  = calcValorMeta(valorConsid);
+    const valorMeta   = calcValorMeta(valorConsid);
     const mesesComMov = tresMeses.filter(m => m.val > 0).length;
     return { elegivel: true, regra: 'convenio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: mesesComMov, precisam: 3 };
   }
