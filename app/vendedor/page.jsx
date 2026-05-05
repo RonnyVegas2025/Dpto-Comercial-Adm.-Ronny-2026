@@ -260,18 +260,36 @@ export default function DashboardVendedor() {
         const peso=isVB?(emp.peso_categoria??1):1;
 
         const libs=(libsTodasMap[emp.produto_id]||[])
-          .filter(l=>l.val>0)
           .sort((a,b)=>a.comp.localeCompare(b.comp));
+        const libsComMov=libs.filter(l=>l.val>0);
 
-        if(libs.length===0) return {valorMeta:0,metaComp:null,metaRegra:null};
+        if(libsComMov.length===0) return {valorMeta:0,metaComp:null,metaRegra:null};
 
-        let mesAlvo=null, regra=null;
-        if(isBenef){ mesAlvo=libs[0]; regra='beneficio'; }
-        else { if(libs.length<3) return {valorMeta:0,metaComp:null,metaRegra:null}; mesAlvo=libs[2]; regra='convenio'; }
+        let mesAlvoObj=null, regra=null;
+        if(isBenef){ mesAlvoObj=libsComMov[0]; regra='beneficio'; }
+        else {
+          // 3 meses CORRIDOS a partir do 1º com movimentação
+          const primeiro=libsComMov[0];
+          const [y0,m0]=primeiro.comp.split('-').map(Number);
+          const tresMeses=[0,1,2].map(i=>{
+            const d=new Date(y0,m0-1+i,1);
+            const comp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const lib=libs.find(l=>l.comp===comp);
+            return {comp,val:lib?.val||0};
+          });
+          const temTerceiro=libs.some(l=>l.comp===tresMeses[2].comp);
+          if(!temTerceiro) return {valorMeta:0,metaComp:null,metaRegra:null};
+          // 3º mês com valor → usa; senão usa último com valor dentro dos 3
+          mesAlvoObj=tresMeses[2].val>0
+            ? tresMeses[2]
+            : [...tresMeses].reverse().find(m=>m.val>0);
+          if(!mesAlvoObj) return {valorMeta:0,metaComp:null,metaRegra:null};
+          regra='convenio';
+        }
 
-        const comp=mesAlvo.comp;
+        const comp=mesAlvoObj.comp;
         const aj=ajusteMap[`${emp.id}__${comp}`];
-        const valorBase=aj!==undefined?aj:mesAlvo.val;
+        const valorBase=aj!==undefined?aj:mesAlvoObj.val;
         const valorMeta=Math.round(valorBase*peso*(pct/100)*100)/100;
         return {valorMeta,metaComp:comp,metaRegra:regra};
       }
