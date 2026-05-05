@@ -201,10 +201,7 @@ export default function DashboardVendedor() {
         consultor_principal:consultor_principal_id(id,nome,gestor,equipe,meta_mensal,meta_valida_desde),
         consultor_agregado:consultor_agregado_id(id,nome),
         consultor_agregado_2:consultor_agregado_2_id(id,nome)
-      `).eq('ativo',true)
-        .not('produto_contratado','ilike','%desconto condicional%')
-        .not('categoria','eq','Taxa Negativa')
-        .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
+      `).eq('ativo',true);
 
       if(consultorId) {
         empQuery=empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
@@ -319,7 +316,14 @@ export default function DashboardVendedor() {
 
       // ── Processa empresas ──────────────────────────────────────────────
       const lista=[];
-      for(const e of empresas){
+      // Filtra categorias em JS (evita erro no Supabase)
+      const _catValidas = ['benefi','bonus','bônus','conv','mobil'];
+      const empresasFiltradas = empresas.filter(e => {
+        const cat = (e.categoria||'').toLowerCase();
+        const prod = (e.produto_contratado||'').toLowerCase();
+        return _catValidas.some(v => cat.includes(v)) && !prod.includes('desconto condicional') && cat !== 'taxa negativa';
+      });
+      for(const e of empresasFiltradas){
         const pctP=e.pct_principal??100, pctA1=e.pct_agregado_1??0, pctA2=e.pct_agregado_2??0;
         const consultoresEmp=[
           e.consultor_principal?{cons:e.consultor_principal,pct:pctP}:null,
@@ -444,11 +448,12 @@ export default function DashboardVendedor() {
 
       // ── Análise por mês selecionado ────────────────────────────────────
       // Empresas agrupadas por "status no mês": novas, ativas, inativas
-      const analise=mesSelecionado?{
-        novas: lista.filter(e=>e.anoCadastro===parseInt(mesSelecionado.split('-')[0])&&e.movPorMes[mesSelecionado]>0),
-        ativas: lista.filter(e=>(e.movPorMes[mesSelecionado]||0)>0),
-        semMov: lista.filter(e=>(e.movPorMes[mesSelecionado]||0)===0),
-      }:null;
+      const analise={
+        lista,  // sempre disponível
+        novas: mesSelecionado?lista.filter(e=>e.anoCadastro===parseInt(mesSelecionado.split('-')[0])&&e.movPorMes[mesSelecionado]>0):[],
+        ativas: mesSelecionado?lista.filter(e=>(e.movPorMes[mesSelecionado]||0)>0):[],
+        semMov: mesSelecionado?lista.filter(e=>(e.movPorMes[mesSelecionado]||0)===0):[],
+      };
 
       setDados({
         consultor,consultoresDaVisao,mesesDisp,lista,
