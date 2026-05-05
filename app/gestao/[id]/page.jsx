@@ -942,10 +942,22 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             </td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                <button onClick={()=>{setInserindoValor(eInserindo?null:comp);setValorInserir('');}}
-                                  style={{background:eInserindo?'rgba(96,165,250,0.12)':'#f5f6fa',border:`1px solid ${eInserindo?'rgba(96,165,250,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eInserindo?'#2563eb':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                  {eInserindo?'✕':'📝 Inserir valor'}
-                                </button>
+                                {!metaGravada ? (
+                                  <button onClick={()=>{setInserindoValor(eInserindo?null:comp);setValorInserir('');}}
+                                    style={{background:eInserindo?'rgba(52,211,153,0.12)':'#f5f6fa',border:`1px solid ${eInserindo?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eInserindo?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                    {eInserindo?'✕':'🎯 Aplicar meta'}
+                                  </button>
+                                ) : (
+                                  <button onClick={async ()=>{
+                                    if(!confirm('Remover a meta deste mês?')) return;
+                                    await supabase.from('valor_meta_empresa').delete()
+                                      .eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01');
+                                    await carregar();
+                                  }}
+                                    style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                    ✕ Remover meta
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1118,6 +1130,21 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                 {temMeta&&!eMetaAberta&&(
                                   <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
                                 )}
+                                {/* Botão remover registro da liberacoes — aparece sempre para permitir desfazer inserções erradas */}
+                                <button
+                                  onClick={async () => {
+                                    if(!confirm(`Remover o registro de ${fmtMes(m.competencia)} da movimentação?\n\nIsso NÃO afeta metas já gravadas.`)) return;
+                                    await supabase.from('liberacoes')
+                                      .delete()
+                                      .eq('empresa_id', empresa.id)
+                                      .eq('competencia', m.competencia);
+                                    await carregar();
+                                  }}
+                                  title="Remover este registro de movimentação"
+                                  style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.1)',borderRadius:7,padding:'5px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.72rem',fontFamily:'inherit',opacity:0.7}}
+                                >
+                                  🗑️
+                                </button>
                               </div>
                             </td>
                           </tr>
