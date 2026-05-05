@@ -179,6 +179,7 @@ export default function ImportarMovimentacao() {
         for (const [mes, val] of Object.entries(row.movPorMes)) {
           if (val > 0) records.push({
             empresa_id:    empId,
+            empresa_nome:  row.nome || '',
             produto_id:    row.prodId,
             competencia:   `${mes}-01`,
             total_liberado: val,
