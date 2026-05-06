@@ -275,20 +275,22 @@ export default function DashboardVendedor() {
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
       const totalValorMeta = listaProcessada.reduce((s,e) => s + (e.valorMeta || 0), 0);
-      const metaMensal     = consultoresDaVisao.reduce((s,c) => s + (c.meta_mensal || 0), 0);
-      // Conta apenas meses válidos: >= meta_valida_desde de cada consultor
-      // Se filtro "Todos": multiplica pelo número de meses no período que são >= início da meta
-      // Se filtro de mês específico: 1 mês (ou 0 se antes da validade)
-      const validaMesConsultor = consultorId
-        ? (consultores.find(c=>c.id===consultorId)?.meta_valida_desde?.substring(0,7) || '2000-01')
-        : (consultoresDaVisao.length === 1
-            ? (consultoresDaVisao[0]?.meta_valida_desde?.substring(0,7) || '2000-01')
-            : '2000-01');
-      const mesesValidos = mesSelecionado
-        ? (mesSelecionado >= validaMesConsultor ? 1 : 0)
-        : mesesDisp.filter(m => m >= validaMesConsultor).length || 1;
-      const meta           = metaMensal * mesesValidos;
-      const metaTotal      = meta;
+      // Meta total: soma individualmente por consultor respeitando meta_valida_desde
+      // Cada consultor contribui: meta_mensal × meses válidos no período
+      const meta = consultoresDaVisao.reduce((total, cons) => {
+        const metaMes  = cons.meta_mensal || 0;
+        if (!metaMes) return total;
+        const validaMes = cons.meta_valida_desde?.substring(0,7) || '2000-01';
+        if (mesSelecionado) {
+          // Mês específico: conta 1 se >= validade, senão 0
+          return total + (mesSelecionado >= validaMes ? metaMes : 0);
+        } else {
+          // Todos: conta quantos meses do período são >= validade
+          const qtd = mesesDisp.filter(m => m >= validaMes).length;
+          return total + metaMes * qtd;
+        }
+      }, 0);
+      const metaTotal = meta;
       const comMov         = listaProcessada.filter(e => e.totalMov > 0).length;
       const semMov         = listaProcessada.filter(e => e.totalMov === 0).length;
       const crescendo      = listaProcessada.filter(e => {
