@@ -35,7 +35,7 @@ async function fetchAll(query) {
 // ─── LÓGICA CENTRAL: calcula o valor que entra para a meta ───────────────────
 // Recebe o histórico COMPLETO de liberações da empresa (todas as competências)
 // e o map de ajustes, e retorna o objeto de meta ou null se ainda não elegível.
-function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct) {
+function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower = (empresa.categoria || '').toLowerCase();
   const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
   const isConv   = catLower.includes('conv')   || catLower.includes('mobil');
@@ -43,8 +43,9 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct) {
   if (!isBenef && !isConv) return null;
 
   // Pega todas as liberações da empresa ordenadas por competência
+  const validaMes = validaDesdeMes ? String(validaDesdeMes).substring(0,7) : '2000-01';
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0)
+    .filter(l => l.val > 0 && l.comp >= validaMes)
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   if (libsOrdenadas.length === 0) return null;
@@ -104,7 +105,7 @@ export default function DashboardVendedor() {
 
   async function carregarBase() {
     const [{ data: cons }, { data: libs }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,meta_valida_desde,setor,gestor,equipe').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
     ]);
     setConsultores(cons || []);
@@ -239,7 +240,10 @@ export default function DashboardVendedor() {
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
           // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct);
+          // Busca meta_valida_desde do consultor completo (tem o campo carregado)
+          const consCompl = consultores.find(c => c.id === cons.id);
+          const validaDesdeMes = consCompl?.meta_valida_desde || null;
+          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes);
 
           listaProcessada.push({
             ...e,
