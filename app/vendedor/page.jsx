@@ -152,7 +152,7 @@ export default function DashboardVendedor() {
       const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
       const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
 
-      const [libsFiltradas, ajustes, libsTodas] = await Promise.all([
+      const [libsFiltradas, ajustes, libsTodas, validadeRows] = await Promise.all([
         prodIds.length ? fetchAll(
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).gte('competencia', mesInicio).lte('competencia', mesFim)
@@ -166,7 +166,12 @@ export default function DashboardVendedor() {
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
+        // meta_valida_desde de cada consultor
+        supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true).then(r => r.data||[]),
       ]);
+
+      // Mapa de validade por consultor_id — fonte garantida dentro do carregarDados
+      const validadeMap = Object.fromEntries((validadeRows||[]).map(v => [v.id, v.meta_valida_desde]));
 
       // ── 3. Mapas de lookup ────────────────────────────────────────────
       const libMap = {}; // produto_id__comp → valor (mês filtrado)
@@ -243,8 +248,8 @@ export default function DashboardVendedor() {
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
           // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
-          const consCompl = consultores.find(c => c.id === cons.id);
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, consCompl?.meta_valida_desde);
+          const validadeConsultor = validadeMap[cons.id] || null;
+          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
 
           listaProcessada.push({
             ...e,
@@ -280,7 +285,8 @@ export default function DashboardVendedor() {
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes  = cons.meta_mensal || 0;
         if (!metaMes) return total;
-        const validaMes = cons.meta_valida_desde?.substring(0,7) || '2000-01';
+        // Usa validadeMap buscado direto no carregarDados (mais confiável que o state)
+        const validaMes = (validadeMap[cons.id] || cons.meta_valida_desde || '').substring(0,7) || '2000-01';
         if (mesSelecionado) {
           // Mês específico: conta 1 se >= validade, senão 0
           return total + (mesSelecionado >= validaMes ? metaMes : 0);
