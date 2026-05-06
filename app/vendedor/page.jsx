@@ -43,9 +43,8 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
   if (!isBenef && !isConv) return null;
 
   // Pega todas as liberações da empresa ordenadas por competência
-  const validaMes = validaDesdeMes ? String(validaDesdeMes).substring(0,7) : '2000-01';
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0 && l.comp >= validaMes)
+    .filter(l => l.val > 0 && (!validaDesdeMes || l.comp >= String(validaDesdeMes).substring(0,7)))
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   if (libsOrdenadas.length === 0) return null;
@@ -104,12 +103,16 @@ export default function DashboardVendedor() {
   useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
 
   async function carregarBase() {
-    const [{ data: cons }, { data: libs }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,meta_valida_desde,setor,gestor,equipe').eq('ativo',true).order('nome'),
+    const [{ data: cons }, { data: libs }, { data: validades }] = await Promise.all([
+      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
+      supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true),
     ]);
-    setConsultores(cons || []);
-    const gs = ['Geral', ...new Set((cons||[]).map(c=>c.gestor).filter(Boolean))];
+    // Mescla meta_valida_desde nos consultores sem depender da query principal
+    const validadeMap = Object.fromEntries((validades||[]).map(v=>[v.id, v.meta_valida_desde]));
+    const consComValidade = (cons||[]).map(c => ({...c, meta_valida_desde: validadeMap[c.id]||null}));
+    setConsultores(consComValidade);
+    const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
     setGestores(gs);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
     setMeses(ms);
@@ -240,10 +243,8 @@ export default function DashboardVendedor() {
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
           // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
-          // Busca meta_valida_desde do consultor completo (tem o campo carregado)
           const consCompl = consultores.find(c => c.id === cons.id);
-          const validaDesdeMes = consCompl?.meta_valida_desde || null;
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes);
+          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, consCompl?.meta_valida_desde);
 
           listaProcessada.push({
             ...e,
