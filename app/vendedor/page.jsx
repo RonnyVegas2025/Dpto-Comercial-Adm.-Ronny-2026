@@ -35,40 +35,48 @@ async function fetchAll(query) {
 // ─── LÓGICA CENTRAL: calcula o valor que entra para a meta ───────────────────
 // Recebe o histórico COMPLETO de liberações da empresa (todas as competências)
 // e o map de ajustes, e retorna o objeto de meta ou null se ainda não elegível.
-function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct) {
+function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower = (empresa.categoria || '').toLowerCase();
   const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
   const isConv   = catLower.includes('conv')   || catLower.includes('mobil');
-
   if (!isBenef && !isConv) return null;
 
-  // Pega todas as liberações da empresa ordenadas por competência
-  const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0)
-    .sort((a, b) => a.comp.localeCompare(b.comp));
-
-  if (libsOrdenadas.length === 0) return null;
+  const validaMes = validaDesdeMes?.substring(0,7) || '2000-01';
+  const todasLibs = (libsTodasMap[empresa.produto_id] || []).sort((a,b) => a.comp.localeCompare(b.comp));
+  const libs = todasLibs.filter(l => l.val > 0 && l.comp >= validaMes);
+  if (libs.length === 0) return null;
 
   let mesAlvo = null, mesSeq = 0, valorBruto = 0;
 
   if (isBenef) {
-    // Benefícios/Bônus: 1ª recarga com valor > 0
-    mesAlvo    = libsOrdenadas[0].comp;
+    mesAlvo    = libs[0].comp;
     mesSeq     = 1;
-    valorBruto = libsOrdenadas[0].val;
+    valorBruto = libs[0].val;
   } else if (isConv) {
-    // Convênio/Mobilidade: 3º mês com valor > 0
-    if (libsOrdenadas.length < 3) return null;
-    mesAlvo    = libsOrdenadas[2].comp;
+    // 3 meses CORRIDOS a partir do 1º com movimentação válida
+    const [y0,m0] = libs[0].comp.split('-').map(Number);
+    const tres = [0,1,2].map(i => {
+      const d    = new Date(y0, m0-1+i, 1);
+      const comp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const lib  = todasLibs.find(l => l.comp === comp);
+      return { comp, val: lib?.val || 0 };
+    });
+    const hoje     = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    // 3º mês chegou se: tem registro no banco OU já passou no calendário
+    const terceiroOk = todasLibs.some(l=>l.comp===tres[2].comp) || tres[2].comp < mesAtual;
+    if (!terceiroOk) return null;
+    // Usa 3º se tem valor; senão usa último com valor dentro dos 3
+    const ref = tres[2].val > 0 ? tres[2] : [...tres].reverse().find(m=>m.val>0);
+    if (!ref || ref.comp < validaMes) return null;
+    mesAlvo    = ref.comp;
     mesSeq     = 3;
-    valorBruto = libsOrdenadas[2].val;
+    valorBruto = ref.val;
   }
 
   if (!mesAlvo) return null;
 
-  // Verifica ajuste manual para esse mês
-  const compKey  = `${empresa.id}__${mesAlvo}`;
-  const ajuste   = ajusteMap[compKey];
+  const ajuste = ajusteMap[`${empresa.id}__${mesAlvo}`];
   const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
   const valorMeta = Math.round(valorConsiderado * (pct / 100) * 100) / 100;
 
@@ -104,7 +112,7 @@ export default function DashboardVendedor() {
 
   async function carregarBase() {
     const [{ data: cons }, { data: libs }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,meta_valida_desde,setor,gestor,equipe').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
     ]);
     setConsultores(cons || []);
@@ -122,7 +130,7 @@ export default function DashboardVendedor() {
         id, produto_id, nome, cnpj, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, cartoes_emitidos, data_cadastro,
         taxa_positiva, taxa_negativa, pct_principal, pct_agregado_1, pct_agregado_2,
-        consultor_principal:consultor_principal_id (id, nome, gestor, equipe, meta_mensal),
+        consultor_principal:consultor_principal_id (id, nome, gestor, equipe, meta_mensal, meta_valida_desde),
         consultor_agregado:consultor_agregado_id (id, nome),
         consultor_agregado_2:consultor_agregado_2_id (id, nome),
         parceiro:parceiro_id (nome)
@@ -239,7 +247,9 @@ export default function DashboardVendedor() {
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
           // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct);
+          const consCompleto2 = consultores.find(c=>c.id===cons.id);
+          const validaDesdeMes = consCompleto2?.meta_valida_desde || cons?.meta_valida_desde || null;
+          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes);
 
           listaProcessada.push({
             ...e,
@@ -270,8 +280,12 @@ export default function DashboardVendedor() {
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
       const totalValorMeta = listaProcessada.reduce((s,e) => s + (e.valorMeta || 0), 0);
-      const meta           = consultoresDaVisao.reduce((s,c) => s + (c.meta_mensal || 0), 0);
-      const metaTotal      = meta; // meta é mensal — comparamos com total apurado (não por meses)
+      const metaMensal     = consultoresDaVisao.reduce((s,c) => s + (c.meta_mensal || 0), 0);
+      const qtdMeses       = mesesDisp.length || 1;
+      const ultimoMes      = mesesDisp.length > 0 ? mesesDisp[mesesDisp.length-1] : null;
+      const ultimaMov      = ultimoMes ? listaProcessada.reduce((s,e)=>s+(e.movPorMes[ultimoMes]||0),0) : 0;
+      const meta           = metaMensal * (mesSelecionado ? 1 : qtdMeses);
+      const metaTotal      = meta;
       const comMov         = listaProcessada.filter(e => e.totalMov > 0).length;
       const semMov         = listaProcessada.filter(e => e.totalMov === 0).length;
       const crescendo      = listaProcessada.filter(e => {
@@ -308,7 +322,8 @@ export default function DashboardVendedor() {
         consultor, consultoresDaVisao, mesesDisp,
         lista: listaProcessada,
         kpis: {
-          totalMovReal, totalEsperado, meta, metaTotal,
+          totalMovReal, totalEsperado, meta, metaMensal, metaTotal,
+          qtdMeses, ultimaMov, ultimoMes,
           totalValorMeta,
           comMov, semMov, crescendo,
           empresas: listaProcessada.length,
@@ -420,7 +435,7 @@ export default function DashboardVendedor() {
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
               {[
                 { label:'Empresas',            val: kpis.empresas,                                                                    cor:'#1a1d2e',   sub:`${kpis.comMov} movimentando` },
-                { label:'Mov. Real Acumulada', val: fmt(kpis.totalMovReal),                                                            cor:'#f0b429',   sub:`${mesesDisp.length||0} meses` },
+                { label: mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação', val: fmt(mesSelecionado ? kpis.totalMovReal : (kpis.ultimaMov||kpis.totalMovReal)),                                                            cor:'#f0b429',   sub:`${mesesDisp.length||0} meses` },
                 { label:'Valor Apurado Meta',  val: fmt(apurado),                                                                      cor:'#34d399',   sub:'1ª rec. / 3º mês convênio' },
                 { label:'Meta Total Vendedor', val: kpis.metaTotal > 0 ? fmt(kpis.metaTotal) : '—',                                    cor:'#1a1d2e',   sub:`${fmt(kpis.meta||0)}/mês` },
                 { label:'% Meta Atingida',     val: kpis.metaTotal > 0 ? fmtPct(pctApurado) : '—',                                     cor: kpis.metaTotal>0 ? corApurado : '#8b92b0', sub:'apurado / meta' },
