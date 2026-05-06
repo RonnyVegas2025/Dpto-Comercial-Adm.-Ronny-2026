@@ -44,7 +44,11 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
 
   // Pega todas as liberações da empresa ordenadas por competência
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0 && (!validaDesdeMes || l.comp >= String(validaDesdeMes).substring(0,7)))
+    .filter(l => {
+      const _v = validaDesdeMes ? String(validaDesdeMes).substring(0,7) : '2026-01';
+      const _limite = _v > '2026-01' ? _v : '2026-01';
+      return l.val > 0 && l.comp >= _limite;
+    })
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   if (libsOrdenadas.length === 0) return null;
@@ -285,8 +289,10 @@ export default function DashboardVendedor() {
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes  = cons.meta_mensal || 0;
         if (!metaMes) return total;
-        // Usa validadeMap buscado direto no carregarDados (mais confiável que o state)
-        const validaMes = (validadeMap[cons.id] || cons.meta_valida_desde || '').substring(0,7) || '2000-01';
+        // Trava fixa: nunca considera meta antes de Jan/2026
+        // Além disso, respeita meta_valida_desde individual do consultor
+        const validadeIndividual = (validadeMap[cons.id] || '').substring(0,7) || '2026-01';
+        const validaMes = validadeIndividual > '2026-01' ? validadeIndividual : '2026-01';
         if (mesSelecionado) {
           // Mês específico: conta 1 se >= validade, senão 0
           return total + (mesSelecionado >= validaMes ? metaMes : 0);
