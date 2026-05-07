@@ -45,8 +45,9 @@ const POR_PAGINA = 12;
 function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
-  const isBenef   = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
-  const isConv    = catLower.includes('conv')   || catLower.includes('mobil');
+  const isConv    = catLower.includes('conv') || catLower.includes('mobil');
+  // Benefícios = tudo que não é Convênio/Mobilidade (Alimentação, Bônus, Aux. Combustível, etc.)
+  const isBenef   = !isConv;
   if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
   const validaMes = validaDesdeMes?.substring(0,7) || '2000-01';
