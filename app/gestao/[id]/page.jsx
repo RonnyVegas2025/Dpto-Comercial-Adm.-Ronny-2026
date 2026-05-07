@@ -1311,8 +1311,22 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
                                     <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
                                       setSalvandoUpsell(true);
-                                      await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');
-                                      const {error}=await supabase.from('valor_meta_empresa').insert({empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:empresa.consultor_principal_id||null,competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0});
+                                      // Busca id existente do upsell para fazer update, senão insert
+                                      const {data:existUpsell} = await supabase.from('valor_meta_empresa')
+                                        .select('id').eq('empresa_id',empresa.id).eq('regra','upsell').maybeSingle();
+                                      let error;
+                                      if(existUpsell?.id){
+                                        ({error} = await supabase.from('valor_meta_empresa').update({
+                                          competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,
+                                          valor_meta:valorUpsell,pct_consultor:pctCons,mes_sequencia:0
+                                        }).eq('id',existUpsell.id));
+                                      } else {
+                                        ({error} = await supabase.from('valor_meta_empresa').insert({
+                                          empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:null,
+                                          competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,
+                                          valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0
+                                        }));
+                                      }
                                       if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
                                       setSalvandoUpsell(false);
                                     }} style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
