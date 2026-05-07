@@ -1061,106 +1061,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </tr>
                             );
                           })()}
-                        {/* Painel de Upsell */}
-                        {upsellMes === comp && (() => {
-                          // Usa a meta gravada (não upsell) como base — pode ser de qualquer mês
-                          const metaBase   = valorMetas.find(v => v.regra !== 'upsell');
-                          const valorBase  = metaBase?.valor_considerado || 0;
-                          const excedente  = Math.max(0, m.total_liberado - valorBase);
-                          const _prodNorm  = (empresa?.produto_contratado||'').toLowerCase().trim();
-                          const _isVB      = _prodNorm === 'vegas benefícios' || _prodNorm === 'vegas beneficios';
-                          const _pesoUp    = _isVB ? peso : 1;
-                          const valorUpsell = Math.round(excedente * _pesoUp * (pctCons/100) * 100) / 100;
-                          const jaTemUpsell = valorMetas.find(v => v.competencia_meta?.substring(0,7) === comp && v.regra === 'upsell');
-                          return (
-                            <tr style={{background:'rgba(8,145,178,0.04)',borderTop:'1px solid rgba(8,145,178,0.1)'}}>
-                              <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{marginBottom:10}}>
-                                  <span style={{color:'#0891b2',fontWeight:700,fontSize:'0.85rem'}}>📈 Upsell — {fmtMes(comp+'-01')}</span>
-                                  {jaTemUpsell && <span style={{marginLeft:8,background:'rgba(8,145,178,0.1)',color:'#0891b2',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
-                                </div>
-                                <div style={{display:'flex',gap:20,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
-                                  <div>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Movimentação</div>
-                                    <div style={{fontWeight:700,color:'#1a1d2e'}}>{fmt(m.total_liberado)}</div>
-                                  </div>
-                                  <div style={{color:'#9ca3af'}}>−</div>
-                                  <div>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta (base)</div>
-                                    <div style={{fontWeight:700,color:'#16a34a'}}>{fmt(valorBase)}</div>
-                                  </div>
-                                  <div style={{color:'#9ca3af'}}>=</div>
-                                  <div>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Excedente</div>
-                                    <div style={{fontWeight:700,color:'#0891b2'}}>{fmt(excedente)}</div>
-                                  </div>
-                                  {_pesoUp < 1 && <>
-                                    <div style={{color:'#9ca3af'}}>×</div>
-                                    <div>
-                                      <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso VB</div>
-                                      <div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoUp*100)}</div>
-                                    </div>
-                                  </>}
-                                  <div style={{color:'#9ca3af'}}>×</div>
-                                  <div>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div>
-                                    <div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div>
-                                  </div>
-                                  <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Comissão upsell</div>
-                                    <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
-                                  </div>
-                                  <div style={{marginLeft:'auto',display:'flex',gap:8}}>
-                                    {jaTemUpsell && (
-                                      <button onClick={async()=>{
-                                        if(!confirm('Remover upsell deste mês?')) return;
-                                        await supabase.from('valor_meta_empresa').delete()
-                                          .eq('empresa_id',empresa.id)
-                                          .eq('competencia_meta',comp+'-01')
-                                          .eq('regra','upsell');
-                                        await carregar(); setUpsellMes(null);
-                                      }} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>
-                                        ✕ Remover
-                                      </button>
-                                    )}
-                                    <button disabled={salvandoUpsell||excedente<=0}
-                                      onClick={async()=>{
-                                        setSalvandoUpsell(true);
-                                        // Remove upsell anterior se existir
-                                        await supabase.from('valor_meta_empresa').delete()
-                                          .eq('empresa_id',empresa.id)
-                                          .eq('competencia_meta',comp+'-01')
-                                          .eq('regra','upsell');
-                                        const {error} = await supabase.from('valor_meta_empresa').insert({
-                                          empresa_id:       empresa.id,
-                                          produto_id:       empresa.produto_id,
-                                          consultor_id:     empresa.consultor_principal_id||null,
-                                          competencia_meta: comp+'-01',
-                                          valor_bruto:      m.total_liberado,
-                                          valor_considerado: excedente,
-                                          valor_meta:       valorUpsell,
-                                          pct_consultor:    pctCons,
-                                          regra:            'upsell',
-                                          mes_sequencia:    0,
-                                        });
-                                        if(!error){ await carregar(); setUpsellMes(null); }
-                                        else alert('Erro: '+error.message);
-                                        setSalvandoUpsell(false);
-                                      }}
-                                      style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                                      {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
-                                    </button>
-                                  </div>
-                                </div>
-                                {excedente <= 0 && (
-                                  <div style={{color:'#f59e0b',fontSize:'0.78rem',marginTop:8}}>
-                                    ⚠️ Movimentação ({fmt(m.total_liberado)}) não supera o valor base da meta ({fmt(valorBase)}). Sem excedente para upsell.
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })()}
+
                         </React.Fragment>
                       );
                     })}
@@ -1376,6 +1277,53 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </td>
                             </tr>
                           )}
+                        {/* Painel de Upsell */}
+                        {upsellMes === comp && (()=>{
+                          const metaBase    = valorMetas.find(v=>v.regra!=='upsell');
+                          const mesMetaComp = metaBase?.competencia_meta?.substring(0,7)||'';
+                          const valorBase   = metaBase?.valor_considerado||0;
+                          const excedente   = Math.max(0, m.total_liberado - valorBase);
+                          const _isVB       = (empresa?.produto_contratado||'').toLowerCase().includes('vegas benef');
+                          const _pesoUp     = _isVB ? peso : 1;
+                          const valorUpsell = Math.round(excedente*_pesoUp*(pctCons/100)*100)/100;
+                          const jaTemUpsell = valorMetas.find(v=>v.competencia_meta?.substring(0,7)===comp&&v.regra==='upsell');
+                          return (
+                            <tr key={comp+'-up'} style={{background:'rgba(8,145,178,0.04)',borderTop:'1px solid rgba(8,145,178,0.12)'}}>
+                              <td colSpan={5} style={{padding:'16px 20px'}}>
+                                <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                                  <span style={{color:'#0891b2',fontWeight:700,fontSize:'0.88rem'}}>📈 Upsell — {fmtMes(comp+'-01')}</span>
+                                  {jaTemUpsell&&<span style={{background:'rgba(8,145,178,0.1)',color:'#0891b2',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
+                                </div>
+                                <div style={{display:'flex',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
+                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Movimentação</div><div style={{fontWeight:700}}>{fmt(m.total_liberado)}</div></div>
+                                  <span style={{color:'#9ca3af'}}>−</span>
+                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Base (meta {fmtMes(mesMetaComp+'-01')})</div><div style={{fontWeight:700,color:'#16a34a'}}>{fmt(valorBase)}</div></div>
+                                  <span style={{color:'#9ca3af'}}>=</span>
+                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Excedente</div><div style={{fontWeight:700,color:'#0891b2'}}>{fmt(excedente)}</div></div>
+                                  {_pesoUp<1&&<><span style={{color:'#9ca3af'}}>×</span><div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Peso VB</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoUp*100)}</div></div></>}
+                                  <span style={{color:'#9ca3af'}}>×</span>
+                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
+                                  <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
+                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
+                                    <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
+                                  </div>
+                                  <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
+                                    {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01').eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
+                                    <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
+                                      setSalvandoUpsell(true);
+                                      await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01').eq('regra','upsell');
+                                      const {error}=await supabase.from('valor_meta_empresa').insert({empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:empresa.consultor_principal_id||null,competencia_meta:comp+'-01',valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0});
+                                      if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
+                                      setSalvandoUpsell(false);
+                                    }} style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                                      {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
                         </>
                       );
                     })}
