@@ -1308,10 +1308,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
                                   </div>
                                   <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
-                                    {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
+                                    {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
                                     <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
                                       setSalvandoUpsell(true);
-                                      await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp).eq('regra','upsell');
+                                      await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');
                                       const {error}=await supabase.from('valor_meta_empresa').insert({empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:empresa.consultor_principal_id||null,competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0});
                                       if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
                                       setSalvandoUpsell(false);
