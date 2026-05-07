@@ -1063,8 +1063,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           })()}
                         {/* Painel de Upsell */}
                         {upsellMes === comp && (() => {
-                          const metaDoMes = valorMetas.find(v => v.competencia_meta?.substring(0,7) === comp && v.regra !== 'upsell');
-                          const valorBase  = metaDoMes?.valor_considerado || 0;
+                          // Usa a meta gravada (não upsell) como base — pode ser de qualquer mês
+                          const metaBase   = valorMetas.find(v => v.regra !== 'upsell');
+                          const valorBase  = metaBase?.valor_considerado || 0;
                           const excedente  = Math.max(0, m.total_liberado - valorBase);
                           const _prodNorm  = (empresa?.produto_contratado||'').toLowerCase().trim();
                           const _isVB      = _prodNorm === 'vegas benefícios' || _prodNorm === 'vegas beneficios';
@@ -1231,18 +1232,21 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                 {temMeta&&!eMetaAberta&&(
                                   <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
                                 )}
-                                {/* Upsell: aparece quando já tem meta gravada E o mês tem valor maior que a meta */}
-                                {temMeta && m.total_liberado > 0 && (() => {
-                                  const metaDoMes = valorMetas.find(v => v.competencia_meta?.substring(0,7) === comp);
-                                  const valorMetaDoMes = metaDoMes?.valor_considerado || 0;
-                                  const excedente = m.total_liberado - valorMetaDoMes;
+                                {/* Upsell: apenas em meses POSTERIORES ao mês da meta, com excedente */}
+                                {m.total_liberado > 0 && valorMetas.length > 0 && (() => {
+                                  const metaBase    = valorMetas.find(v => v.regra !== 'upsell');
+                                  const mesMetaComp = metaBase?.competencia_meta?.substring(0,7) || '';
+                                  // Só mostra em meses APÓS o mês da meta
+                                  if (comp <= mesMetaComp) return null;
+                                  const valorBase   = metaBase?.valor_considerado || 0;
+                                  const excedente   = m.total_liberado - valorBase;
                                   const jaTemUpsell = valorMetas.some(v => v.competencia_meta?.substring(0,7) === comp && v.regra === 'upsell');
                                   const eUpsellAberto = upsellMes === comp;
                                   if (excedente <= 0 && !eUpsellAberto && !jaTemUpsell) return null;
                                   return (
                                     <button onClick={()=>setUpsellMes(eUpsellAberto?null:comp)}
                                       style={{background:eUpsellAberto?'rgba(8,145,178,0.15)':jaTemUpsell?'rgba(8,145,178,0.08)':'#f5f6fa',border:`1px solid ${eUpsellAberto?'rgba(8,145,178,0.4)':jaTemUpsell?'rgba(8,145,178,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eUpsellAberto?'#0891b2':jaTemUpsell?'#0891b2':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                      {eUpsellAberto?'✕':jaTemUpsell?'📈 Upsell':'📈 Upsell'}
+                                      {eUpsellAberto?'✕':'📈 Upsell'}
                                     </button>
                                   );
                                 })()}
