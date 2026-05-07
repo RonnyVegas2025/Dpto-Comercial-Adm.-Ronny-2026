@@ -37,10 +37,9 @@ async function fetchAll(query) {
 // e o map de ajustes, e retorna o objeto de meta ou null se ainda não elegível.
 function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower = (empresa.categoria || '').toLowerCase();
-  const isBenef  = catLower.includes('benefi') || catLower.includes('bonus') || catLower.includes('bônus');
-  const isConv   = catLower.includes('conv')   || catLower.includes('mobil');
-
-  if (!isBenef && !isConv) return null;
+  const isConv   = catLower.includes('conv') || catLower.includes('mobil');
+  // Benefícios = tudo que não é Convênio/Mobilidade (Alimentação, Bônus, Aux. Combustível, etc.)
+  const isBenef  = !isConv;
 
   // Pega todas as liberações da empresa ordenadas por competência
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
