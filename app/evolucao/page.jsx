@@ -426,7 +426,9 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           const calculada = meta?.elegivel && meta?.mesAlvo && !mesesBanco.includes(meta.mesAlvo.substring(0,7))
                             ? [{ competencia_meta: meta.mesAlvo.substring(0,10), valor_meta: meta.valorMeta, regra: meta.regra }]
                             : [];
-                          const todasEntradas = [...gravadas, ...calculada].sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
+                          const todasEntradas = [...gravadas, ...calculada]
+                            .filter(v => filtroMesMeta === 'todos' || v.competencia_meta?.substring(0,7) === filtroMesMeta)
+                            .sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
                           return todasEntradas;
                         })().map((entrada, idx, arr) => (
                           <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
