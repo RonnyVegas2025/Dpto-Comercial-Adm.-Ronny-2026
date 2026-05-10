@@ -236,10 +236,13 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.reduce((s, e) => {
-    // Soma todas as entradas do banco (meta + upsell)
+    // Soma entradas do banco filtradas pelo mês quando filtroMesMeta está ativo
     const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
     if (todasEntradas.length > 0) {
-      return s + todasEntradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
+      const filtradas = filtroMesMeta !== 'todos'
+        ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === filtroMesMeta)
+        : todasEntradas;
+      return s + filtradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
     }
     const valor = e._meta?.elegivel ? e._meta.valorMeta : 0;
     return s + (valor || 0);
