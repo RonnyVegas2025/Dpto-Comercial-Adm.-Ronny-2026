@@ -1008,12 +1008,15 @@ export default function Evolucao() {
     if (filtroMeta === 'na_meta')   arr = arr.filter(e => e._meta?.elegivel === true);
     if (filtroMeta === 'pendente')  arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
     if (filtroMeta === 'fora')      arr = arr.filter(e => !e._meta || e._meta?.regra === null);
-    // Filtro por mês específico da meta — usa mesAlvo calculado OU competencia_meta gravada
+    // Filtro por mês específico da meta — usa mesAlvo calculado OU competencia_meta gravada (incluindo upsell)
     if (filtroMesMeta !== 'todos') {
       arr = arr.filter(e => {
         // Checa meta calculada
         if (e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === filtroMesMeta) return true;
-        // Checa meta gravada no banco (fallback)
+        // Checa TODAS as entradas gravadas no banco (meta principal + upsell)
+        const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+        if (todasEntradas.some(v => v.competencia_meta?.substring(0,7) === filtroMesMeta)) return true;
+        // Fallback: chave específica
         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
         const gravado = chaveCalc
           ? metasGravadas[chaveCalc]
