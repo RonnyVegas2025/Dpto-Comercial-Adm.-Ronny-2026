@@ -175,16 +175,18 @@ export default function DashboardVendedor() {
         empIds.length ? supabase.from('valor_meta_empresa')
           .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra')
           .in('empresa_id', empIds)
-          .neq('regra','upsell')
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
 
       // Mapa de validade por consultor_id — fonte garantida dentro do carregarDados
       const validadeMap = Object.fromEntries((validadeRows||[]).map(v => [v.id, v.meta_valida_desde]));
-      // Mapa de metas gravadas por empresa_id (excluindo upsell)
+      // Mapa de metas por empresa_id: soma TODAS as entradas (meta + upsell)
       const vmetaEmpMap = {};
       for (const v of (vmetasRows||[])) {
-        if (!vmetaEmpMap[v.empresa_id]) vmetaEmpMap[v.empresa_id] = v;
+        if (!vmetaEmpMap[v.empresa_id]) {
+          vmetaEmpMap[v.empresa_id] = { ...v, valor_meta: 0 };
+        }
+        vmetaEmpMap[v.empresa_id].valor_meta += (v.valor_meta || 0);
       }
 
       // ── 3. Mapas de lookup ────────────────────────────────────────────
@@ -297,7 +299,12 @@ export default function DashboardVendedor() {
       // ── 6. KPIs ───────────────────────────────────────────────────────
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      const totalValorMeta = listaProcessada.reduce((s,e) => s + (e.valorMeta || 0), 0);
+      // totalValorMeta: soma das metas gravadas no banco (excluindo upsell)
+      // Se empresa tem meta gravada usa ela; senão usa cálculo inline
+      const totalValorMeta = listaProcessada.reduce((s,e) => {
+        const gravada = vmetaEmpMap[e.id];
+        return s + (gravada ? (gravada.valor_meta||0) : (e.valorMeta||0));
+      }, 0);
       // Meta total: soma individualmente por consultor respeitando meta_valida_desde
       // Cada consultor contribui: meta_mensal × meses válidos no período
       const meta = consultoresDaVisao.reduce((total, cons) => {
@@ -463,20 +470,51 @@ export default function DashboardVendedor() {
 
             {/* KPIs */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
-              {[
-                { label:'Empresas',            val: kpis.empresas,                                                                    cor:'#1a1d2e',   sub:`${kpis.comMov} movimentando` },
-                { label:'Mov. Real Acumulada', val: fmt(kpis.totalMovReal),                                                            cor:'#f0b429',   sub:`${mesesDisp.length||0} meses` },
-                { label:'Valor Apurado Meta',  val: fmt(apurado),                                                                      cor:'#34d399',   sub:'1ª rec. / 3º mês convênio' },
-                { label:'Meta Total Vendedor', val: kpis.metaTotal > 0 ? fmt(kpis.metaTotal) : '—',                                    cor:'#1a1d2e',   sub:`${fmt(kpis.meta||0)}/mês` },
-                { label:'% Meta Atingida',     val: kpis.metaTotal > 0 ? fmtPct(pctApurado) : '—',                                     cor: kpis.metaTotal>0 ? corApurado : '#8b92b0', sub:'apurado / meta' },
-                { label:'Crescendo',           val: kpis.crescendo,                                                                    cor:'#34d399',   sub:'empresas em alta' },
-              ].map(k => (
-                <div key={k.label} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                  <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{k.label}</div>
-                  <div style={{fontSize:'1.2rem',fontWeight:700,color:k.cor}}>{k.val}</div>
-                  {k.sub && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{k.sub}</div>}
+              {/* KPI: Empresas */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Empresas</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
+              </div>
+              {/* KPI: Movimentação — média/mês com total acumulado abaixo */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
+                  {mesSelecionado ? 'Movimentação do mês' : 'Média por mês'}
                 </div>
-              ))}
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#f0b429'}}>
+                  {mesSelecionado ? fmt(kpis.totalMovReal) : fmt(Math.round(kpis.totalMovReal/(mesesDisp.length||1)))}
+                </div>
+                {!mesSelecionado && (
+                  <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>
+                    total: {fmt(kpis.totalMovReal)} · {mesesDisp.length} meses
+                  </div>
+                )}
+                {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
+              </div>
+              {/* KPI: Valor Apurado Meta */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Valor Apurado Meta</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#34d399'}}>{fmt(apurado)}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>1ª rec. / 3º mês convênio</div>
+              </div>
+              {/* KPI: Meta Total */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Meta Total Vendedor</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.metaTotal>0?fmt(kpis.metaTotal):'—'}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmt(kpis.meta||0)}/mês</div>
+              </div>
+              {/* KPI: % Meta */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>% Meta Atingida</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:kpis.metaTotal>0?corApurado:'#8b92b0'}}>{kpis.metaTotal>0?fmtPct(pctApurado):'—'}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>apurado / meta</div>
+              </div>
+              {/* KPI: Crescendo */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Crescendo</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#34d399'}}>{kpis.crescendo}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>empresas em alta</div>
+              </div>
             </div>
 
             {/* Barras de progresso */}
