@@ -1043,12 +1043,14 @@ export default function Evolucao() {
     const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
     const totalMetaApurado = listaFiltrada.reduce((s, e) => {
-      // Soma meta principal + upsell (todas as entradas do banco para esta empresa)
+      // Soma entradas do banco filtradas pelo mês quando filtroMesMeta está ativo
       const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
       if (todasEntradas.length > 0) {
-        return s + todasEntradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
+        const entradasFiltradas = filtroMesMeta !== 'todos'
+          ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === filtroMesMeta)
+          : todasEntradas;
+        return s + entradasFiltradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
       }
-      // Senão usa cálculo inline
       const valor = e._meta?.elegivel ? e._meta.valorMeta : 0;
       return s + (valor || 0);
     }, 0);
@@ -1059,7 +1061,7 @@ export default function Evolucao() {
     }));
     const totalUpsell = listaFiltrada.filter(e => e._upsell).length;
     return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado, totalUpsell };
-  }, [listaFiltrada, meses, libMap, metasGravadas]);
+  }, [listaFiltrada, meses, libMap, metasGravadas, filtroMesMeta]);
 
   // Meses únicos de cadastro para o filtro
   // mesesCadastro em cascata: mostra só meses disponíveis com os filtros atuais (exceto o próprio filtro de cadastro)
