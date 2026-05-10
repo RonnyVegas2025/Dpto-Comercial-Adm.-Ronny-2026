@@ -236,12 +236,12 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.reduce((s, e) => {
-    // Busca meta gravada: chave exata ou fallback por empresa_id
-    const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-    const gravado = chaveCalc
-      ? metasGravadas[chaveCalc]
-      : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
-    const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+    // Soma todas as entradas do banco (meta + upsell)
+    const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+    if (todasEntradas.length > 0) {
+      return s + todasEntradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
+    }
+    const valor = e._meta?.elegivel ? e._meta.valorMeta : 0;
     return s + (valor || 0);
   }, 0);
   const naMeta = lista.filter(e => {
@@ -1043,8 +1043,13 @@ export default function Evolucao() {
     const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
     const totalMetaApurado = listaFiltrada.reduce((s, e) => {
-      const gravado = getMetaGravada(e);
-      const valor = gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0);
+      // Soma meta principal + upsell (todas as entradas do banco para esta empresa)
+      const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+      if (todasEntradas.length > 0) {
+        return s + todasEntradas.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
+      }
+      // Senão usa cálculo inline
+      const valor = e._meta?.elegivel ? e._meta.valorMeta : 0;
       return s + (valor || 0);
     }, 0);
     const porMes = meses.map(m => ({
