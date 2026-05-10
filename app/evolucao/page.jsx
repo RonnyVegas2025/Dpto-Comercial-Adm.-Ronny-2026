@@ -223,7 +223,7 @@ const bb = {
 };
 
 function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
-  metasGravadas = {}, onSalvarMeta, onRemoverMeta,
+  metasGravadas = {}, onSalvarMeta, onRemoverMeta, filtroMesMeta = 'todos',
 }) {
   const [pagina,       setPagina]       = useState(1);
   const [modalMeta,    setModalMeta]    = useState(null);
@@ -1511,6 +1511,7 @@ export default function Evolucao() {
             lista={listaFiltrada} meses={meses} libMap={libMap}
             colunas={colunasVisiveis} porPagina={porPagina}
             metasGravadas={metasGravadas}
+            filtroMesMeta={filtroMesMeta}
             onSalvarMeta={async (empresa, form) => {
               // Para upsell usa mesAlvoOverride; senão usa mesAlvo da meta normal
               const comp = form.mesAlvoOverride
