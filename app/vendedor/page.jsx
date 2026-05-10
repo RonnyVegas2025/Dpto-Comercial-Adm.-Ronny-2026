@@ -155,7 +155,7 @@ export default function DashboardVendedor() {
       const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
       const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
 
-      const [libsFiltradas, ajustes, libsTodas, validadeRows] = await Promise.all([
+      const [libsFiltradas, ajustes, libsTodas, validadeRows, vmetasRows] = await Promise.all([
         prodIds.length ? fetchAll(
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).gte('competencia', mesInicio).lte('competencia', mesFim)
@@ -171,10 +171,21 @@ export default function DashboardVendedor() {
         ) : Promise.resolve([]),
         // meta_valida_desde de cada consultor
         supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true).then(r => r.data||[]),
+        // metas gravadas no banco (excluindo upsell para não duplicar)
+        empIds.length ? supabase.from('valor_meta_empresa')
+          .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra')
+          .in('empresa_id', empIds)
+          .neq('regra','upsell')
+          .then(r => r.data||[]) : Promise.resolve([]),
       ]);
 
       // Mapa de validade por consultor_id — fonte garantida dentro do carregarDados
       const validadeMap = Object.fromEntries((validadeRows||[]).map(v => [v.id, v.meta_valida_desde]));
+      // Mapa de metas gravadas por empresa_id (excluindo upsell)
+      const vmetaEmpMap = {};
+      for (const v of (vmetasRows||[])) {
+        if (!vmetaEmpMap[v.empresa_id]) vmetaEmpMap[v.empresa_id] = v;
+      }
 
       // ── 3. Mapas de lookup ────────────────────────────────────────────
       const libMap = {}; // produto_id__comp → valor (mês filtrado)
@@ -252,7 +263,11 @@ export default function DashboardVendedor() {
 
           // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
           const validadeConsultor = validadeMap[cons.id] || null;
-          const metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+          // Prioriza meta gravada no banco; senão calcula inline
+          const metaGravada = vmetaEmpMap[e.id];
+          const metaCalc = metaGravada
+            ? { valor_meta: metaGravada.valor_meta, competencia_meta: metaGravada.competencia_meta, regra: metaGravada.regra, valor_bruto: 0, valor_considerado: metaGravada.valor_meta / (pct/100) }
+            : calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
 
           listaProcessada.push({
             ...e,
