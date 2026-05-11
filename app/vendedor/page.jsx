@@ -813,7 +813,8 @@ export default function DashboardVendedor() {
                               </td>
                             </tr>
                           ));
-                        })}
+                        })
+                      })()}
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
