@@ -16,6 +16,7 @@ const norm   = (s) => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const ABAS = [
   { key:'resumo',     label:'📊 Resumo'     },
   { key:'categorias', label:'📂 Categorias' },
+  { key:'equipes',    label:'👥 Equipes'    },
   { key:'carteira',   label:'📋 Carteira'   },
   { key:'produtos',   label:'🎯 Produtos'   },
   { key:'ranking',    label:'🏆 Ranking'    },
@@ -102,6 +103,11 @@ export default function DashboardVendedor() {
   const [filtroMetaMesLocal, setFiltroMetaMesLocal] = useState('');
   const [filtroMetaProduto,  setFiltroMetaProduto]  = useState('');
   const [filtroMetaCadastro, setFiltroMetaCadastro] = useState('');
+  const [carteiraPagina,     setCarteiraPagina]     = useState(1);
+  const [carteiraPorPag,     setCarteiraPorPag]     = useState(12);
+  const [filtroCategoria,    setFiltroCategoria]    = useState('');
+  const [colsVisiveis,       setColsVisiveis]       = useState(new Set(['empresa','produto','esperado','media','meta','status']));
+  const [mesesVisiveis,      setMesesVisiveis]      = useState(null); // null = todos
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
@@ -1093,112 +1099,270 @@ export default function DashboardVendedor() {
               }
             })()}
 
-            {/* ── CARTEIRA ── */}
-            {aba === 'carteira' && (
-              <div style={s.card}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
-                  <div style={s.cardTitle}>📋 Carteira de Empresas</div>
-                  <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>{listaFiltrada.length} de {lista.length} empresas</span>
-                </div>
-                <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
-                  <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e=>setBusca(e.target.value)} />
-                  <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
-                    <option value="">Todos os produtos</option>
-                    {[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
-                  </select>
-                  <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-                    <option value="">Todos os status</option>
-                    <option value="acima do esperado">✅ Acima do esperado</option>
-                    <option value="dentro do esperado">⚡ Dentro do esperado</option>
-                    <option value="abaixo do esperado">⚠️ Abaixo do esperado</option>
-                    <option value="sem movimentação">❌ Sem movimentação</option>
-                  </select>
-                </div>
-                <div style={{overflowX:'auto',borderRadius:8,border:'1px solid #f0f2f8'}}>
-                  <table style={s.table}>
-                    <thead>
-                      <tr style={{background:'#f9fafb'}}>
-                        {['Empresa','Produto','Vendedor','Esperado/mês',...mesesDisp.map(m=>fmtMes(m+'-01')),'Média Real','% Adere','Apurado Meta','Status'].map(h=>
-                          <th key={h} style={s.th}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listaFiltrada.map((e,i) => {
-                        const corSit = e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
-                        return (
-                          <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
-                            <td style={s.td}>
-                              <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}
-                                onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
-                                onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
-                                {e.nome}
-                              </a>
-                              <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>ID {e.produto_id}</div>
-                            </td>
-                            <td style={s.td}>{e.produto_contratado||'—'}</td>
-                            <td style={s.td}>
-                              <div style={{fontSize:'0.78rem'}}>{e.vendedor}</div>
-                              {e._pct < 100 && <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:4,padding:'1px 6px',fontSize:'0.65rem',fontWeight:700}}>{e._pct}%</span>}
-                            </td>
-                            <td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>
-                            {mesesDisp.map(m => {
-                              const v    = e.movPorMes[m] || 0;
-                              const pctV = e.esperadoMes > 0 ? (v / e.esperadoMes) * 100 : 0;
-                              const c    = pctV >= 90 ? '#34d399' : pctV >= 50 ? '#f0b429' : v > 0 ? '#f87171' : '#9ca3af';
+            {/* ── EQUIPES ── */}
+            {aba === 'equipes' && (() => {
+              // Agrupa por equipe
+              const equipeMap = {};
+              for (const e of lista) {
+                const equipe = e._cons?.equipe || e.gestor || 'Sem equipe';
+                const gestor = e.gestor || '—';
+                if (!equipeMap[equipe]) equipeMap[equipe] = { nome:equipe, gestor, vendedores:{}, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                const eq = equipeMap[equipe];
+                eq.empresas++;
+                const movE = mesesDisp.reduce((s,m)=>s+(e.movPorMes?.[m]||0),0);
+                eq.movTotal += movE;
+                eq.esperado += (e.esperadoMes||0);
+                if (movE===0) eq.semMov++;
+                const entBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
+                if (entBanco.length>0) { eq.naMeta++; eq.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0); }
+                // Agrupa vendedores dentro da equipe
+                const vNome = e.vendedor||'—';
+                if (!eq.vendedores[vNome]) eq.vendedores[vNome] = { nome:vNome, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                const vd = eq.vendedores[vNome];
+                vd.empresas++; vd.movTotal+=movE; vd.esperado+=(e.esperadoMes||0);
+                if(movE===0) vd.semMov++;
+                if(entBanco.length>0){vd.naMeta++;vd.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0);}
+              }
+              const equipes = Object.values(equipeMap).sort((a,b)=>b.movTotal-a.movTotal);
+              const meses2026E = mesesDisp.filter(m=>m>='2026-01');
+              const qtdM = meses2026E.length||1;
+
+              return (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  {/* KPIs gerais de equipes */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+                    {[
+                      {label:'Equipes',val:equipes.length,sub:'ativas'},
+                      {label:'Total Empresas',val:lista.length,cor:'#1a1d2e',sub:`${lista.filter(e=>mesesDisp.some(m=>(e.movPorMes?.[m]||0)>0)).length} movimentando`},
+                      {label:'Melhor Equipe',val:equipes[0]?.nome||'—',cor:'#f0b429',sub:fmt(equipes[0]?.movTotal||0)+' acum.'},
+                    ].map(k=>(
+                      <div key={k.label} style={{...s.card,padding:'14px 18px'}}>
+                        <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{k.label}</div>
+                        <div style={{fontSize:typeof k.val==='number'?'1.4rem':'1rem',fontWeight:700,color:k.cor||'#1a1d2e'}}>{k.val}</div>
+                        {k.sub&&<div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cards por equipe */}
+                  {equipes.map(eq => {
+                    const vendedores = Object.values(eq.vendedores).sort((a,b)=>b.movTotal-a.movTotal);
+                    const pctMov = eq.esperado*mesesDisp.length>0?(eq.movTotal/(eq.esperado*mesesDisp.length))*100:0;
+                    const pctMeta = (eq.esperado||1)>0?(eq.valorMeta/eq.esperado)*100:0;
+                    const cor = pctMov>=100?'#34d399':pctMov>=50?'#f0b429':'#f87171';
+                    return (
+                      <div key={eq.nome} style={{...s.card,padding:0,overflow:'hidden'}}>
+                        {/* Header da equipe */}
+                        <div style={{background:'linear-gradient(135deg,#1a1d2e,#252840)',padding:'16px 22px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
+                          <div>
+                            <div style={{fontWeight:700,fontSize:'1rem',color:'white'}}>👥 {eq.nome}</div>
+                            <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas · {vendedores.length} vendedor{vendedores.length!==1?'es':''}</div>
+                          </div>
+                          <div style={{display:'flex',gap:20'}}>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.65rem',textTransform:'uppercase'}}>Movimentação acum.</div>
+                              <div style={{color:'#f0b429',fontWeight:700,fontSize:'1.1rem'}}>{fmt(eq.movTotal)}</div>
+                            </div>
+                            <div style={{textAlign:'right',marginLeft:16}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.65rem',textTransform:'uppercase'}}>Meta apurada</div>
+                              <div style={{color:'#34d399',fontWeight:700,fontSize:'1.1rem'}}>{eq.valorMeta>0?fmt(eq.valorMeta):'—'}</div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Barra de progresso da equipe */}
+                        <div style={{padding:'8px 22px',background:'#f9fafb',borderBottom:'1px solid #e4e7ef',display:'flex',alignItems:'center',gap:12}}>
+                          <div style={{flex:1,background:'#e4e7ef',borderRadius:4,height:8,overflow:'hidden'}}>
+                            <div style={{height:'100%',width:`${Math.min(pctMov,100)}%`,background:cor,borderRadius:4}}/>
+                          </div>
+                          <span style={{color:cor,fontWeight:700,fontSize:'0.78rem',minWidth:40}}>{fmtPct(pctMov)}</span>
+                          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{eq.semMov} sem mov.</span>
+                        </div>
+                        {/* Ranking de vendedores da equipe */}
+                        <div style={{padding:'12px 22px'}}>
+                          <div style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Ranking de Vendedores</div>
+                          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                            {vendedores.map((vd,idx) => {
+                              const pctVd = vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
+                              const corVd = pctVd>=100?'#34d399':pctVd>=50?'#f0b429':'#f87171';
+                              const medalha = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
                               return (
-                                <td key={m} style={{...s.td,textAlign:'right',color:c,fontWeight:v>0?600:400}}>
-                                  {v > 0 ? fmt(v) : '—'}
-                                </td>
+                                <div key={vd.nome} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:idx===0?'rgba(240,180,41,0.05)':'transparent',borderRadius:8,border:idx===0?'1px solid rgba(240,180,41,0.15)':'1px solid transparent'}}>
+                                  <span style={{fontSize:'1rem',minWidth:28}}>{medalha}</span>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontWeight:600,fontSize:'0.82rem'}}>{vd.nome}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{vd.empresas} emp. · {vd.naMeta} na meta · {vd.semMov} sem mov.</div>
+                                  </div>
+                                  <div style={{textAlign:'right',minWidth:100}}>
+                                    <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.85rem'}}>{fmt(vd.movTotal)}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>média: {fmt(Math.round(vd.movTotal/qtdM))}/mês</div>
+                                  </div>
+                                  <div style={{textAlign:'right',minWidth:80}}>
+                                    <div style={{color:corVd,fontWeight:700,fontSize:'0.82rem'}}>{fmtPct(pctVd)}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>vs esperado</div>
+                                  </div>
+                                  {vd.valorMeta>0 && <div style={{textAlign:'right',minWidth:80}}>
+                                    <div style={{color:'#34d399',fontWeight:700,fontSize:'0.8rem'}}>{fmt(vd.valorMeta)}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>meta apurada</div>
+                                  </div>}
+                                </div>
                               );
                             })}
-                            <td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>
-                            <td style={s.td}>
-                              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                                <div style={{background:'#f0f2f8',borderRadius:3,height:5,width:50,overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:`${Math.min(e.aderencia,100)}%`,background:corSit}}></div>
-                                </div>
-                                <span style={{color:corSit,fontWeight:600,fontSize:'0.75rem'}}>{fmtPct(e.aderencia)}</span>
-                              </div>
-                            </td>
-                            {/* COLUNA: Apurado Meta — mostra regra + mês + valor */}
-                            <td style={{...s.td,textAlign:'right'}}>
-                              {e.valorMeta > 0 ? (
-                                <div>
-                                  <div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div>
-                                  <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:2}}>
-                                    {e.metaRegra==='beneficio' ? '1ª rec.' : e.metaRegra==='convenio' ? '3º mês' : '—'}
-                                    {' · '}{fmtMes(e.metaComp)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* ── CARTEIRA ── */}
+            {aba === 'carteira' && (() => {
+              const categoriasCart = [...new Set(lista.map(e=>e.categoria).filter(Boolean))].sort();
+              const listaCart = listaFiltrada.filter(e => !filtroCategoria || e.categoria === filtroCategoria);
+              const totalPags = Math.ceil(listaCart.length / carteiraPorPag);
+              const pagAtual  = Math.min(carteiraPagina, totalPags || 1);
+              const listaPage = listaCart.slice((pagAtual-1)*carteiraPorPag, pagAtual*carteiraPorPag);
+              const mesesMostar = mesesVisiveis || new Set(mesesDisp);
+              const mesesFiltrados = mesesDisp.filter(m => mesesMostar.has(m));
+              const colV = (k) => colsVisiveis.has(k);
+              const toggleCol = (k) => setColsVisiveis(prev => { const n=new Set(prev); n.has(k)?n.delete(k):n.add(k); return n; });
+              const toggleMes = (m) => setMesesVisiveis(prev => {
+                const base = prev || new Set(mesesDisp);
+                const n = new Set(base);
+                n.has(m) ? n.delete(m) : n.add(m);
+                return n;
+              });
+              return (
+                <div style={s.card}>
+                  {/* Header e filtros */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}}>
+                    <div style={s.cardTitle}>📋 Carteira — {listaCart.length} empresas</div>
+                    <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+                      <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>Por página:</span>
+                      {[12,50,100].map(n=>(
+                        <button key={n} onClick={()=>{setCarteiraPorPag(n);setCarteiraPagina(1);}}
+                          style={{background:carteiraPorPag===n?'#f0b429':'#f5f6fa',color:carteiraPorPag===n?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'3px 10px',fontSize:'0.75rem',cursor:'pointer',fontFamily:'inherit',fontWeight:carteiraPorPag===n?700:400}}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+                    <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e=>setBusca(e.target.value)} />
+                    <select style={s.sel} value={filtroCategoria} onChange={e=>{setFiltroCategoria(e.target.value);setCarteiraPagina(1);}}>
+                      <option value="">Todas as categorias</option>
+                      {categoriasCart.map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
+                      <option value="">Todos os produtos</option>
+                      {[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+                      <option value="">Todos os status</option>
+                      <option value="acima do esperado">✅ Acima</option>
+                      <option value="abaixo do esperado">⚠️ Abaixo</option>
+                      <option value="sem movimentação">❌ Sem mov.</option>
+                    </select>
+                  </div>
+                  {/* Seletor de colunas e meses */}
+                  <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap',alignItems:'center',background:'#f9fafb',borderRadius:8,padding:'8px 12px',border:'1px solid #e4e7ef'}}>
+                    <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginRight:4}}>Colunas:</span>
+                    {[['empresa','Empresa'],['produto','Produto'],['esperado','Esperado'],['media','Média'],['meta','Meta'],['status','Status']].map(([k,l])=>(
+                      <button key={k} onClick={()=>toggleCol(k)}
+                        style={{background:colV(k)?'rgba(240,180,41,0.12)':'#f0f2f8',color:colV(k)?'#b45309':'#6b7280',border:`1px solid ${colV(k)?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:colV(k)?700:400}}>
+                        {l}
+                      </button>
+                    ))}
+                    <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginLeft:8,marginRight:4}}>Meses:</span>
+                    {mesesDisp.map(m=>{
+                      const vis = !mesesVisiveis || mesesVisiveis.has(m);
+                      return (
+                        <button key={m} onClick={()=>toggleMes(m)}
+                          style={{background:vis?'rgba(96,165,250,0.1)':'#f0f2f8',color:vis?'#2563eb':'#6b7280',border:`1px solid ${vis?'rgba(96,165,250,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:vis?700:400}}>
+                          {fmtMes(m+'-01')}
+                        </button>
+                      );
+                    })}
+                    {mesesVisiveis && <button onClick={()=>setMesesVisiveis(null)} style={{background:'rgba(220,38,38,0.06)',color:'#dc2626',border:'1px solid rgba(220,38,38,0.15)',borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit'}}>Mostrar todos</button>}
+                  </div>
+                  <div style={{overflowX:'auto',borderRadius:8,border:'1px solid #f0f2f8'}}>
+                    <table style={s.table}>
+                      <thead>
+                        <tr style={{background:'#f9fafb'}}>
+                          {colV('empresa') && <th style={s.th}>Empresa</th>}
+                          {colV('produto') && <th style={s.th}>Produto</th>}
+                          <th style={s.th}>Vendedor</th>
+                          {colV('esperado') && <th style={s.th}>Esperado/mês</th>}
+                          {mesesFiltrados.map(m=><th key={m} style={{...s.th,textAlign:'right'}}>{fmtMes(m+'-01')}</th>)}
+                          {colV('media') && <th style={{...s.th,textAlign:'right'}}>Média</th>}
+                          {colV('meta') && <th style={{...s.th,textAlign:'right'}}>Meta</th>}
+                          {colV('status') && <th style={s.th}>Status</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listaPage.map((e,i) => {
+                          const corSit = e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
+                          return (
+                            <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
+                              {colV('empresa') && <td style={s.td}>
+                                <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}
+                                  onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
+                                  onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
+                                  {e.nome}
+                                </a>
+                                <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                              </td>}
+                              {colV('produto') && <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
+                              <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.vendedor}</span></td>
+                              {colV('esperado') && <td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>}
+                              {mesesFiltrados.map(m => {
+                                const v = e.movPorMes[m]||0;
+                                const pctV = e.esperadoMes>0?(v/e.esperadoMes)*100:0;
+                                const c2 = pctV>=90?'#34d399':pctV>=50?'#f0b429':v>0?'#f87171':'#9ca3af';
+                                return <td key={m} style={{...s.td,textAlign:'right',color:c2,fontWeight:v>0?600:400}}>{v>0?fmt(v):'—'}</td>;
+                              })}
+                              {colV('media') && <td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>}
+                              {colV('meta') && <td style={{...s.td,textAlign:'right'}}>
+                                {e.valorMeta>0 ? (
+                                  <div>
+                                    <div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec.':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div>
                                   </div>
-                                  {e._pct < 100 && (
-                                    <div style={{color:'#f0b429',fontSize:'0.6rem'}}>{e._pct}% de {fmt(e.metaBruto)}</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div>
-                                  <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>
-                                  {/* Mostra quantas liberações faltam para convênio */}
-                                  {(e.categoria||'').toLowerCase().includes('conv') || (e.categoria||'').toLowerCase().includes('mobil') ? (
-                                    <div style={{color:'#6b7280',fontSize:'0.6rem',marginTop:2}}>
-                                      {e.mesesAtivos}/3 meses
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )}
-                            </td>
-                            <td style={s.td}>
-                              <span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
-                            </td>
-                          </tr>
+                                ) : <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>}
+                              </td>}
+                              {colV('status') && <td style={s.td}>
+                                <span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
+                              </td>}
+                            </tr>
+                          );
+                        })}
+                        {listaPage.length===0 && <tr><td colSpan={20} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Paginação */}
+                  {totalPags > 1 && (
+                    <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:16,flexWrap:'wrap'}}>
+                      <button onClick={()=>setCarteiraPagina(p=>Math.max(1,p-1))} disabled={pagAtual===1}
+                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===1?'default':'pointer',color:pagAtual===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
+                      {Array.from({length:Math.min(totalPags,7)},(_,i)=>{
+                        const pg = totalPags<=7?i+1:pagAtual<=4?i+1:pagAtual>=totalPags-3?totalPags-6+i:pagAtual-3+i;
+                        return (
+                          <button key={pg} onClick={()=>setCarteiraPagina(pg)}
+                            style={{background:pagAtual===pg?'#f0b429':'#f5f6fa',color:pagAtual===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pagAtual===pg?700:400,fontSize:'0.82rem'}}>
+                            {pg}
+                          </button>
                         );
                       })}
-                      {listaFiltrada.length === 0 && (
-                        <tr><td colSpan={8+mesesDisp.length} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                      <button onClick={()=>setCarteiraPagina(p=>Math.min(totalPags,p+1))} disabled={pagAtual===totalPags}
+                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===totalPags?'default':'pointer',color:pagAtual===totalPags?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
+                      <span style={{color:'#8b92b0',fontSize:'0.72rem',marginLeft:4}}>Página {pagAtual} de {totalPags} · {listaCart.length} empresas</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── PRODUTOS ── */}
             {aba === 'produtos' && (
