@@ -387,7 +387,7 @@ export default function DashboardVendedor() {
         });
 
       setDados({
-        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta,
+        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows,
         lista: listaProcessada,
         kpis: {
           totalMovReal, totalEsperado, meta, metaTotal,
@@ -473,7 +473,7 @@ export default function DashboardVendedor() {
       )}
 
       {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta } = dados;
+        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corApurado = pctApurado >= 100 ? '#34d399' : pctApurado >= 70 ? '#f0b429' : '#f87171';
@@ -499,14 +499,23 @@ export default function DashboardVendedor() {
             </div>
 
             {/* KPIs */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:16}}>
-              {/* KPI: Empresas */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,marginBottom:16}}>
+              {/* KPI: Contratos Novos */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Empresas</div>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
+                <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
+                <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
               </div>
-              {/* KPI: Movimentação — média/mês com total acumulado abaixo */}
+              {/* KPI: Total Valor Esperado */}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Total Valor Esperado</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#a78bfa'}}>
+                  {fmt(lista.reduce((s,e)=>s+e.esperadoMes,0))}
+                </div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>potencial × peso/mês</div>
+              </div>
+              {/* KPI: Média/mês */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
                   {mesSelecionado ? 'Movimentação do mês' : 'Média por mês'}
@@ -514,11 +523,7 @@ export default function DashboardVendedor() {
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#f0b429'}}>
                   {mesSelecionado ? fmt(kpis.totalMovReal) : fmt(Math.round(kpis.totalMovReal/(mesesDisp.length||1)))}
                 </div>
-                {!mesSelecionado && (
-                  <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>
-                    total: {fmt(kpis.totalMovReal)} · {mesesDisp.length} meses
-                  </div>
-                )}
+                {!mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>total: {fmt(kpis.totalMovReal)} · {mesesDisp.length} meses</div>}
                 {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
               </div>
               {/* KPI: Valor Apurado Meta */}
@@ -534,36 +539,39 @@ export default function DashboardVendedor() {
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmt(kpis.meta||0)}/mês</div>
               </div>
               {/* KPI: % Meta */}
-              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+              <div style={{background:'#ffffff',border:`1px solid ${kpis.metaTotal>0?corApurado+'44':'#e4e7ef'}`,borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>% Meta Atingida</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:kpis.metaTotal>0?corApurado:'#8b92b0'}}>{kpis.metaTotal>0?fmtPct(pctApurado):'—'}</div>
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>apurado / meta</div>
-              </div>
-              {/* KPI: Crescendo */}
-              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Crescendo</div>
-                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#34d399'}}>{kpis.crescendo}</div>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>empresas em alta</div>
               </div>
             </div>
 
             {/* Barras de progresso */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-              {/* Barra 1: Real vs Esperado */}
+              {/* Barra 1: Média Real vs Esperada por mês */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 Mov. Real vs Esperada</span>
-                  <span style={{fontSize:'0.72rem',color:'#8b92b0'}}>{fmtPct(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0)}</span>
-                </div>
-                <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
-                  <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
-                    width:`${Math.min(kpis.totalEsperado>0?(kpis.totalMovReal/kpis.totalEsperado)*100:0,100)}%`,
-                    background:'linear-gradient(90deg,#34d399,#059669)'}}></div>
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
-                  <span style={{color:'#34d399',fontWeight:600}}>{fmt(kpis.totalMovReal)} realizados</span>
-                  <span>meta: {fmt(kpis.totalEsperado)}</span>
-                </div>
+                {(() => {
+                  const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
+                  const mediaMes   = mesSelecionado ? kpis.totalMovReal : Math.round(kpis.totalMovReal/(mesesDisp.length||1));
+                  const pctMov     = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
+                  const corMov     = pctMov >= 90 ? '#34d399' : pctMov >= 50 ? '#f0b429' : '#f87171';
+                  return (
+                    <>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                        <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 {mesSelecionado?'Mov. Real vs Esperada':'Média Mensal vs Esperada'}</span>
+                        <span style={{fontSize:'0.72rem',color:corMov,fontWeight:700}}>{fmtPct(pctMov)}</span>
+                      </div>
+                      <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
+                        <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',width:`${Math.min(pctMov,100)}%`,background:`linear-gradient(90deg,${corMov},${corMov}aa)`}}></div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
+                        <span style={{color:corMov,fontWeight:600}}>{fmt(mediaMes)} {mesSelecionado?'realizados':'média/mês'}</span>
+                        <span>esperado: {fmt(esperMes)}/mês</span>
+                      </div>
+                      {!mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:4}}>total acumulado: {fmt(kpis.totalMovReal)} em {mesesDisp.length} meses</div>}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Barra 2: Apurado na Meta vs Meta do Vendedor */}
@@ -609,24 +617,49 @@ export default function DashboardVendedor() {
                 ) : (
                   <div style={{display:'flex',gap:14,marginTop:20,flexWrap:'wrap'}}>
                     {mesesDisp.map(m => {
-                      const totalMes   = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
-                      const esperMes   = lista.reduce((s,e) => s+e.esperadoMes, 0);
-                      const pctMes     = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
-                      const corMes     = pctMes >= 90 ? '#34d399' : pctMes >= 50 ? '#f0b429' : '#f87171';
+                      const totalMes    = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
+                      const esperMes    = lista.reduce((s,e) => s+e.esperadoMes, 0);
+                      const pctMes      = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
+                      const corMes      = pctMes >= 90 ? '#34d399' : pctMes >= 50 ? '#f0b429' : '#f87171';
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
+                      // Contratos novos: empresas cadastradas neste mês
+                      const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
+                      // Meta considerada no mês
+                      const metaMes     = (vmetasRows||[])
+                        .filter(v => lista.some(e=>e.id===v.empresa_id) && v.competencia_meta?.substring(0,7)===m)
+                        .reduce((s,v)=>s+(v.valor_meta||0),0);
                       return (
-                        <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 180px',minWidth:180}}>
+                        <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
                           <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
-                          <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:4}}>{fmt(totalMes)}</div>
-                          <div style={{color:'#8b92b0',fontSize:'0.75rem',marginBottom:10}}>{empresasMes} empresas movimentando</div>
+                          <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:2}}>{fmt(totalMes)}</div>
+                          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:10}}>{empresasMes} movimentando</div>
+                          {/* Barra vs esperado */}
                           <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:4}}>
                             <span style={{color:'#8b92b0'}}>vs esperado</span>
                             <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
                           </div>
-                          <div style={{background:'#e4e7ef',borderRadius:4,height:6,overflow:'hidden'}}>
+                          <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:10}}>
                             <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
                           </div>
-                          <div style={{marginTop:8,fontSize:'0.68rem',color:'#8b92b0'}}>esperado: {fmt(esperMes)}</div>
+                          {/* Informações extras */}
+                          <div style={{borderTop:'1px solid #e4e7ef',paddingTop:8,display:'flex',flexDirection:'column',gap:5}}>
+                            {metaMes > 0 && (
+                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
+                                <span style={{color:'#6b7280'}}>🎯 Meta considerada</span>
+                                <span style={{color:'#34d399',fontWeight:700}}>{fmt(metaMes)}</span>
+                              </div>
+                            )}
+                            {novosMes > 0 && (
+                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
+                                <span style={{color:'#6b7280'}}>📋 Contratos novos</span>
+                                <span style={{color:'#60a5fa',fontWeight:700}}>{novosMes}</span>
+                              </div>
+                            )}
+                            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
+                              <span style={{color:'#6b7280'}}>📊 Esperado</span>
+                              <span style={{color:'#8b92b0'}}>{fmt(esperMes)}</span>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
