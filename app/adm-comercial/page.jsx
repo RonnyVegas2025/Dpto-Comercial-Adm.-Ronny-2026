@@ -665,14 +665,20 @@ const COR_PERFIL = {
 
 // Páginas disponíveis para configurar permissões
 const PAGINAS_CONFIG = [
-  { key:'inicio',             label:'🏠 Início',           desc:'Página inicial do sistema' },
-  { key:'vendedor',           label:'👤 Vendedor',          desc:'Dashboard de performance e metas' },
-  { key:'movimentacoes',      label:'📥 Importações',       desc:'Importar movimentação, meta e empresas' },
-  { key:'gestao',             label:'⚙️ Gestão',            desc:'Painel de empresas e contratos' },
-  { key:'relatorios',         label:'📋 Relatórios',        desc:'Exportar relatórios e conferências' },
-  { key:'relatorio-empresas', label:'📑 Rel. Empresas',     desc:'Relatório customizável de empresas' },
-  { key:'agregados',          label:'📦 Agregados',         desc:'WellHub, Total Pass, Telemedicina' },
-  { key:'adm-comercial',      label:'🏢 Adm Comercial',     desc:'Usuários, equipes e vendedores' },
+  { key: 'inicio',             label: '🏠 Início',              desc: 'Página inicial do sistema' },
+  { key: 'vendedor',           label: '👤 Vendedor',             desc: 'Dashboard de performance e metas' },
+  { key: 'movimentacoes',      label: '📥 Importações',          desc: 'Importar movimentação, meta e empresas' },
+  { key: 'gestao',             label: '⚙️ Gestão',               desc: 'Painel de empresas e contratos' },
+  { key: 'relatorios',         label: '📋 Relatórios',           desc: 'Exportar relatórios e conferências' },
+  { key: 'relatorio_empresas', label: '📑 Rel. Empresas',        desc: 'Relatório customizável de empresas' },
+  { key: 'agregados',          label: '🧩 Agregados',            desc: 'WellHub, Total Pass, Telemedicina' },
+  // ── Adm Comercial — subpáginas individuais ──────────────────
+  { key: 'adm_vendedores',     label: '👤 Adm › Vendedores',     desc: 'Cadastro e gestão de vendedores' },
+  { key: 'adm_equipes',        label: '🏷️ Adm › Equipes',        desc: 'Crie e edite as equipes comerciais' },
+  { key: 'adm_diretores',      label: '👔 Adm › Diretores',      desc: 'Cadastro de diretores' },
+  { key: 'adm_gestores',       label: '👥 Adm › Gestores',       desc: 'Cadastro de gestores vinculados' },
+  { key: 'adm_parceiros',      label: '🤝 Adm › Parceiros',      desc: 'Cadastro e comissões de parceiros' },
+  { key: 'adm_usuarios',       label: '🔐 Adm › Usuários',       desc: 'Usuários e permissões do sistema' },
 ];
 
 // Permissões padrão por perfil (base ao selecionar perfil)
