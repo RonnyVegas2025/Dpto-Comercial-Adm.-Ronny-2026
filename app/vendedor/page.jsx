@@ -1070,8 +1070,7 @@ export default function DashboardVendedor() {
                 </div>
               );
               } catch(err) {
-                console.error('[Categorias]', err);
-                return <div style={{...s.card,padding:32,color:'#f87171'}}>Erro ao carregar categorias. Verifique o console.</div>;
+                return <div style={{...s.card,padding:32,color:'#f87171'}}>Erro: {String(err?.message||err)}</div>;
               }
             })()}
 
