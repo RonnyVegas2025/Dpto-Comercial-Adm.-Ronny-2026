@@ -299,11 +299,19 @@ export default function DashboardVendedor() {
       // ── 6. KPIs ───────────────────────────────────────────────────────
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: soma das metas gravadas no banco (excluindo upsell)
-      // Se empresa tem meta gravada usa ela; senão usa cálculo inline
+      // totalValorMeta: soma das metas gravadas no banco filtradas pelo mês selecionado
       const totalValorMeta = listaProcessada.reduce((s,e) => {
-        const gravada = vmetaEmpMap[e.id];
-        return s + (gravada ? (gravada.valor_meta||0) : (e.valorMeta||0));
+        const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
+        if (todasEntradas.length > 0) {
+          const filtradas = mesSelecionado
+            ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
+            : todasEntradas;
+          return s + filtradas.reduce((sv,v) => sv + (v.valor_meta||0), 0);
+        }
+        // Sem meta gravada: usa cálculo inline (só conta se mês da meta bate)
+        const metaComp = e.metaComp?.substring(0,7);
+        if (mesSelecionado && metaComp !== mesSelecionado) return s;
+        return s + (e.valorMeta||0);
       }, 0);
       // Meta total: soma individualmente por consultor respeitando meta_valida_desde
       // Cada consultor contribui: meta_mensal × meses válidos no período
@@ -356,8 +364,30 @@ export default function DashboardVendedor() {
       });
       const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
 
+      // Empresas na meta: lista por mês para análise
+      const empresasNaMeta = listaProcessada
+        .map(e => {
+          const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
+          const entradasFiltradas = mesSelecionado
+            ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
+            : todasEntradas;
+          if (entradasFiltradas.length === 0) {
+            // Sem meta gravada — usa inline
+            const metaComp = e.metaComp?.substring(0,7);
+            if (!e.valorMeta || (mesSelecionado && metaComp !== mesSelecionado)) return null;
+            return { ...e, _metaEntradas: [{ competencia_meta: e.metaComp, valor_meta: e.valorMeta, regra: e.metaRegra }] };
+          }
+          return { ...e, _metaEntradas: entradasFiltradas };
+        })
+        .filter(Boolean)
+        .sort((a,b) => {
+          const va = a._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0);
+          const vb = b._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0);
+          return vb - va;
+        });
+
       setDados({
-        consultor, consultoresDaVisao, mesesDisp,
+        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta,
         lista: listaProcessada,
         kpis: {
           totalMovReal, totalEsperado, meta, metaTotal,
@@ -443,7 +473,7 @@ export default function DashboardVendedor() {
       )}
 
       {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao } = dados;
+        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corApurado = pctApurado >= 100 ? '#34d399' : pctApurado >= 70 ? '#f0b429' : '#f87171';
@@ -602,6 +632,60 @@ export default function DashboardVendedor() {
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── EMPRESAS NA META ── */}
+            {aba === 'resumo' && empresasNaMeta && empresasNaMeta.length > 0 && (
+              <div style={{...s.card,marginBottom:16}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
+                  <div style={s.cardTitle}>🎯 Empresas na Meta {mesSelecionado ? `— ${fmtMes(mesSelecionado+'-01')}` : '— Todos os meses'}</div>
+                  <span style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{empresasNaMeta.length} empresa{empresasNaMeta.length!==1?'s':''} · {fmt(kpis.totalValorMeta)} apurado</span>
+                </div>
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
+                    <thead>
+                      <tr style={{borderBottom:'2px solid #e4e7ef'}}>
+                        {['Empresa','Produto','Mês Meta','Regra','Valor Base','Comissão'].map(h=>(
+                          <th key={h} style={{padding:'8px 12px',textAlign:h==='Valor Base'||h==='Comissão'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {empresasNaMeta.flatMap((e,i) =>
+                        e._metaEntradas.map((entrada, j) => (
+                          <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
+                            <td style={{padding:'10px 12px',fontWeight:600}}>
+                              <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none',fontWeight:600}}>{e.nome}</a>
+                              <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                            </td>
+                            <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                            <td style={{padding:'10px 12px'}}>
+                              <span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>
+                                {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
+                              </span>
+                            </td>
+                            <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>
+                              {entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}
+                            </td>
+                            <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>
+                              {fmt(entrada.valor_considerado||0)}
+                            </td>
+                            <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:entrada.regra==='upsell'?'#d97706':'#34d399'}}>
+                              {fmt(entrada.valor_meta)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
+                        <td colSpan={5} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>TOTAL</td>
+                        <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>{fmt(kpis.totalValorMeta)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             )}
 
