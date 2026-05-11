@@ -329,19 +329,15 @@ export default function DashboardVendedor() {
       // ── 6. KPIs ───────────────────────────────────────────────────────
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: soma das metas gravadas no banco filtradas pelo mês selecionado
-      // Usa entrada específica do consultor (não soma todas)
+      // totalValorMeta: usa e.valorMeta que já foi calculado corretamente por empresa/consultor
+      // e.valorMeta vem do banco (entradaBanco) ou do cálculo inline, já filtrado pelo consultor correto
       const totalValorMeta = listaProcessada.reduce((s,e) => {
-        const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
-        if (todasEntradas.length > 0) {
-          const filtradas = mesSelecionado
-            ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
-            : todasEntradas;
-          return s + filtradas.reduce((sv,v) => sv + (v.valor_meta||0), 0);
+        if (mesSelecionado) {
+          // Filtra pelo mês da competencia_meta
+          const metaMes = e.metaComp?.substring(0,7);
+          if (metaMes !== mesSelecionado) return s;
         }
-        const metaComp = e.metaComp?.substring(0,7);
-        if (mesSelecionado && metaComp !== mesSelecionado) return s;
-        return s + (e.valorMeta||0);
+        return s + (e.valorMeta || 0);
       }, 0);
       // Meta total: soma individualmente por consultor respeitando meta_valida_desde
       // Cada consultor contribui: meta_mensal × meses válidos no período
@@ -420,14 +416,9 @@ export default function DashboardVendedor() {
       const metaPorMes = {};
       for (const m of mesesDisp) {
         metaPorMes[m] = listaProcessada.reduce((s,e) => {
-          const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
-          if (todasEntradas.length > 0) {
-            const filtradas = todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
-            return s + filtradas.reduce((sv,v) => sv + (v.valor_meta||0), 0);
-          }
-          // Sem entrada no banco: usa inline se metaComp bate com o mês
-          const metaComp = e.metaComp?.substring(0,7);
-          if (metaComp === m) return s + (e.valorMeta||0);
+          // Usa e.valorMeta já calculado corretamente por empresa/consultor
+          const metaMes = e.metaComp?.substring(0,7);
+          if (metaMes === m) return s + (e.valorMeta||0);
           return s;
         }, 0);
       }
