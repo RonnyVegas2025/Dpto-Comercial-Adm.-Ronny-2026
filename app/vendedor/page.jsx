@@ -365,11 +365,13 @@ export default function DashboardVendedor() {
       const rankingMap = {};
       listaProcessada.forEach(e => {
         const cid = e._cons.id;
-        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0 };
-        rankingMap[cid].movReal   += e.mediaMovMes;
-        rankingMap[cid].esperado  += e.esperadoMes;
-        rankingMap[cid].empresas  += 1;
-        rankingMap[cid].valorMeta += e.valorMeta || 0;
+        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
+        rankingMap[cid].movReal      += e.mediaMovMes;
+        rankingMap[cid].esperado     += e.esperadoMes;
+        rankingMap[cid].empresas     += 1;
+        rankingMap[cid].valorMeta    += e.valorMeta || 0;
+        rankingMap[cid].fechadoBruto += e.potencial_movimentacao || 0;
+        if ((e.valorMeta||0) > 0) rankingMap[cid].naMeta += 1;
       });
       const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
 
@@ -1027,38 +1029,32 @@ export default function DashboardVendedor() {
                   </div>
 
                   {/* ── GRÁFICOS DE PIZZA ── */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                  {(()=>{
+                    const COR_CATEGORIA = {};
+                    const PALETA = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
+                    [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).forEach((cat,i)=>{ COR_CATEGORIA[cat.nome]=PALETA[i%PALETA.length]; });
+                    function pizzaPath(inicio,fim,r=80,ri=40){
+                      if(fim-inicio>=359.9) return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
+                      const xy=(d,rv)=>({x:100+rv*Math.cos(d*Math.PI/180),y:100+rv*Math.sin(d*Math.PI/180)});
+                      const s1=xy(inicio,r),e1=xy(fim,r),s2=xy(fim,ri),e2=xy(inicio,ri),lg=fim-inicio>180?1:0;
+                      return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
+                    }
+                    return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
 
                     {/* Pizza 1: % do Esperado/mês por categoria */}
                     {(()=>{
                       const totalEsp = cats.reduce((s,c)=>s+c.esperadoMes,0);
                       if (totalEsp === 0) return null;
-                      const CORES = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
 
-                      // Calcula fatias
-                      let angulo = -90; // começa no topo
-                      const fatias = cats.map((cat, i) => {
+                      // Ordena do maior para o menor + usa cores fixas
+                      let angulo = -90;
+                      const fatias = [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).map((cat, i) => {
                         const pct   = cat.esperadoMes / totalEsp;
                         const graus = pct * 360;
                         const inicio = angulo;
                         angulo += graus;
-                        return { ...cat, pct, graus, inicio, cor: CORES[i % CORES.length] };
+                        return { ...cat, pct, graus, inicio, cor: COR_CATEGORIA[cat.nome] || PALETA[i % PALETA.length] };
                       });
-
-                      // Converte ângulo para coordenadas SVG (cx=100, cy=100, r=80)
-                      function polarToXY(deg, r=80) {
-                        const rad = (deg * Math.PI) / 180;
-                        return { x: 100 + r * Math.cos(rad), y: 100 + r * Math.sin(rad) };
-                      }
-                      function fatiaPath(inicio, fim, r=80, ri=40) {
-                        if (fim - inicio >= 359.9) {
-                          return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
-                        }
-                        const s1 = polarToXY(inicio, r), e1 = polarToXY(fim, r);
-                        const s2 = polarToXY(fim, ri),   e2 = polarToXY(inicio, ri);
-                        const lg = fim - inicio > 180 ? 1 : 0;
-                        return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
-                      }
 
                       return (
                         <div style={{...s.card,padding:'20px 24px'}}>
@@ -1069,7 +1065,7 @@ export default function DashboardVendedor() {
                             {/* SVG donut */}
                             <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
                               {fatias.map((f,i) => (
-                                <path key={i} d={fatiaPath(f.inicio, f.inicio+f.graus)}
+                                <path key={i} d={pizzaPath(f.inicio, f.inicio+f.graus)}
                                   fill={f.cor} stroke="white" strokeWidth="1.5"
                                   style={{transition:'opacity 0.2s',cursor:'default'}}/>
                               ))}
@@ -1109,36 +1105,24 @@ export default function DashboardVendedor() {
                     {(()=>{
                       const totalMeta = cats.reduce((s,c)=>s+c.valorMeta,0);
                       if (totalMeta === 0) return null;
-                      const CORES = ['#34d399','#f0b429','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
 
+                      // Ordena do maior para o menor + usa MESMAS cores do pizza 1
                       let angulo = -90;
-                      const fatias = cats.filter(c=>c.valorMeta>0).map((cat, i) => {
-                        const pct   = cat.valorMeta / totalMeta;
-                        const graus = pct * 360;
-                        const inicio = angulo;
-                        angulo += graus;
-                        return { ...cat, pct, graus, inicio, cor: CORES[i % CORES.length] };
-                      });
+                      const fatias = [...cats].filter(c=>c.valorMeta>0)
+                        .sort((a,b)=>b.valorMeta-a.valorMeta)
+                        .map((cat, i) => {
+                          const pct   = cat.valorMeta / totalMeta;
+                          const graus = pct * 360;
+                          const inicio = angulo;
+                          angulo += graus;
+                          return { ...cat, pct, graus, inicio, cor: COR_CATEGORIA[cat.nome] || PALETA[i % PALETA.length] };
+                        });
 
                       if (fatias.length === 0) return (
                         <div style={{...s.card,padding:'20px 24px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem'}}>
                           Nenhuma meta apurada nesta categoria ainda
                         </div>
                       );
-
-                      function polarToXY(deg, r=80) {
-                        const rad = (deg * Math.PI) / 180;
-                        return { x: 100 + r * Math.cos(rad), y: 100 + r * Math.sin(rad) };
-                      }
-                      function fatiaPath(inicio, fim, r=80, ri=40) {
-                        if (fim - inicio >= 359.9) {
-                          return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
-                        }
-                        const s1 = polarToXY(inicio, r), e1 = polarToXY(fim, r);
-                        const s2 = polarToXY(fim, ri),   e2 = polarToXY(inicio, ri);
-                        const lg = fim - inicio > 180 ? 1 : 0;
-                        return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
-                      }
 
                       return (
                         <div style={{...s.card,padding:'20px 24px'}}>
@@ -1149,7 +1133,7 @@ export default function DashboardVendedor() {
                             {/* SVG donut */}
                             <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
                               {fatias.map((f,i) => (
-                                <path key={i} d={fatiaPath(f.inicio, f.inicio+f.graus)}
+                                <path key={i} d={pizzaPath(f.inicio, f.inicio+f.graus)}
                                   fill={f.cor} stroke="white" strokeWidth="1.5"/>
                               ))}
                               <circle cx="100" cy="100" r="36" fill="white"/>
@@ -1183,8 +1167,8 @@ export default function DashboardVendedor() {
                       );
                     })()}
 
-                  </div>{/* fim grid pizzas */}
-
+                  </div>;
+                  })()}
                 </div>
               );
               } catch(err) {
@@ -1446,33 +1430,33 @@ export default function DashboardVendedor() {
                       {/* ── RODAPÉ COM TOTAIS (lista completa filtrada, não só a página) ── */}
                       {listaCart.length > 0 && (
                         <tfoot>
-                          <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                            {colV('empresa') && <td style={{...s.td,fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
+                          <tr style={{borderTop:'2px solid #1a1d2e',background:'#1a1d2e'}}>
+                            {colV('empresa') && <td style={{...s.td,fontWeight:700,color:'#ffffff',fontSize:'0.8rem',whiteSpace:'nowrap'}}>
                               TOTAL ({listaCart.length} empresas)
                             </td>}
-                            {colV('produto') && <td style={s.td}/>}
-                            <td style={s.td}/>{/* vendedor */}
-                            {colV('esperado') && <td style={{...s.td,fontWeight:700,color:'#a78bfa'}}>
+                            {colV('produto') && <td style={{...s.td,background:'#1a1d2e'}}/>}
+                            <td style={{...s.td,background:'#1a1d2e'}}/>{/* vendedor */}
+                            {colV('esperado') && <td style={{...s.td,fontWeight:700,color:'#c4b5fd',textAlign:'right'}}>
                               {fmt(listaCart.reduce((s,e)=>s+(e.esperadoMes||0),0))}
                             </td>}
                             {mesesFiltrados.map(m => (
-                              <td key={m} style={{...s.td,textAlign:'right',fontWeight:700,color:'#f0b429'}}>
+                              <td key={m} style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>
                                 {(()=>{
                                   const t = listaCart.reduce((s,e)=>s+(e.movPorMes?.[m]||0),0);
-                                  return t > 0 ? fmt(t) : <span style={{color:'#d1d5e8'}}>—</span>;
+                                  return t > 0 ? fmt(t) : <span style={{color:'#4b5563'}}>—</span>;
                                 })()}
                               </td>
                             ))}
-                            {colV('media') && <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#f0b429'}}>
+                            {colV('media') && <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>
                               {fmt(listaCart.reduce((s,e)=>s+(e.mediaMovMes||0),0))}
                             </td>}
-                            {colV('meta') && <td style={{...s.td,textAlign:'right',fontWeight:800,color:'#34d399'}}>
+                            {colV('meta') && <td style={{...s.td,textAlign:'right',fontWeight:800,color:'#6ee7b7'}}>
                               {(()=>{
                                 const t = listaCart.reduce((s,e)=>s+(e.valorMeta||0),0);
-                                return t > 0 ? fmt(t) : <span style={{color:'#d1d5e8'}}>—</span>;
+                                return t > 0 ? fmt(t) : <span style={{color:'#4b5563'}}>—</span>;
                               })()}
                             </td>}
-                            {colV('status') && <td style={s.td}/>}
+                            {colV('status') && <td style={{...s.td,background:'#1a1d2e'}}/>}
                           </tr>
                         </tfoot>
                       )}
@@ -1539,31 +1523,62 @@ export default function DashboardVendedor() {
             {aba === 'ranking' && (
               <div style={s.card}>
                 <div style={s.cardTitle}>🏆 Ranking — Vol. Meta Apurada por Vendedor</div>
-                <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:8}}>
                   {[...ranking].sort((a,b) => b.valorMeta - a.valorMeta).map((c,i) => {
-                    const medal  = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
-                    const corM   = i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
-                    const pctAd  = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
-                    const cor    = pctAd >= 90 ? '#34d399' : pctAd >= 50 ? '#f0b429' : '#f87171';
-                    const isAtu  = c.id === consultorId;
-                    const maxMeta = Math.max(...ranking.map(x=>x.valorMeta), 1);
+                    const medal    = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
+                    const corM     = i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
+                    const isAtu    = c.id === consultorId;
+                    const maxMeta  = Math.max(...ranking.map(x=>x.valorMeta), 1);
+                    const qtdM     = mesesDisp.filter(m=>m>='2026-01').length || 1;
+                    // Meta do consultor
+                    const consData    = consultores.find(cc=>cc.id===c.id);
+                    const metaConsult = consData?.meta_mensal || 0;
+                    const pctMeta     = metaConsult > 0 ? (c.valorMeta / metaConsult) * 100 : 0;
+                    const corMeta     = corPct(pctMeta);
+                    // Aderência mov vs esperado
+                    const pctAdere    = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
+                    const corAdere    = corPct(pctAdere);
                     return (
-                      <div key={c.id} style={{borderRadius:10,overflow:'hidden',background:isAtu?'#fff8e6':'#f9fafb',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`}}>
-                        <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',flexWrap:'wrap'}}>
-                          <span style={{fontWeight:700,fontSize:'1rem',color:corM,minWidth:32,textAlign:'center'}}>{medal}</span>
-                          <div style={{flex:1}}>
+                      <div key={c.id} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`,background:isAtu?'rgba(255,248,230,0.6)':'#fafafa'}}>
+                        {/* Linha principal */}
+                        <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap'}}>
+                          <span style={{fontWeight:700,fontSize:'1rem',minWidth:28,textAlign:'center',color:corM}}>{medal}</span>
+                          <div style={{flex:1,minWidth:120}}>
                             <div style={{fontWeight:700,fontSize:'0.88rem',color:isAtu?'#b45309':'#1a1d2e'}}>{c.nome}</div>
-                            <div style={{fontSize:'0.72rem',color:'#8b92b0',marginTop:2}}>{c.empresas} empresa{c.empresas>1?'s':''} · gestor: {c.gestor}</div>
+                            <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>
+                              {c.empresas} emp. · {c.naMeta||0} na meta · gestor: {c.gestor}
+                            </div>
                           </div>
-                          <div style={{textAlign:'right'}}>
-                            <div style={{color:'#34d399',fontWeight:700,fontSize:'1rem'}}>{fmt(c.valorMeta)}</div>
-                            <div style={{fontSize:'0.65rem',color:'#8b92b0',marginTop:1}}>meta apurada</div>
-                            <div style={{fontSize:'0.68rem',color:'#f0b429',marginTop:2}}>{fmt(c.movReal)} mov. real</div>
+                          {/* Bloco: Mov. Acum. */}
+                          <div style={{textAlign:'right',minWidth:90}}>
+                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
+                            <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.movReal)}</div>
+                            <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>média: {fmt(Math.round(c.movReal/qtdM))}/mês</div>
+                          </div>
+                          {/* Bloco: Fechado Bruto */}
+                          <div style={{textAlign:'right',minWidth:90}}>
+                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
+                            <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.fechadoBruto||0)}</div>
+                            <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{c.empresas} contratos</div>
+                          </div>
+                          {/* Bloco: Esperado/mês */}
+                          <div style={{textAlign:'right',minWidth:90}}>
+                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
+                            <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.esperado)}</div>
+                            <div style={{color:corAdere,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctAdere)} realizado</div>
+                          </div>
+                          {/* Bloco: Meta Apurada */}
+                          <div style={{textAlign:'right',minWidth:90}}>
+                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
+                            <div style={{color:'#34d399',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.valorMeta)}</div>
+                            {metaConsult > 0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
                           </div>
                           {isAtu && <span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
                         </div>
-                        <div style={{height:3,background:'#f5f6fa'}}>
-                          <div style={{height:'100%',width:`${(c.valorMeta/maxMeta)*100}%`,background:isAtu?'#f0b429':i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}></div>
+                        {/* Barra de progresso da meta */}
+                        <div style={{height:3,background:'#f0f2f8'}}>
+                          <div style={{height:'100%',width:`${Math.min(metaConsult>0?pctMeta:(c.valorMeta/maxMeta)*100,100)}%`,
+                            background:isAtu?'#f0b429':metaConsult>0?corMeta:i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}/>
                         </div>
                       </div>
                     );
