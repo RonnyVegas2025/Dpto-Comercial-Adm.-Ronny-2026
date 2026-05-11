@@ -970,8 +970,8 @@ export default function DashboardVendedor() {
                 catMap[cat].movTotal    += movE;
                 catMap[cat].esperadoMes += (e.esperadoMes||0);
                 catMap[cat].esperadoAcum += (e.esperadoMes||0) * (mesesDisp||[]).length;
-                const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                if (entradasBanco.length > 0) { catMap[cat].naMeta++; catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0); }
+                // CORRIGIDO: usa e.valorMeta (calculado por consultor, com peso correto)
+                if ((e.valorMeta||0) > 0) { catMap[cat].naMeta++; catMap[cat].valorMeta += (e.valorMeta||0); }
                 if (movE === 0) catMap[cat].semMov++;
               }
               const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
@@ -1025,6 +1025,162 @@ export default function DashboardVendedor() {
                       </table>
                     </div>
                   </div>
+                </div>
+
+                  {/* ── GRÁFICOS DE PIZZA ── */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+
+                    {/* Pizza 1: % do Esperado/mês por categoria */}
+                    {(()=>{
+                      const totalEsp = cats.reduce((s,c)=>s+c.esperadoMes,0);
+                      if (totalEsp === 0) return null;
+                      const CORES = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
+
+                      // Calcula fatias
+                      let angulo = -90; // começa no topo
+                      const fatias = cats.map((cat, i) => {
+                        const pct   = cat.esperadoMes / totalEsp;
+                        const graus = pct * 360;
+                        const inicio = angulo;
+                        angulo += graus;
+                        return { ...cat, pct, graus, inicio, cor: CORES[i % CORES.length] };
+                      });
+
+                      // Converte ângulo para coordenadas SVG (cx=100, cy=100, r=80)
+                      function polarToXY(deg, r=80) {
+                        const rad = (deg * Math.PI) / 180;
+                        return { x: 100 + r * Math.cos(rad), y: 100 + r * Math.sin(rad) };
+                      }
+                      function fatiaPath(inicio, fim, r=80, ri=40) {
+                        if (fim - inicio >= 359.9) {
+                          return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
+                        }
+                        const s1 = polarToXY(inicio, r), e1 = polarToXY(fim, r);
+                        const s2 = polarToXY(fim, ri),   e2 = polarToXY(inicio, ri);
+                        const lg = fim - inicio > 180 ? 1 : 0;
+                        return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
+                      }
+
+                      return (
+                        <div style={{...s.card,padding:'20px 24px'}}>
+                          <div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>
+                            📊 Distribuição — Esperado/mês
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
+                            {/* SVG donut */}
+                            <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
+                              {fatias.map((f,i) => (
+                                <path key={i} d={fatiaPath(f.inicio, f.inicio+f.graus)}
+                                  fill={f.cor} stroke="white" strokeWidth="1.5"
+                                  style={{transition:'opacity 0.2s',cursor:'default'}}/>
+                              ))}
+                              {/* Centro */}
+                              <circle cx="100" cy="100" r="36" fill="white"/>
+                              <text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Total</text>
+                              <text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#1a1d2e',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>
+                                {Number(totalEsp/1000).toFixed(0)}k
+                              </text>
+                            </svg>
+                            {/* Legenda */}
+                            <div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>
+                              {fatias.map((f,i) => (
+                                <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+                                  <div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div>
+                                    <div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.esperadoMes)}</div>
+                                  </div>
+                                  <div style={{textAlign:'right'}}>
+                                    <div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Pizza 2: % da Meta Apurada por categoria */}
+                    {(()=>{
+                      const totalMeta = cats.reduce((s,c)=>s+c.valorMeta,0);
+                      if (totalMeta === 0) return null;
+                      const CORES = ['#34d399','#f0b429','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
+
+                      let angulo = -90;
+                      const fatias = cats.filter(c=>c.valorMeta>0).map((cat, i) => {
+                        const pct   = cat.valorMeta / totalMeta;
+                        const graus = pct * 360;
+                        const inicio = angulo;
+                        angulo += graus;
+                        return { ...cat, pct, graus, inicio, cor: CORES[i % CORES.length] };
+                      });
+
+                      if (fatias.length === 0) return (
+                        <div style={{...s.card,padding:'20px 24px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem'}}>
+                          Nenhuma meta apurada nesta categoria ainda
+                        </div>
+                      );
+
+                      function polarToXY(deg, r=80) {
+                        const rad = (deg * Math.PI) / 180;
+                        return { x: 100 + r * Math.cos(rad), y: 100 + r * Math.sin(rad) };
+                      }
+                      function fatiaPath(inicio, fim, r=80, ri=40) {
+                        if (fim - inicio >= 359.9) {
+                          return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
+                        }
+                        const s1 = polarToXY(inicio, r), e1 = polarToXY(fim, r);
+                        const s2 = polarToXY(fim, ri),   e2 = polarToXY(inicio, ri);
+                        const lg = fim - inicio > 180 ? 1 : 0;
+                        return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
+                      }
+
+                      return (
+                        <div style={{...s.card,padding:'20px 24px'}}>
+                          <div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>
+                            🎯 Distribuição — Meta Apurada
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
+                            {/* SVG donut */}
+                            <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
+                              {fatias.map((f,i) => (
+                                <path key={i} d={fatiaPath(f.inicio, f.inicio+f.graus)}
+                                  fill={f.cor} stroke="white" strokeWidth="1.5"/>
+                              ))}
+                              <circle cx="100" cy="100" r="36" fill="white"/>
+                              <text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Apurado</text>
+                              <text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#16a34a',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>
+                                {Number(totalMeta/1000).toFixed(0)}k
+                              </text>
+                            </svg>
+                            {/* Legenda */}
+                            <div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>
+                              {fatias.map((f,i) => (
+                                <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+                                  <div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div>
+                                    <div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.valorMeta)} · {f.naMeta} emp.</div>
+                                  </div>
+                                  <div style={{textAlign:'right'}}>
+                                    <div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div>
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Linha total */}
+                              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                <span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total apurado</span>
+                                <span style={{fontSize:'0.82rem',fontWeight:800,color:'#16a34a'}}>{fmt(totalMeta)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  </div>{/* fim grid pizzas */}
+
                 </div>
               );
               } catch(err) {
