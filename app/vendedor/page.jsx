@@ -535,24 +535,23 @@ export default function DashboardVendedor() {
                 </div>
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>potencial × peso/mês</div>
               </div>
-              {/* KPI: Média/mês */}
+              {/* KPI: Última Movimentação */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
-                  {mesSelecionado ? 'Movimentação do mês' : 'Média por mês'}
+                  {mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação'}
                 </div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#f0b429'}}>
                   {(() => {
                     if (mesSelecionado) return fmt(kpis.totalMovReal);
-                    const meses2026 = mesesDisp.filter(m => m >= '2026-01');
-                    const qtd = meses2026.length || 1;
-                    const totalMov2026 = lista.reduce((s,e) => s + meses2026.reduce((sm,m) => sm+(e.movPorMes[m]||0), 0), 0);
-                    return fmt(Math.round(totalMov2026/qtd));
+                    const ultimoMes2026 = [...mesesDisp].filter(m=>m>='2026-01').pop();
+                    if (!ultimoMes2026) return fmt(kpis.totalMovReal);
+                    return fmt(lista.reduce((s,e)=>s+(e.movPorMes[ultimoMes2026]||0),0));
                   })()}
                 </div>
                 {!mesSelecionado && (() => {
-                    const meses2026 = mesesDisp.filter(m => m >= '2026-01');
+                    const ultimoMes2026 = [...mesesDisp].filter(m=>m>='2026-01').pop();
                     return <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>
-                      média {meses2026.length} meses 2026 · total: {fmt(kpis.totalMovReal)}
+                      {ultimoMes2026 ? fmtMes(ultimoMes2026+'-01') : ''} · total: {fmt(kpis.totalMovReal)}
                     </div>;
                   })()}
                 {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
@@ -585,20 +584,23 @@ export default function DashboardVendedor() {
                   const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
                   const meses2026b = mesesDisp.filter(m => m >= '2026-01');
                   const totalMov2026b = lista.reduce((s,e) => s + meses2026b.reduce((sm,m) => sm+(e.movPorMes[m]||0),0), 0);
-                  const mediaMes = mesSelecionado ? kpis.totalMovReal : Math.round(totalMov2026b/(meses2026b.length||1));
+                  const ultimoMes2026b = [...mesesDisp].filter(m=>m>='2026-01').pop();
+                  const mediaMes = mesSelecionado
+                    ? kpis.totalMovReal
+                    : (ultimoMes2026b ? lista.reduce((s,e)=>s+(e.movPorMes[ultimoMes2026b]||0),0) : kpis.totalMovReal);
                   const pctMov     = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
                   const corMov     = corPct(pctMov);
                   return (
                     <>
                       <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                        <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 {mesSelecionado?'Mov. Real vs Esperada':'Média Mensal vs Esperada'}</span>
+                        <span style={{fontWeight:600,fontSize:'0.82rem',color:'#4a5068'}}>📊 {mesSelecionado?'Mov. Real vs Esperada':'Última Mov. vs Esperada'}</span>
                         <span style={{fontSize:'0.72rem',color:corMov,fontWeight:700}}>{fmtPct(pctMov)}</span>
                       </div>
                       <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
                         <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',width:`${Math.min(pctMov,100)}%`,background:`linear-gradient(90deg,${corMov},${corMov}aa)`}}></div>
                       </div>
                       <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
-                        <span style={{color:corMov,fontWeight:600}}>{fmt(mediaMes)} {mesSelecionado?'realizados':'média/mês'}</span>
+                        <span style={{color:corMov,fontWeight:600}}>{fmt(mediaMes)} {mesSelecionado?'realizados':('último mês: '+(ultimoMes2026b?fmtMes(ultimoMes2026b+'-01'):''))}</span>
                         <span>esperado: {fmt(esperMes)}/mês</span>
                       </div>
                       {!mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:4}}>total acumulado: {fmt(kpis.totalMovReal)} em {mesesDisp.length} meses</div>}
@@ -651,7 +653,9 @@ export default function DashboardVendedor() {
                   <div style={{display:'flex',gap:14,marginTop:20,flexWrap:'wrap'}}>
                     {mesesDisp.map(m => {
                       const totalMes    = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
-                      const esperMes    = lista.reduce((s,e) => s+e.esperadoMes, 0);
+                      // Esperado: só empresas cadastradas ATÉ este mês (não futuras)
+                      const listaAteMes = lista.filter(e => !e.data_cadastro || e.data_cadastro.substring(0,7) <= m);
+                      const esperMes    = listaAteMes.reduce((s,e) => s+e.esperadoMes, 0);
                       const pctMes      = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
                       const corMes      = corPct(pctMes);
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
