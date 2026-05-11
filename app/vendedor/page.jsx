@@ -14,10 +14,11 @@ const fmtMes = (d) => { if(!d) return '—'; const [y,m]=String(d).substring(0,7
 const norm   = (s) => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 
 const ABAS = [
-  { key:'resumo',   label:'📊 Resumo'   },
-  { key:'carteira', label:'📋 Carteira' },
-  { key:'produtos', label:'🎯 Produtos' },
-  { key:'ranking',  label:'🏆 Ranking'  },
+  { key:'resumo',     label:'📊 Resumo'     },
+  { key:'categorias', label:'📂 Categorias' },
+  { key:'carteira',   label:'📋 Carteira'   },
+  { key:'produtos',   label:'🎯 Produtos'   },
+  { key:'ranking',    label:'🏆 Ranking'    },
 ];
 
 async function fetchAll(query) {
@@ -722,6 +723,19 @@ export default function DashboardVendedor() {
                                 <span style={{color:'#60a5fa',fontWeight:700}}>{novosMes}</span>
                               </div>
                             )}
+                            {novosMes > 0 && (() => {
+                              // Fechado Novo: valor esperado (peso) das empresas cadastradas neste mês
+                              const fechadoNovo = lista
+                                .filter(e => e.data_cadastro?.substring(0,7) === m)
+                                .reduce((s,e) => s + e.esperadoMes, 0);
+                              if (fechadoNovo <= 0) return null;
+                              return (
+                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',background:'rgba(96,165,250,0.06)',borderRadius:5,padding:'3px 6px',margin:'0 -6px'}}>
+                                  <span style={{color:'#2563eb',fontWeight:600}}>💰 Fechado Novo</span>
+                                  <span style={{color:'#2563eb',fontWeight:700}}>{fmt(fechadoNovo)}</span>
+                                </div>
+                              );
+                            })()}
                             <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
                               <span style={{color:'#6b7280'}}>📊 Esperado</span>
                               <span style={{color:'#8b92b0'}}>{fmt(esperMes)}</span>
@@ -904,6 +918,146 @@ export default function DashboardVendedor() {
                 </div>
               </div>
             )}
+
+            {/* ── CATEGORIAS ── */}
+            {aba === 'categorias' && (() => {
+              // Agrupa empresas por categoria
+              const catMap = {};
+              for (const e of lista) {
+                const cat = e.categoria || 'Outros';
+                if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                catMap[cat].empresas++;
+                catMap[cat].movTotal  += mesesDisp.reduce((s,m)=>s+(e.movPorMes[m]||0),0);
+                catMap[cat].esperado  += e.esperadoMes;
+                const temMeta = (vmetasRows||[]).some(v=>v.empresa_id===e.id);
+                if (temMeta) {
+                  catMap[cat].naMeta++;
+                  catMap[cat].valorMeta += (vmetasRows||[]).filter(v=>v.empresa_id===e.id).reduce((s,v)=>s+(v.valor_meta||0),0);
+                }
+                const movRec = mesesDisp.reduce((s,m)=>s+(e.movPorMes[m]||0),0);
+                if (movRec === 0) catMap[cat].semMov++;
+              }
+              const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
+              const maxMov = Math.max(...cats.map(c=>c.movTotal), 1);
+              const maxEsp = Math.max(...cats.map(c=>c.esperado), 1);
+
+              return (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  {/* KPIs de categorias */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+                    <div style={{...s.card,padding:'14px 18px'}}>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias ativas</div>
+                      <div style={{fontSize:'1.4rem',fontWeight:700}}>{cats.length}</div>
+                    </div>
+                    <div style={{...s.card,padding:'14px 18px'}}>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Maior categoria</div>
+                      <div style={{fontSize:'1rem',fontWeight:700,color:'#f0b429'}}>{cats[0]?.nome}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{cats[0]?.empresas} empresas</div>
+                    </div>
+                    <div style={{...s.card,padding:'14px 18px'}}>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Maior movimentação</div>
+                      <div style={{fontSize:'1rem',fontWeight:700,color:'#f0b429'}}>{fmt(cats[0]?.movTotal||0)}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{cats[0]?.nome}</div>
+                    </div>
+                  </div>
+
+                  {/* Gráfico de barras por categoria */}
+                  <div style={s.card}>
+                    <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:16}}>📊 Movimentação Total por Categoria</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                      {cats.map(cat => {
+                        const pctMov = (cat.movTotal/maxMov)*100;
+                        const pctEsp = (cat.esperado/maxEsp)*100;
+                        const pctReal = cat.esperado > 0 ? (cat.movTotal/cat.esperado)*100 : 0;
+                        const cor = corPct(pctReal);
+                        return (
+                          <div key={cat.nome}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                <span style={{fontWeight:600,color:'#1a1d2e',fontSize:'0.82rem'}}>{cat.nome}</span>
+                                <span style={{color:'#8b92b0',fontSize:'0.7rem'}}>{cat.empresas} emp. · {cat.semMov} sem mov.</span>
+                              </div>
+                              <div style={{display:'flex',gap:16,alignItems:'center'}}>
+                                <span style={{color:cor,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctReal)}</span>
+                                <span style={{color:'#f0b429',fontWeight:700,fontSize:'0.82rem'}}>{fmt(cat.movTotal)}</span>
+                              </div>
+                            </div>
+                            {/* Barra dupla: movimentação e esperado */}
+                            <div style={{position:'relative',height:10,background:'#f0f2f8',borderRadius:5,overflow:'hidden'}}>
+                              {/* Esperado (fundo mais claro) */}
+                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${pctEsp}%`,background:'#e4e7ef',borderRadius:5}}/>
+                              {/* Movimentado */}
+                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${pctMov}%`,background:cor,borderRadius:5,opacity:0.85}}/>
+                            </div>
+                            <div style={{display:'flex',justifyContent:'space-between',marginTop:3,fontSize:'0.65rem',color:'#8b92b0'}}>
+                              <span>{cat.naMeta} na meta · {fmt(cat.valorMeta)} apurado</span>
+                              <span>esperado: {fmt(cat.esperado)}/mês</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Tabela detalhada por categoria */}
+                  <div style={s.card}>
+                    <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:14}}>📋 Detalhamento por Categoria</div>
+                    <div style={{overflowX:'auto'}}>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
+                        <thead>
+                          <tr style={{borderBottom:'2px solid #e4e7ef'}}>
+                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Esperado/mês','% Realizado','Na Meta','Meta Apurada'].map(h=>(
+                              <th key={h} style={{padding:'8px 12px',textAlign:['Empresas','Sem Mov.'].includes(h)?'center':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cats.map((cat,i)=>{
+                            const pctReal = cat.esperado>0?(cat.movTotal/cat.esperado)*100:0;
+                            const cor = corPct(pctReal);
+                            return (
+                              <tr key={cat.nome} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
+                                <td style={{padding:'10px 12px',fontWeight:600}}>{cat.nome}</td>
+                                <td style={{padding:'10px 12px',textAlign:'center'}}>{cat.empresas}</td>
+                                <td style={{padding:'10px 12px',textAlign:'center',color:cat.semMov>0?'#f87171':'#8b92b0'}}>{cat.semMov}</td>
+                                <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cat.movTotal)}</td>
+                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{fmt(cat.esperado)}</td>
+                                <td style={{padding:'10px 12px'}}>
+                                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                    <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
+                                      <div style={{height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor}}/>
+                                    </div>
+                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span>
+                                  </div>
+                                </td>
+                                <td style={{padding:'10px 12px',textAlign:'center',color:'#34d399',fontWeight:600}}>{cat.naMeta}</td>
+                                <td style={{padding:'10px 12px',fontWeight:700,color:'#34d399'}}>{cat.valorMeta>0?fmt(cat.valorMeta):'—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068'}}>TOTAL</td>
+                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700}}>{lista.length}</td>
+                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#f87171'}}>{cats.reduce((s,c)=>s+c.semMov,0)}</td>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cats.reduce((s,c)=>s+c.movTotal,0))}</td>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#6b7280'}}>{fmt(cats.reduce((s,c)=>s+c.esperado,0))}</td>
+                            <td style={{padding:'10px 12px'}}>
+                              <span style={{color:corPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperado,0),1)*100),fontWeight:700,fontSize:'0.75rem'}}>
+                                {fmtPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperado,0),1)*100)}
+                              </span>
+                            </td>
+                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#34d399'}}>{cats.reduce((s,c)=>s+c.naMeta,0)}</td>
+                            <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399'}}>{fmt(cats.reduce((s,c)=>s+c.valorMeta,0))}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── CARTEIRA ── */}
             {aba === 'carteira' && (
