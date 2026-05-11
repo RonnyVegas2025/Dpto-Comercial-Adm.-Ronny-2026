@@ -670,24 +670,48 @@ export default function DashboardVendedor() {
                             <>
                               <div style={{fontSize:'0.65rem',color:'#16a34a',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontWeight:700}}>🎯 Meta Considerada</div>
                               <div style={{fontSize:'1.4rem',fontWeight:800,color:'#16a34a',marginBottom:2}}>{fmt(metaMes)}</div>
-                              <div style={{fontSize:'0.72rem',color:'#8b92b0',marginBottom:8}}>Movimentado: <span style={{color:'#f0b429',fontWeight:600}}>{fmt(totalMes)}</span> · {empresasMes} emp.</div>
                             </>
                           ) : (
                             <>
                               <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:2}}>{fmt(totalMes)}</div>
-                              <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:8}}>{empresasMes} movimentando</div>
+                              <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:4}}>{empresasMes} movimentando</div>
                             </>
                           )}
-                          {/* Barra vs esperado */}
-                          <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:4}}>
-                            <span style={{color:'#8b92b0'}}>vs esperado</span>
-                            <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
-                          </div>
-                          <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:8}}>
-                            <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
-                          </div>
+                          {/* Barra Meta Considerada vs Meta do Mês (quando há meta) ou vs esperado */}
+                          {metaMes > 0 ? (() => {
+                            const metaDoMes = kpis.meta > 0 ? kpis.meta / (mesesDisp.filter(m2=>m2>='2026-01').length||1) : 0;
+                            const pctMeta = metaDoMes > 0 ? (metaMes / metaDoMes) * 100 : 0;
+                            const corMeta = corPct(pctMeta);
+                            return (
+                              <>
+                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:3}}>
+                                  <span style={{color:'#6b7280'}}>meta apurada vs meta/mês</span>
+                                  <span style={{color:corMeta,fontWeight:700}}>{fmtPct(pctMeta)}</span>
+                                </div>
+                                <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
+                                  <div style={{height:'100%',width:`${Math.min(pctMeta,100)}%`,background:corMeta,borderRadius:4}}></div>
+                                </div>
+                              </>
+                            );
+                          })() : (
+                            <>
+                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:3}}>
+                                <span style={{color:'#8b92b0'}}>vs esperado</span>
+                                <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
+                              </div>
+                              <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
+                                <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
+                              </div>
+                            </>
+                          )}
                           {/* Informações extras */}
-                          <div style={{borderTop:'1px solid #e4e7ef',paddingTop:8,display:'flex',flexDirection:'column',gap:4}}>
+                          <div style={{borderTop:'1px solid #e4e7ef',paddingTop:7,display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
+                            {metaMes > 0 && (
+                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
+                                <span style={{color:'#6b7280'}}>📈 Movimentado</span>
+                                <span style={{color:'#f0b429',fontWeight:600}}>{fmt(totalMes)} · {empresasMes} emp.</span>
+                              </div>
+                            )}
                             {novosMes > 0 && (
                               <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
                                 <span style={{color:'#6b7280'}}>📋 Contratos novos</span>
@@ -830,26 +854,45 @@ export default function DashboardVendedor() {
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                        <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
-                          TOTAL ({filtroMetaCadastro
-                            ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).length
-                            : empresasNaMeta.filter(e => {
-                                if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                                if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
-                                return true;
-                              }).length
-                          } empresas)
+                        <td colSpan={5} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
+                          {(()=>{
+                            const base = filtroMetaCadastro
+                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
+                              : empresasNaMeta.filter(e=>{
+                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
+                                  return true;
+                                });
+                            return `TOTAL (${base.length} empresas)`;
+                          })()}
+                        </td>
+                        <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',textAlign:'right',fontSize:'0.8rem'}}>
+                          {(()=>{
+                            const base = filtroMetaCadastro
+                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
+                              : empresasNaMeta.filter(e=>{
+                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
+                                  return true;
+                                });
+                            return fmt(base.reduce((s,e)=>s+(e.esperadoMes||0),0));
+                          })()}
                         </td>
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
-                          {fmt(empresasNaMeta
-                            .filter(e => {
-                          if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                          if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
-                          if (filtroMetaCadastro && e.data_cadastro?.substring(0,7) !== filtroMetaCadastro) return false;
-                          return true;
-                        })
-                            .flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas)
-                            .reduce((s,v)=>s+(v.valor_meta||0),0))}
+                          {(()=>{
+                            const base = filtroMetaCadastro
+                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
+                              : empresasNaMeta.filter(e=>{
+                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
+                                  return true;
+                                });
+                            const ent = base.flatMap(e=>{
+                              const all=(vmetasRows||[]).filter(v=>v.empresa_id===e.id);
+                              return filtroMetaMesLocal?all.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal):all;
+                            });
+                            return fmt(ent.reduce((s,v)=>s+(v.valor_meta||0),0));
+                          })()}
                         </td>
                       </tr>
                     </tfoot>
