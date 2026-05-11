@@ -98,6 +98,7 @@ export default function DashboardVendedor() {
   const [aba,            setAba]            = useState('resumo');
   const [meses,          setMeses]          = useState([]);
   const [mesSelecionado, setMesSelecionado] = useState('');
+  const [filtroMetaMesLocal, setFiltroMetaMesLocal] = useState('');
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
@@ -476,8 +477,9 @@ export default function DashboardVendedor() {
         const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
-        const corApurado = pctApurado >= 100 ? '#34d399' : pctApurado >= 70 ? '#f0b429' : '#f87171';
-        const badgeApurado = pctApurado >= 100 ? '✅ Meta atingida' : pctApurado >= 70 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
+        const corPct = (p) => p >= 100 ? '#34d399' : p >= 50 ? '#f0b429' : '#f87171';
+        const corApurado = corPct(pctApurado);
+        const badgeApurado = pctApurado >= 100 ? '✅ Meta atingida' : pctApurado >= 50 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
 
         return (
           <>
@@ -554,7 +556,7 @@ export default function DashboardVendedor() {
                   const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
                   const mediaMes   = mesSelecionado ? kpis.totalMovReal : Math.round(kpis.totalMovReal/(mesesDisp.length||1));
                   const pctMov     = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
-                  const corMov     = pctMov >= 90 ? '#34d399' : pctMov >= 50 ? '#f0b429' : '#f87171';
+                  const corMov     = corPct(pctMov);
                   return (
                     <>
                       <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
@@ -620,7 +622,7 @@ export default function DashboardVendedor() {
                       const totalMes    = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
                       const esperMes    = lista.reduce((s,e) => s+e.esperadoMes, 0);
                       const pctMes      = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
-                      const corMes      = pctMes >= 90 ? '#34d399' : pctMes >= 50 ? '#f0b429' : '#f87171';
+                      const corMes      = corPct(pctMes);
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
                       // Contratos novos: empresas cadastradas neste mês
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
@@ -630,25 +632,31 @@ export default function DashboardVendedor() {
                         .reduce((s,v)=>s+(v.valor_meta||0),0);
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
+                          {/* Cabeçalho do mês */}
                           <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
-                          <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:2}}>{fmt(totalMes)}</div>
-                          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:10}}>{empresasMes} movimentando</div>
+                          {/* Meta considerada em destaque */}
+                          {metaMes > 0 ? (
+                            <>
+                              <div style={{fontSize:'0.65rem',color:'#16a34a',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontWeight:700}}>🎯 Meta Considerada</div>
+                              <div style={{fontSize:'1.4rem',fontWeight:800,color:'#16a34a',marginBottom:2}}>{fmt(metaMes)}</div>
+                              <div style={{fontSize:'0.72rem',color:'#8b92b0',marginBottom:8}}>Movimentado: <span style={{color:'#f0b429',fontWeight:600}}>{fmt(totalMes)}</span> · {empresasMes} emp.</div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{fontSize:'1.4rem',fontWeight:700,color:'#f0b429',marginBottom:2}}>{fmt(totalMes)}</div>
+                              <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:8}}>{empresasMes} movimentando</div>
+                            </>
+                          )}
                           {/* Barra vs esperado */}
                           <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:4}}>
                             <span style={{color:'#8b92b0'}}>vs esperado</span>
                             <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
                           </div>
-                          <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:10}}>
+                          <div style={{background:'#e4e7ef',borderRadius:4,height:5,overflow:'hidden',marginBottom:8}}>
                             <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
                           </div>
                           {/* Informações extras */}
-                          <div style={{borderTop:'1px solid #e4e7ef',paddingTop:8,display:'flex',flexDirection:'column',gap:5}}>
-                            {metaMes > 0 && (
-                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
-                                <span style={{color:'#6b7280'}}>🎯 Meta considerada</span>
-                                <span style={{color:'#34d399',fontWeight:700}}>{fmt(metaMes)}</span>
-                              </div>
-                            )}
+                          <div style={{borderTop:'1px solid #e4e7ef',paddingTop:8,display:'flex',flexDirection:'column',gap:4}}>
                             {novosMes > 0 && (
                               <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
                                 <span style={{color:'#6b7280'}}>📋 Contratos novos</span>
@@ -671,56 +679,91 @@ export default function DashboardVendedor() {
             {/* ── EMPRESAS NA META ── */}
             {aba === 'resumo' && empresasNaMeta && empresasNaMeta.length > 0 && (
               <div style={{...s.card,marginBottom:16}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
-                  <div style={s.cardTitle}>🎯 Empresas na Meta {mesSelecionado ? `— ${fmtMes(mesSelecionado+'-01')}` : '— Todos os meses'}</div>
-                  <span style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{empresasNaMeta.length} empresa{empresasNaMeta.length!==1?'s':''} · {fmt(kpis.totalValorMeta)} apurado</span>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
+                  <div style={s.cardTitle}>🎯 Empresas na Meta</div>
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                    {/* Filtro por mês */}
+                    <select
+                      value={filtroMetaMesLocal||''}
+                      onChange={ev => setFiltroMetaMesLocal(ev.target.value)}
+                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                      <option value="">Todos os meses</option>
+                      {[...new Set((vmetasRows||[]).filter(v=>empresasNaMeta.some(e=>e.id===v.empresa_id)).map(v=>v.competencia_meta?.substring(0,7)).filter(Boolean))].sort().map(m=>(
+                        <option key={m} value={m}>{fmtMes(m+'-01')}</option>
+                      ))}
+                    </select>
+                    <span style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>
+                      {empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)).length} empresas · {fmt(
+                        empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
+                          .flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas)
+                          .reduce((s,v)=>s+(v.valor_meta||0),0)
+                      )} apurado
+                    </span>
+                  </div>
                 </div>
                 <div style={{overflowX:'auto'}}>
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
                     <thead>
                       <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                        {['Empresa','Produto','Mês Meta','Regra','Valor Base','Comissão'].map(h=>(
-                          <th key={h} style={{padding:'8px 12px',textAlign:h==='Valor Base'||h==='Comissão'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
+                        {['Empresa','Data Cad.','Produto','Mês Meta','Regra','Valor Esperado/mês','Meta Considerada'].map(h=>(
+                          <th key={h} style={{padding:'8px 12px',textAlign:h==='Valor Esperado/mês'||h==='Meta Considerada'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {empresasNaMeta.flatMap((e,i) =>
-                        e._metaEntradas.map((entrada, j) => (
-                          <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
-                            <td style={{padding:'10px 12px',fontWeight:600}}>
-                              <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none',fontWeight:600}}>{e.nome}</a>
-                              <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
-                            </td>
-                            <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
-                            <td style={{padding:'10px 12px'}}>
-                              <span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>
-                                {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
-                              </span>
-                            </td>
-                            <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>
-                              {entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}
-                            </td>
-                            <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>
-                              {fmt(entrada.valor_considerado||0)}
-                            </td>
-                            <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:entrada.regra==='upsell'?'#d97706':'#34d399'}}>
-                              {fmt(entrada.valor_meta)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
+                      {empresasNaMeta
+                        .filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
+                        .flatMap((e,i) => {
+                          const entradas = filtroMetaMesLocal
+                            ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
+                            : e._metaEntradas;
+                          return entradas.map((entrada, j) => (
+                            <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
+                              <td style={{padding:'10px 12px',fontWeight:600}}>
+                                <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none',fontWeight:600}}
+                                  onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
+                                  onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
+                                  {e.nome} ↗
+                                </a>
+                                <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                              </td>
+                              <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem',whiteSpace:'nowrap'}}>
+                                {e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}
+                              </td>
+                              <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                              <td style={{padding:'10px 12px'}}>
+                                <span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>
+                                  {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
+                                </span>
+                              </td>
+                              <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>
+                                {entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}
+                              </td>
+                              <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>
+                                {fmt(e.esperadoMes||0)}
+                              </td>
+                              <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:entrada.regra==='upsell'?'#d97706':'#34d399'}}>
+                                {fmt(entrada.valor_meta)}
+                              </td>
+                            </tr>
+                          ));
+                        })}
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                        <td colSpan={5} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>TOTAL</td>
-                        <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>{fmt(kpis.totalValorMeta)}</td>
+                        <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>TOTAL</td>
+                        <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
+                          {fmt(empresasNaMeta
+                            .filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
+                            .flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas)
+                            .reduce((s,v)=>s+(v.valor_meta||0),0))}
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
-            )}
+            )}            )}
 
             {/* ── CARTEIRA ── */}
             {aba === 'carteira' && (
