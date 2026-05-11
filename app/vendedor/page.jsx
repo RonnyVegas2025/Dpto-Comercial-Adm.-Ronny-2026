@@ -939,7 +939,7 @@ export default function DashboardVendedor() {
                   catMap[cat].naMeta++;
                   catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0);
                 }
-                if (catMap[cat].movTotal === 0) catMap[cat].semMov = 0; // recalc abaixo
+                // semMov recalculado abaixo
               }
               // Recalcular semMov corretamente
               for (const e of lista) {
@@ -1030,7 +1030,7 @@ export default function DashboardVendedor() {
                         </thead>
                         <tbody>
                           {cats.map((cat,i)=>{
-                            const pctReal = cat.esperado>0?(cat.movTotal/cat.esperado)*100:0;
+                            const pctReal = cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;
                             const cor = corPct(pctReal);
                             return (
                               <tr key={cat.nome} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
