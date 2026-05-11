@@ -763,7 +763,7 @@ export default function DashboardVendedor() {
                   </table>
                 </div>
               </div>
-            )}            )}
+            )}
 
             {/* ── CARTEIRA ── */}
             {aba === 'carteira' && (
