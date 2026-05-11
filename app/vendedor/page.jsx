@@ -389,8 +389,24 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
+      // Calcula meta por mês: simula totalValorMeta para cada mês como se estivesse selecionado
+      const metaPorMes = {};
+      for (const m of mesesDisp) {
+        metaPorMes[m] = listaProcessada.reduce((s,e) => {
+          const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
+          if (todasEntradas.length > 0) {
+            const filtradas = todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
+            return s + filtradas.reduce((sv,v) => sv + (v.valor_meta||0), 0);
+          }
+          // Sem entrada no banco: usa inline se metaComp bate com o mês
+          const metaComp = e.metaComp?.substring(0,7);
+          if (metaComp === m) return s + (e.valorMeta||0);
+          return s;
+        }, 0);
+      }
+
       setDados({
-        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows,
+        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
         lista: listaProcessada,
         kpis: {
           totalMovReal, totalEsperado, meta, metaTotal,
@@ -476,7 +492,7 @@ export default function DashboardVendedor() {
       )}
 
       {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows } = dados;
+        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corPct = (p) => p >= 100 ? '#34d399' : p >= 50 ? '#f0b429' : '#f87171';
@@ -641,14 +657,10 @@ export default function DashboardVendedor() {
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
                       // Contratos novos: empresas cadastradas neste mês
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
-                      // Meta considerada no mês
-                      // Quando o mês selecionado é este mês, usa kpis.totalValorMeta (já filtrado corretamente)
-                      // Senão calcula pela competencia_meta do banco
+                      // Meta considerada no mês — usa metaPorMes pré-calculado (mesmo cálculo do totalValorMeta filtrado)
                       const metaMes = mesSelecionado === m
                         ? (kpis.totalValorMeta || 0)
-                        : (vmetasRows||[])
-                            .filter(v => lista.some(e=>e.id===v.empresa_id) && v.competencia_meta?.substring(0,7)===m)
-                            .reduce((s,v)=>s+(v.valor_meta||0),0);
+                        : (metaPorMes?.[m] || 0);
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
                           {/* Cabeçalho do mês */}
