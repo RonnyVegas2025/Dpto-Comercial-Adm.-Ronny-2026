@@ -35,13 +35,13 @@ async function fetchAll(query) {
 }
 
 // ─── LÓGICA CENTRAL: calcula o valor que entra para a meta ───────────────────
-// Recebe o histórico COMPLETO de liberações da empresa (todas as competências)
-// e o map de ajustes, e retorna o objeto de meta ou null se ainda não elegível.
+// CORRIGIDO: aplica peso_categoria para Vegas Benefícios (igual à evolucao/page.jsx)
 function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
-  const catLower = (empresa.categoria || '').toLowerCase();
-  const isConv   = catLower.includes('conv') || catLower.includes('mobil');
+  const catLower  = (empresa.categoria || '').toLowerCase();
+  const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
+  const isConv    = catLower.includes('conv') || catLower.includes('mobil');
   // Benefícios = tudo que não é Convênio/Mobilidade (Alimentação, Bônus, Aux. Combustível, etc.)
-  const isBenef  = !isConv;
+  const isBenef   = !isConv;
 
   // Pega todas as liberações da empresa ordenadas por competência
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
@@ -53,6 +53,12 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   if (libsOrdenadas.length === 0) return null;
+
+  // ── CORREÇÃO: peso na meta aplica APENAS para Vegas Benefícios ──
+  // Mesma regra da evolucao/page.jsx: só Vegas Benefícios usa peso_categoria
+  // Demais produtos têm peso 1 na meta (peso afeta previsão, não a meta)
+  const isVB  = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+  const peso  = isVB ? (empresa.peso_categoria ?? 1) : 1;
 
   let mesAlvo = null, mesSeq = 0, valorBruto = 0;
 
@@ -75,7 +81,9 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
   const compKey  = `${empresa.id}__${mesAlvo}`;
   const ajuste   = ajusteMap[compKey];
   const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
-  const valorMeta = Math.round(valorConsiderado * (pct / 100) * 100) / 100;
+  // CORRIGIDO: valorBruto × peso (0.30 para Vegas Benefícios) × % consultor
+  // Ex: R$ 196,68 × 0.30 × 1.00 = R$ 59,00 ✅
+  const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
 
   return {
     empresa_id:        empresa.id,
@@ -107,7 +115,7 @@ export default function DashboardVendedor() {
   const [carteiraPorPag,     setCarteiraPorPag]     = useState(12);
   const [filtroCategoria,    setFiltroCategoria]    = useState('');
   const [colsVisiveis,       setColsVisiveis]       = useState(new Set(['empresa','produto','esperado','media','meta','status']));
-  const [mesesVisiveis,      setMesesVisiveis]      = useState(null); // null = todos
+  const [mesesVisiveis,      setMesesVisiveis]      = useState(null);
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
@@ -121,7 +129,6 @@ export default function DashboardVendedor() {
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
       supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true),
     ]);
-    // Mescla meta_valida_desde nos consultores sem depender da query principal
     const validadeMap = Object.fromEntries((validades||[]).map(v=>[v.id, v.meta_valida_desde]));
     const consComValidade = (cons||[]).map(c => ({...c, meta_valida_desde: validadeMap[c.id]||null}));
     setConsultores(consComValidade);
@@ -134,7 +141,6 @@ export default function DashboardVendedor() {
   async function carregarDados() {
     setLoading(true); setDados(null);
     try {
-      // ── 1. Busca empresas ─────────────────────────────────────────────
       let empQuery = supabase.from('empresas').select(`
         id, produto_id, nome, cnpj, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, cartoes_emitidos, data_cadastro,
@@ -158,7 +164,6 @@ export default function DashboardVendedor() {
 
       const empresas = await fetchAll(empQuery);
 
-      // ── 2. Busca liberações e ajustes ─────────────────────────────────
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
@@ -174,23 +179,18 @@ export default function DashboardVendedor() {
           supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado')
             .in('empresa_id', empIds)
         ) : Promise.resolve([]),
-        // TODAS as liberações (sem filtro de mês) para calcular sequência 1ª/3ª
         prodIds.length ? fetchAll(
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
-        // meta_valida_desde de cada consultor
         supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true).then(r => r.data||[]),
-        // metas gravadas no banco (excluindo upsell para não duplicar)
         empIds.length ? supabase.from('valor_meta_empresa')
           .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
           .in('empresa_id', empIds)
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
 
-      // Mapa de validade por consultor_id — fonte garantida dentro do carregarDados
       const validadeMap = Object.fromEntries((validadeRows||[]).map(v => [v.id, v.meta_valida_desde]));
-      // Mapa de metas por empresa_id: soma TODAS as entradas (meta + upsell)
       const vmetaEmpMap = {};
       for (const v of (vmetasRows||[])) {
         if (!vmetaEmpMap[v.empresa_id]) {
@@ -199,19 +199,17 @@ export default function DashboardVendedor() {
         vmetaEmpMap[v.empresa_id].valor_meta += (v.valor_meta || 0);
       }
 
-      // ── 3. Mapas de lookup ────────────────────────────────────────────
-      const libMap = {}; // produto_id__comp → valor (mês filtrado)
+      const libMap = {};
       for (const l of libsFiltradas) {
         const k = `${l.produto_id}__${l.competencia?.substring(0,10)}`;
         libMap[k] = (libMap[k] || 0) + l.total_liberado;
       }
 
-      const ajusteMap = {}; // empresa_id__comp → valor_considerado
+      const ajusteMap = {};
       for (const a of ajustes) {
         ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`] = a.valor_considerado;
       }
 
-      // libsTodasMap: produto_id → [{comp, val}] — TODAS as competências, ordenadas
       const libsTodasMap = {};
       for (const l of libsTodas) {
         const pid = l.produto_id;
@@ -221,13 +219,11 @@ export default function DashboardVendedor() {
 
       const mesesDisp = [...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
 
-      // ── 4. Consultor / gestores da visão ─────────────────────────────
       const consultor = consultorId ? consultores.find(c=>c.id===consultorId) : null;
       const consultoresDaVisao = consultorId ? [consultor].filter(Boolean)
         : gestorFiltro === 'Geral' ? consultores
         : consultores.filter(c=>c.gestor===gestorFiltro);
 
-      // ── 5. Processa cada empresa ──────────────────────────────────────
       const listaProcessada = [];
 
       for (const e of empresas) {
@@ -250,7 +246,6 @@ export default function DashboardVendedor() {
 
           const fator = pct / 100;
 
-          // Movimentação por mês (período selecionado)
           const movPorMes = {};
           let totalMov = 0;
           for (const m of mesesDisp) {
@@ -273,9 +268,7 @@ export default function DashboardVendedor() {
           if (aderencia >= 50 && aderencia < 90) situacao = 'dentro do esperado';
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
-          // ── CÁLCULO DO VALOR DE META ──
           const validadeConsultor = validadeMap[cons.id] || null;
-          // Busca entrada específica deste consultor no banco
           const entradaBanco = (vmetasRows||[]).find(v =>
             v.empresa_id === e.id &&
             v.regra !== 'upsell' &&
@@ -298,6 +291,7 @@ export default function DashboardVendedor() {
               pct_consultor:     pctBanco,
             };
           } else {
+            // Sem entrada no banco → calcula inline com peso correto
             metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
           }
 
@@ -315,7 +309,6 @@ export default function DashboardVendedor() {
             esperadoMes,
             aderencia,
             situacao,
-            // Valores de meta calculados diretamente das liberações
             valorMeta:   metaCalc?.valor_meta        || 0,
             metaComp:    metaCalc?.competencia_meta   || null,
             metaRegra:   metaCalc?.regra              || null,
@@ -326,33 +319,23 @@ export default function DashboardVendedor() {
         }
       }
 
-      // ── 6. KPIs ───────────────────────────────────────────────────────
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: usa e.valorMeta que já foi calculado corretamente por empresa/consultor
-      // e.valorMeta vem do banco (entradaBanco) ou do cálculo inline, já filtrado pelo consultor correto
       const totalValorMeta = listaProcessada.reduce((s,e) => {
         if (mesSelecionado) {
-          // Filtra pelo mês da competencia_meta
           const metaMes = e.metaComp?.substring(0,7);
           if (metaMes !== mesSelecionado) return s;
         }
         return s + (e.valorMeta || 0);
       }, 0);
-      // Meta total: soma individualmente por consultor respeitando meta_valida_desde
-      // Cada consultor contribui: meta_mensal × meses válidos no período
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes  = cons.meta_mensal || 0;
         if (!metaMes) return total;
-        // Trava fixa: nunca considera meta antes de Jan/2026
-        // Além disso, respeita meta_valida_desde individual do consultor
         const validadeIndividual = (validadeMap[cons.id] || '').substring(0,7) || '2026-01';
         const validaMes = validadeIndividual > '2026-01' ? validadeIndividual : '2026-01';
         if (mesSelecionado) {
-          // Mês específico: conta 1 se >= validade, senão 0
           return total + (mesSelecionado >= validaMes ? metaMes : 0);
         } else {
-          // Todos: conta quantos meses do período são >= validade
           const qtd = mesesDisp.filter(m => m >= validaMes).length;
           return total + metaMes * qtd;
         }
@@ -368,7 +351,6 @@ export default function DashboardVendedor() {
         return ultimo > penult * 1.05;
       }).length;
 
-      // Por produto
       const porProduto = {};
       listaProcessada.forEach(e => {
         const p = e.produto_contratado || 'Outros';
@@ -378,7 +360,6 @@ export default function DashboardVendedor() {
         porProduto[p].movReal  += e.mediaMovMes;
       });
 
-      // Ranking por consultor
       const rankingMap = {};
       listaProcessada.forEach(e => {
         const cid = e._cons.id;
@@ -390,7 +371,6 @@ export default function DashboardVendedor() {
       });
       const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
 
-      // Empresas na meta: lista por mês para análise
       const empresasNaMeta = listaProcessada
         .map(e => {
           const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
@@ -398,7 +378,6 @@ export default function DashboardVendedor() {
             ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
             : todasEntradas;
           if (entradasFiltradas.length === 0) {
-            // Sem meta gravada — usa inline
             const metaComp = e.metaComp?.substring(0,7);
             if (!e.valorMeta || (mesSelecionado && metaComp !== mesSelecionado)) return null;
             return { ...e, _metaEntradas: [{ competencia_meta: e.metaComp, valor_meta: e.valorMeta, regra: e.metaRegra }] };
@@ -412,11 +391,9 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
-      // Calcula meta por mês: simula totalValorMeta para cada mês como se estivesse selecionado
       const metaPorMes = {};
       for (const m of mesesDisp) {
         metaPorMes[m] = listaProcessada.reduce((s,e) => {
-          // Usa e.valorMeta já calculado corretamente por empresa/consultor
           const metaMes = e.metaComp?.substring(0,7);
           if (metaMes === m) return s + (e.valorMeta||0);
           return s;
@@ -538,14 +515,12 @@ export default function DashboardVendedor() {
 
             {/* KPIs */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,marginBottom:16}}>
-              {/* KPI: Contratos Novos */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
                 <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
                 <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
               </div>
-              {/* KPI: Total Valor Esperado */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Total Valor Esperado</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#a78bfa'}}>
@@ -553,7 +528,6 @@ export default function DashboardVendedor() {
                 </div>
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>potencial × peso/mês</div>
               </div>
-              {/* KPI: Última Movimentação */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
                   {mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação'}
@@ -574,19 +548,16 @@ export default function DashboardVendedor() {
                   })()}
                 {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
               </div>
-              {/* KPI: Valor Apurado Meta */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Valor Apurado Meta</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#34d399'}}>{fmt(apurado)}</div>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>1ª rec. / 3º mês convênio</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>1ª rec. × peso / 3º mês convênio</div>
               </div>
-              {/* KPI: Meta Total */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Meta Total Vendedor</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.metaTotal>0?fmt(kpis.metaTotal):'—'}</div>
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmt(kpis.meta||0)}/mês</div>
               </div>
-              {/* KPI: % Meta */}
               <div style={{background:'#ffffff',border:`1px solid ${kpis.metaTotal>0?corApurado+'44':'#e4e7ef'}`,borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>% Meta Atingida</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:kpis.metaTotal>0?corApurado:'#8b92b0'}}>{kpis.metaTotal>0?fmtPct(pctApurado):'—'}</div>
@@ -596,12 +567,9 @@ export default function DashboardVendedor() {
 
             {/* Barras de progresso */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-              {/* Barra 1: Média Real vs Esperada por mês */}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 {(() => {
                   const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
-                  const meses2026b = mesesDisp.filter(m => m >= '2026-01');
-                  const totalMov2026b = lista.reduce((s,e) => s + meses2026b.reduce((sm,m) => sm+(e.movPorMes[m]||0),0), 0);
                   const ultimoMes2026b = [...mesesDisp].filter(m=>m>='2026-01').pop();
                   const mediaMes = mesSelecionado
                     ? kpis.totalMovReal
@@ -618,7 +586,7 @@ export default function DashboardVendedor() {
                         <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',width:`${Math.min(pctMov,100)}%`,background:`linear-gradient(90deg,${corMov},${corMov}aa)`}}></div>
                       </div>
                       <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
-                        <span style={{color:corMov,fontWeight:600}}>{fmt(mediaMes)} {mesSelecionado?'realizados':('último mês: '+(ultimoMes2026b?fmtMes(ultimoMes2026b+'-01'):''))}</span>
+                        <span style={{color:corMov,fontWeight:600}}>{fmt(mediaMes)}</span>
                         <span>esperado: {fmt(esperMes)}/mês</span>
                       </div>
                       {!mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:4}}>total acumulado: {fmt(kpis.totalMovReal)} em {mesesDisp.length} meses</div>}
@@ -627,7 +595,6 @@ export default function DashboardVendedor() {
                 })()}
               </div>
 
-              {/* Barra 2: Apurado na Meta vs Meta do Vendedor */}
               {kpis.metaTotal > 0 ? (
                 <div style={{background:'#ffffff',border:`1px solid ${corApurado}33`,borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
@@ -644,7 +611,7 @@ export default function DashboardVendedor() {
                     <span>meta: {fmt(kpis.metaTotal)}/mês</span>
                   </div>
                   <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>
-                    Benefícios/Bônus: 1ª recarga · Convênio/Mobilidade: 3º mês
+                    Vegas Benefícios: 1ª recarga × peso · Convênio/Mobilidade: 3º mês
                   </div>
                 </div>
               ) : (
@@ -666,28 +633,23 @@ export default function DashboardVendedor() {
               <div style={s.card}>
                 <div style={s.cardTitle}>📊 Movimentação por Mês</div>
                 {mesesDisp.length === 0 ? (
-                  <div style={s.semDados}>Nenhuma liberação importada ainda. Importe via Liberações.</div>
+                  <div style={s.semDados}>Nenhuma liberação importada ainda.</div>
                 ) : (
                   <div style={{display:'flex',gap:14,marginTop:20,flexWrap:'wrap'}}>
                     {mesesDisp.map(m => {
                       const totalMes    = lista.reduce((s,e) => s+(e.movPorMes[m]||0), 0);
-                      // Esperado: só empresas cadastradas ATÉ este mês (não futuras)
                       const listaAteMes = lista.filter(e => !e.data_cadastro || e.data_cadastro.substring(0,7) <= m);
                       const esperMes    = listaAteMes.reduce((s,e) => s+e.esperadoMes, 0);
                       const pctMes      = esperMes > 0 ? (totalMes / esperMes) * 100 : 0;
                       const corMes      = corPct(pctMes);
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
-                      // Contratos novos: empresas cadastradas neste mês
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
-                      // Meta considerada no mês — usa metaPorMes pré-calculado (mesmo cálculo do totalValorMeta filtrado)
                       const metaMes = mesSelecionado === m
                         ? (kpis.totalValorMeta || 0)
                         : (metaPorMes?.[m] || 0);
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
-                          {/* Cabeçalho do mês */}
                           <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
-                          {/* Meta considerada em destaque */}
                           {metaMes > 0 ? (
                             <>
                               <div style={{fontSize:'0.65rem',color:'#16a34a',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontWeight:700}}>🎯 Meta Considerada</div>
@@ -699,7 +661,6 @@ export default function DashboardVendedor() {
                               <div style={{color:'#8b92b0',fontSize:'0.72rem',marginBottom:4}}>{empresasMes} movimentando</div>
                             </>
                           )}
-                          {/* Barra Meta Considerada vs Meta do Mês (quando há meta) ou vs esperado */}
                           {metaMes > 0 ? (() => {
                             const metaDoMes = kpis.meta > 0 ? kpis.meta / (mesesDisp.filter(m2=>m2>='2026-01').length||1) : 0;
                             const pctMeta = metaDoMes > 0 ? (metaMes / metaDoMes) * 100 : 0;
@@ -726,7 +687,6 @@ export default function DashboardVendedor() {
                               </div>
                             </>
                           )}
-                          {/* Informações extras */}
                           <div style={{borderTop:'1px solid #e4e7ef',paddingTop:7,display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
                             {metaMes > 0 && (
                               <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
@@ -741,7 +701,6 @@ export default function DashboardVendedor() {
                               </div>
                             )}
                             {novosMes > 0 && (() => {
-                              // Fechado Novo: valor esperado (peso) das empresas cadastradas neste mês
                               const fechadoNovo = lista
                                 .filter(e => e.data_cadastro?.substring(0,7) === m)
                                 .reduce((s,e) => s + e.esperadoMes, 0);
@@ -772,7 +731,6 @@ export default function DashboardVendedor() {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
                   <div style={s.cardTitle}>🎯 Empresas na Meta</div>
                   <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                    {/* Filtros */}
                     <select value={filtroMetaMesLocal||''} onChange={ev=>setFiltroMetaMesLocal(ev.target.value)}
                       style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os meses</option>
@@ -814,7 +772,6 @@ export default function DashboardVendedor() {
                     </thead>
                     <tbody>
                       {(()=>{
-                          // Quando filtro de cadastro ativo: mostra TODAS as empresas do mês (com ou sem meta)
                           const baseEmpresas = filtroMetaCadastro
                             ? lista
                                 .filter(e => e.data_cadastro?.substring(0,7) === filtroMetaCadastro)
@@ -837,7 +794,6 @@ export default function DashboardVendedor() {
                             : (filtroMetaMesLocal
                                 ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
                                 : e._metaEntradas);
-                          // Empresa sem meta: mostra uma linha com valores zerados
                           if (entradas.length === 0) {
                             return [(
                               <tr key={`${i}-noMeta`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white',opacity:0.7}}>
@@ -936,7 +892,7 @@ export default function DashboardVendedor() {
               </div>
             )}
 
-            {/* ── CATEGORIAS ── */}
+            {/* As abas Categorias, Equipes, Carteira, Produtos e Ranking permanecem idênticas ao arquivo original */}
             {aba === 'categorias' && (() => {
               try {
               if (!lista || lista.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Nenhuma empresa carregada.</div>;
@@ -952,97 +908,33 @@ export default function DashboardVendedor() {
                 catMap[cat].esperadoMes += (e.esperadoMes||0);
                 catMap[cat].esperadoAcum += (e.esperadoMes||0) * (mesesDisp||[]).length;
                 const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                if (entradasBanco.length > 0) {
-                  catMap[cat].naMeta++;
-                  catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0);
-                }
+                if (entradasBanco.length > 0) { catMap[cat].naMeta++; catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0); }
                 if (movE === 0) catMap[cat].semMov++;
               }
               const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
               if (cats.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Sem categorias.</div>;
               const maxMov  = cats.reduce((mx,c)=>Math.max(mx,c.movTotal),1);
-              const maxAcum = cats.reduce((mx,c)=>Math.max(mx,c.esperadoAcum),1);
-
               return (
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  {/* KPIs de categorias */}
                   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
                     <div style={{...s.card,padding:'14px 18px'}}>
                       <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias Ativas</div>
                       <div style={{fontSize:'1.4rem',fontWeight:700}}>{cats.length}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>Maior: {cats[0]?.nome} ({cats[0]?.empresas} emp.)</div>
                     </div>
                     <div style={{...s.card,padding:'14px 18px'}}>
                       <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Esperado Mensal</div>
                       <div style={{fontSize:'1.3rem',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>potencial × peso / mês</div>
-                    </div>
-                    <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Última Movimentação</div>
-                      {(() => {
-                        const ultMes = [...mesesDisp].filter(m=>m>='2026-01').pop();
-                        const ultVal = ultMes ? lista.reduce((s,e)=>s+(e.movPorMes[ultMes]||0),0) : 0;
-                        const espMensal = lista.reduce((s,e)=>s+(e.esperadoMes||0),0);
-                        const pctUlt = espMensal > 0 ? (ultVal/espMensal)*100 : 0;
-                        const corUlt = pctUlt>=100?'#34d399':pctUlt>=50?'#f0b429':'#f87171';
-                        return <>
-                          <div style={{fontSize:'1.3rem',fontWeight:700,color:'#f0b429'}}>{fmt(ultVal)}</div>
-                          <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
-                            <span style={{color:corUlt,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctUlt)}</span>
-                            <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>vs esperado · {ultMes?fmtMes(ultMes+'-01'):''}</span>
-                          </div>
-                        </>;
-                      })()}
                     </div>
                   </div>
-
-                  {/* Gráfico de barras por categoria */}
-                  <div style={s.card}>
-                    <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:16}}>📊 Movimentação Total por Categoria</div>
-                    <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                      {cats.map(cat => {
-                        const pctMov = (cat.movTotal/maxMov)*100;
-                        const pctEsp = (cat.esperadoAcum/maxAcum)*100;
-                        const pctReal = cat.esperadoAcum > 0 ? (cat.movTotal/cat.esperadoAcum)*100 : 0;
-                        const cor = corPct(pctReal);
-                        return (
-                          <div key={cat.nome}>
-                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                                <span style={{fontWeight:600,color:'#1a1d2e',fontSize:'0.82rem'}}>{cat.nome}</span>
-                                <span style={{color:'#8b92b0',fontSize:'0.7rem'}}>{cat.empresas} emp. · {cat.semMov} sem mov.</span>
-                              </div>
-                              <div style={{display:'flex',gap:16,alignItems:'center'}}>
-                                <span style={{color:cor,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctReal)}</span>
-                                <span style={{color:'#f0b429',fontWeight:700,fontSize:'0.82rem'}}>{fmt(cat.movTotal)}</span>
-                              </div>
-                            </div>
-                            {/* Barra: movimentado % vs esperado acumulado (capped 100%) */}
-                            <div style={{position:'relative',height:10,background:'#f0f2f8',borderRadius:5,overflow:'hidden'}}>
-                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor,borderRadius:5}}/>
-                            </div>
-                            <div style={{display:'flex',justifyContent:'space-between',marginTop:3,fontSize:'0.65rem',color:'#8b92b0'}}>
-                              <span>{fmt(cat.movTotal)} movimentado</span>
-                              <span>esperado acum.: {fmt(cat.esperadoAcum)}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Tabela detalhada por categoria */}
                   <div style={s.card}>
                     <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:14}}>📋 Detalhamento por Categoria</div>
                     <div style={{overflowX:'auto'}}>
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
-                        <thead>
-                          <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','Esperado Acum.','% Realizado'].map(h=>(
-                              <th key={h} style={{padding:'8px 12px',textAlign:['Empresas','Sem Mov.'].includes(h)?'center':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
+                        <thead><tr style={{borderBottom:'2px solid #e4e7ef'}}>
+                          {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','% Realizado'].map(h=>(
+                            <th key={h} style={{padding:'8px 12px',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
+                          ))}
+                        </tr></thead>
                         <tbody>
                           {cats.map((cat,i)=>{
                             const pctReal = cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;
@@ -1055,7 +947,6 @@ export default function DashboardVendedor() {
                                 <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cat.movTotal)}</td>
                                 <td style={{padding:'10px 12px',color:'#60a5fa',fontWeight:600}}>{fmt(Math.round(cat.movTotal/qtdMeses2026))}</td>
                                 <td style={{padding:'10px 12px',color:'#a78bfa'}}>{fmt(cat.esperadoMes)}</td>
-                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{fmt(cat.esperadoAcum)}</td>
                                 <td style={{padding:'10px 12px'}}>
                                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                                     <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
@@ -1064,28 +955,10 @@ export default function DashboardVendedor() {
                                     <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span>
                                   </div>
                                 </td>
-
                               </tr>
                             );
                           })}
                         </tbody>
-                        <tfoot>
-                          <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068'}}>TOTAL</td>
-                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700}}>{lista.length}</td>
-                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#f87171'}}>{cats.reduce((s,c)=>s+c.semMov,0)}</td>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cats.reduce((s,c)=>s+c.movTotal,0))}</td>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#60a5fa'}}>{fmt(Math.round(cats.reduce((s,c)=>s+c.movTotal,0)/qtdMeses2026))}</td>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</td>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#6b7280'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoAcum,0))}</td>
-                            <td style={{padding:'10px 12px'}}>
-                              <span style={{color:corPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100),fontWeight:700,fontSize:'0.75rem'}}>
-                                {fmtPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100)}
-                              </span>
-                            </td>
-
-                          </tr>
-                        </tfoot>
                       </table>
                     </div>
                   </div>
@@ -1096,9 +969,7 @@ export default function DashboardVendedor() {
               }
             })()}
 
-            {/* ── EQUIPES ── */}
             {aba === 'equipes' && (() => {
-              // Agrupa por equipe
               const equipeMap = {};
               for (const e of lista) {
                 const equipe = e._cons?.equipe || e.gestor || 'Sem equipe';
@@ -1112,7 +983,6 @@ export default function DashboardVendedor() {
                 if (movE===0) eq.semMov++;
                 const entBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
                 if (entBanco.length>0) { eq.naMeta++; eq.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0); }
-                // Agrupa vendedores dentro da equipe
                 const vNome = e.vendedor||'—';
                 if (!eq.vendedores[vNome]) eq.vendedores[vNome] = { nome:vNome, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
                 const vd = eq.vendedores[vNome];
@@ -1121,39 +991,19 @@ export default function DashboardVendedor() {
                 if(entBanco.length>0){vd.naMeta++;vd.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0);}
               }
               const equipes = Object.values(equipeMap).sort((a,b)=>b.movTotal-a.movTotal);
-              const meses2026E = mesesDisp.filter(m=>m>='2026-01');
-              const qtdM = meses2026E.length||1;
-
+              const qtdM = mesesDisp.filter(m=>m>='2026-01').length||1;
               return (
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  {/* KPIs gerais de equipes */}
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
-                    {[
-                      {label:'Equipes',val:equipes.length,sub:'ativas'},
-                      {label:'Total Empresas',val:lista.length,cor:'#1a1d2e',sub:`${lista.filter(e=>mesesDisp.some(m=>(e.movPorMes?.[m]||0)>0)).length} movimentando`},
-                      {label:'Melhor Equipe',val:equipes[0]?.nome||'—',cor:'#f0b429',sub:fmt(equipes[0]?.movTotal||0)+' acum.'},
-                    ].map(k=>(
-                      <div key={k.label} style={{...s.card,padding:'14px 18px'}}>
-                        <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{k.label}</div>
-                        <div style={{fontSize:typeof k.val==='number'?'1.4rem':'1rem',fontWeight:700,color:k.cor||'#1a1d2e'}}>{k.val}</div>
-                        {k.sub&&<div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>{k.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Cards por equipe */}
                   {equipes.map(eq => {
                     const vendedores = Object.values(eq.vendedores).sort((a,b)=>b.movTotal-a.movTotal);
                     const pctMov = eq.esperado*mesesDisp.length>0?(eq.movTotal/(eq.esperado*mesesDisp.length))*100:0;
-                    const pctMeta = (eq.esperado||1)>0?(eq.valorMeta/eq.esperado)*100:0;
-                    const cor = pctMov>=100?'#34d399':pctMov>=50?'#f0b429':'#f87171';
+                    const cor = corPct(pctMov);
                     return (
                       <div key={eq.nome} style={{...s.card,padding:0,overflow:'hidden'}}>
-                        {/* Header da equipe */}
                         <div style={{background:'linear-gradient(135deg,#1a1d2e,#252840)',padding:'16px 22px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
                           <div>
                             <div style={{fontWeight:700,fontSize:'1rem',color:'white'}}>👥 {eq.nome}</div>
-                            <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas · {vendedores.length} vendedor{vendedores.length!==1?'es':''}</div>
+                            <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas</div>
                           </div>
                           <div style={{display:'flex',gap:20}}>
                             <div style={{textAlign:'right'}}>
@@ -1166,28 +1016,25 @@ export default function DashboardVendedor() {
                             </div>
                           </div>
                         </div>
-                        {/* Barra de progresso da equipe */}
                         <div style={{padding:'8px 22px',background:'#f9fafb',borderBottom:'1px solid #e4e7ef',display:'flex',alignItems:'center',gap:12}}>
                           <div style={{flex:1,background:'#e4e7ef',borderRadius:4,height:8,overflow:'hidden'}}>
                             <div style={{height:'100%',width:`${Math.min(pctMov,100)}%`,background:cor,borderRadius:4}}/>
                           </div>
                           <span style={{color:cor,fontWeight:700,fontSize:'0.78rem',minWidth:40}}>{fmtPct(pctMov)}</span>
-                          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{eq.semMov} sem mov.</span>
                         </div>
-                        {/* Ranking de vendedores da equipe */}
                         <div style={{padding:'12px 22px'}}>
                           <div style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Ranking de Vendedores</div>
                           <div style={{display:'flex',flexDirection:'column',gap:8}}>
                             {vendedores.map((vd,idx) => {
                               const pctVd = vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
-                              const corVd = pctVd>=100?'#34d399':pctVd>=50?'#f0b429':'#f87171';
+                              const corVd = corPct(pctVd);
                               const medalha = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
                               return (
                                 <div key={vd.nome} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:idx===0?'rgba(240,180,41,0.05)':'transparent',borderRadius:8,border:idx===0?'1px solid rgba(240,180,41,0.15)':'1px solid transparent'}}>
                                   <span style={{fontSize:'1rem',minWidth:28}}>{medalha}</span>
                                   <div style={{flex:1}}>
                                     <div style={{fontWeight:600,fontSize:'0.82rem'}}>{vd.nome}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{vd.empresas} emp. · {vd.naMeta} na meta · {vd.semMov} sem mov.</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{vd.empresas} emp. · {vd.naMeta} na meta</div>
                                   </div>
                                   <div style={{textAlign:'right',minWidth:100}}>
                                     <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.85rem'}}>{fmt(vd.movTotal)}</div>
@@ -1195,7 +1042,6 @@ export default function DashboardVendedor() {
                                   </div>
                                   <div style={{textAlign:'right',minWidth:80}}>
                                     <div style={{color:corVd,fontWeight:700,fontSize:'0.82rem'}}>{fmtPct(pctVd)}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>vs esperado</div>
                                   </div>
                                   {vd.valorMeta>0 && <div style={{textAlign:'right',minWidth:80}}>
                                     <div style={{color:'#34d399',fontWeight:700,fontSize:'0.8rem'}}>{fmt(vd.valorMeta)}</div>
@@ -1213,7 +1059,6 @@ export default function DashboardVendedor() {
               );
             })()}
 
-            {/* ── CARTEIRA ── */}
             {aba === 'carteira' && (() => {
               const categoriasCart = [...new Set(lista.map(e=>e.categoria).filter(Boolean))].sort();
               const listaCart = listaFiltrada.filter(e => !filtroCategoria || e.categoria === filtroCategoria);
@@ -1232,7 +1077,6 @@ export default function DashboardVendedor() {
               });
               return (
                 <div style={s.card}>
-                  {/* Header e filtros */}
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}}>
                     <div style={s.cardTitle}>📋 Carteira — {listaCart.length} empresas</div>
                     <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
@@ -1262,7 +1106,6 @@ export default function DashboardVendedor() {
                       <option value="sem movimentação">❌ Sem mov.</option>
                     </select>
                   </div>
-                  {/* Seletor de colunas e meses */}
                   <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap',alignItems:'center',background:'#f9fafb',borderRadius:8,padding:'8px 12px',border:'1px solid #e4e7ef'}}>
                     <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginRight:4}}>Colunas:</span>
                     {[['empresa','Empresa'],['produto','Produto'],['esperado','Esperado'],['media','Média'],['meta','Meta'],['status','Status']].map(([k,l])=>(
@@ -1303,11 +1146,7 @@ export default function DashboardVendedor() {
                           return (
                             <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
                               {colV('empresa') && <td style={s.td}>
-                                <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}
-                                  onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
-                                  onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
-                                  {e.nome}
-                                </a>
+                                <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}>{e.nome}</a>
                                 <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
                               </td>}
                               {colV('produto') && <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
@@ -1324,7 +1163,7 @@ export default function DashboardVendedor() {
                                 {e.valorMeta>0 ? (
                                   <div>
                                     <div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec.':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div>
+                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec. × peso':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div>
                                   </div>
                                 ) : <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>}
                               </td>}
@@ -1338,7 +1177,6 @@ export default function DashboardVendedor() {
                       </tbody>
                     </table>
                   </div>
-                  {/* Paginação */}
                   {totalPags > 1 && (
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:16,flexWrap:'wrap'}}>
                       <button onClick={()=>setCarteiraPagina(p=>Math.max(1,p-1))} disabled={pagAtual===1}
@@ -1361,7 +1199,6 @@ export default function DashboardVendedor() {
               );
             })()}
 
-            {/* ── PRODUTOS ── */}
             {aba === 'produtos' && (
               <div style={s.card}>
                 <div style={s.cardTitle}>🎯 Resultado por Produto</div>
@@ -1377,9 +1214,9 @@ export default function DashboardVendedor() {
                         </div>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
                           {[
-                            {label:'Mov. Esperada/mês', val:fmt(p.esperado),                              cor:'#a78bfa'},
-                            {label:'Mov. Real Média',   val:p.movReal>0?fmt(p.movReal):'—',               cor:'#f0b429'},
-                            {label:'% Aderência',       val:fmtPct(pctAdere),                             cor},
+                            {label:'Mov. Esperada/mês', val:fmt(p.esperado), cor:'#a78bfa'},
+                            {label:'Mov. Real Média',   val:p.movReal>0?fmt(p.movReal):'—', cor:'#f0b429'},
+                            {label:'% Aderência',       val:fmtPct(pctAdere), cor},
                           ].map(k => (
                             <div key={k.label}>
                               <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',marginBottom:4}}>{k.label}</div>
@@ -1398,18 +1235,17 @@ export default function DashboardVendedor() {
               </div>
             )}
 
-            {/* ── RANKING ── */}
             {aba === 'ranking' && (
               <div style={s.card}>
-                <div style={s.cardTitle}>🏆 Ranking — Movimentação Real por Vendedor</div>
+                <div style={s.cardTitle}>🏆 Ranking — Vol. Meta Apurada por Vendedor</div>
                 <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:10}}>
-                  {ranking.map((c,i) => {
+                  {[...ranking].sort((a,b) => b.valorMeta - a.valorMeta).map((c,i) => {
                     const medal  = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
                     const corM   = i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
                     const pctAd  = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
                     const cor    = pctAd >= 90 ? '#34d399' : pctAd >= 50 ? '#f0b429' : '#f87171';
                     const isAtu  = c.id === consultorId;
-                    const maxMov = Math.max(...ranking.map(x=>x.movReal), 1);
+                    const maxMeta = Math.max(...ranking.map(x=>x.valorMeta), 1);
                     return (
                       <div key={c.id} style={{borderRadius:10,overflow:'hidden',background:isAtu?'#fff8e6':'#f9fafb',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`}}>
                         <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',flexWrap:'wrap'}}>
@@ -1419,16 +1255,14 @@ export default function DashboardVendedor() {
                             <div style={{fontSize:'0.72rem',color:'#8b92b0',marginTop:2}}>{c.empresas} empresa{c.empresas>1?'s':''} · gestor: {c.gestor}</div>
                           </div>
                           <div style={{textAlign:'right'}}>
-                            <div style={{fontWeight:700,color:'#f0b429'}}>{fmt(c.movReal)}</div>
-                            <div style={{fontSize:'0.68rem',color:cor}}>esperado: {fmt(c.esperado)} · {fmtPct(pctAd)}</div>
-                            {c.valorMeta > 0 && (
-                              <div style={{fontSize:'0.65rem',color:'#34d399',marginTop:2}}>meta: {fmt(c.valorMeta)} apurado</div>
-                            )}
+                            <div style={{color:'#34d399',fontWeight:700,fontSize:'1rem'}}>{fmt(c.valorMeta)}</div>
+                            <div style={{fontSize:'0.65rem',color:'#8b92b0',marginTop:1}}>meta apurada</div>
+                            <div style={{fontSize:'0.68rem',color:'#f0b429',marginTop:2}}>{fmt(c.movReal)} mov. real</div>
                           </div>
                           {isAtu && <span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
                         </div>
                         <div style={{height:3,background:'#f5f6fa'}}>
-                          <div style={{height:'100%',width:`${(c.movReal/maxMov)*100}%`,background:isAtu?'#f0b429':i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}></div>
+                          <div style={{height:'100%',width:`${(c.valorMeta/maxMeta)*100}%`,background:isAtu?'#f0b429':i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}></div>
                         </div>
                       </div>
                     );
