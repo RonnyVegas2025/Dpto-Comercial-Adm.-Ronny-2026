@@ -922,24 +922,34 @@ export default function DashboardVendedor() {
             {/* ── CATEGORIAS ── */}
             {aba === 'categorias' && (() => {
               // Agrupa empresas por categoria
+              const meses2026Cat = mesesDisp.filter(m=>m>='2026-01');
+              const qtdMeses2026 = meses2026Cat.length || 1;
               const catMap = {};
               for (const e of lista) {
                 const cat = e.categoria || 'Outros';
-                if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperadoMes:0, esperadoAcum:0, naMeta:0, valorMeta:0, semMov:0 };
                 catMap[cat].empresas++;
-                catMap[cat].movTotal  += mesesDisp.reduce((s,m)=>s+(e.movPorMes[m]||0),0);
-                catMap[cat].esperado  += e.esperadoMes;
-                const temMeta = (vmetasRows||[]).some(v=>v.empresa_id===e.id);
-                if (temMeta) {
+                catMap[cat].movTotal    += mesesDisp.reduce((s,m)=>s+(e.movPorMes[m]||0),0);
+                catMap[cat].esperadoMes += e.esperadoMes;
+                // Esperado acumulado = esperado/mês × nº meses disponíveis
+                catMap[cat].esperadoAcum += e.esperadoMes * mesesDisp.length;
+                // Meta apurada: soma do banco (inclui upsell)
+                const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
+                if (entradasBanco.length > 0) {
                   catMap[cat].naMeta++;
-                  catMap[cat].valorMeta += (vmetasRows||[]).filter(v=>v.empresa_id===e.id).reduce((s,v)=>s+(v.valor_meta||0),0);
+                  catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0);
                 }
+                if (catMap[cat].movTotal === 0) catMap[cat].semMov = 0; // recalc abaixo
+              }
+              // Recalcular semMov corretamente
+              for (const e of lista) {
+                const cat = e.categoria || 'Outros';
                 const movRec = mesesDisp.reduce((s,m)=>s+(e.movPorMes[m]||0),0);
-                if (movRec === 0) catMap[cat].semMov++;
+                if (movRec === 0) catMap[cat].semMov = (catMap[cat].semMov||0)+1;
               }
               const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
-              const maxMov = Math.max(...cats.map(c=>c.movTotal), 1);
-              const maxEsp = Math.max(...cats.map(c=>c.esperado), 1);
+              const maxMov  = Math.max(...cats.map(c=>c.movTotal), 1);
+              const maxAcum = Math.max(...cats.map(c=>c.esperadoAcum), 1);
 
               return (
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -967,8 +977,8 @@ export default function DashboardVendedor() {
                     <div style={{display:'flex',flexDirection:'column',gap:10}}>
                       {cats.map(cat => {
                         const pctMov = (cat.movTotal/maxMov)*100;
-                        const pctEsp = (cat.esperado/maxEsp)*100;
-                        const pctReal = cat.esperado > 0 ? (cat.movTotal/cat.esperado)*100 : 0;
+                        const pctEsp = (cat.esperadoAcum/maxAcum)*100;
+                        const pctReal = cat.esperadoAcum > 0 ? (cat.movTotal/cat.esperadoAcum)*100 : 0;
                         const cor = corPct(pctReal);
                         return (
                           <div key={cat.nome}>
@@ -991,7 +1001,7 @@ export default function DashboardVendedor() {
                             </div>
                             <div style={{display:'flex',justifyContent:'space-between',marginTop:3,fontSize:'0.65rem',color:'#8b92b0'}}>
                               <span>{cat.naMeta} na meta · {fmt(cat.valorMeta)} apurado</span>
-                              <span>esperado: {fmt(cat.esperado)}/mês</span>
+                              <span>esperado acum.: {fmt(cat.esperadoAcum)}</span>
                             </div>
                           </div>
                         );
@@ -1006,7 +1016,7 @@ export default function DashboardVendedor() {
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
                         <thead>
                           <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Esperado/mês','% Realizado','Na Meta','Meta Apurada'].map(h=>(
+                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado Acum.','% Realizado','Na Meta','Meta Apurada'].map(h=>(
                               <th key={h} style={{padding:'8px 12px',textAlign:['Empresas','Sem Mov.'].includes(h)?'center':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                             ))}
                           </tr>
@@ -1021,7 +1031,8 @@ export default function DashboardVendedor() {
                                 <td style={{padding:'10px 12px',textAlign:'center'}}>{cat.empresas}</td>
                                 <td style={{padding:'10px 12px',textAlign:'center',color:cat.semMov>0?'#f87171':'#8b92b0'}}>{cat.semMov}</td>
                                 <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cat.movTotal)}</td>
-                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{fmt(cat.esperado)}</td>
+                                <td style={{padding:'10px 12px',color:'#60a5fa',fontWeight:600}}>{fmt(Math.round(cat.movTotal/qtdMeses2026))}</td>
+                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{fmt(cat.esperadoAcum)}</td>
                                 <td style={{padding:'10px 12px'}}>
                                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                                     <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
@@ -1042,10 +1053,11 @@ export default function DashboardVendedor() {
                             <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700}}>{lista.length}</td>
                             <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#f87171'}}>{cats.reduce((s,c)=>s+c.semMov,0)}</td>
                             <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cats.reduce((s,c)=>s+c.movTotal,0))}</td>
-                            <td style={{padding:'10px 12px',fontWeight:700,color:'#6b7280'}}>{fmt(cats.reduce((s,c)=>s+c.esperado,0))}</td>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#60a5fa'}}>{fmt(Math.round(cats.reduce((s,c)=>s+c.movTotal,0)/qtdMeses2026))}</td>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#6b7280'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoAcum,0))}</td>
                             <td style={{padding:'10px 12px'}}>
-                              <span style={{color:corPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperado,0),1)*100),fontWeight:700,fontSize:'0.75rem'}}>
-                                {fmtPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperado,0),1)*100)}
+                              <span style={{color:corPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100),fontWeight:700,fontSize:'0.75rem'}}>
+                                {fmtPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100)}
                               </span>
                             </td>
                             <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#34d399'}}>{cats.reduce((s,c)=>s+c.naMeta,0)}</td>
