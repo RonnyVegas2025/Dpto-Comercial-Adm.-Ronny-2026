@@ -111,6 +111,8 @@ export default function DashboardVendedor() {
   const [filtroMetaMesLocal, setFiltroMetaMesLocal] = useState('');
   const [filtroMetaProduto,  setFiltroMetaProduto]  = useState('');
   const [filtroMetaCadastro, setFiltroMetaCadastro] = useState('');
+  const [metaPagina,         setMetaPagina]         = useState(1);
+  const [metaPorPag,         setMetaPorPag]         = useState(15);
   const [carteiraPagina,     setCarteiraPagina]     = useState(1);
   const [carteiraPorPag,     setCarteiraPorPag]     = useState(12);
   const [filtroCategoria,    setFiltroCategoria]    = useState('');
@@ -729,23 +731,35 @@ export default function DashboardVendedor() {
             {aba === 'resumo' && empresasNaMeta && empresasNaMeta.length > 0 && (
               <div style={{...s.card,marginBottom:16}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
-                  <div style={s.cardTitle}>🎯 Empresas na Meta</div>
+                  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                    <div style={s.cardTitle}>🎯 Empresas na Meta</div>
+                    {/* Seletor por página */}
+                    <div style={{display:'flex',alignItems:'center',gap:5}}>
+                      <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>Por pág:</span>
+                      {[15,50,100].map(n=>(
+                        <button key={n} onClick={()=>{setMetaPorPag(n);setMetaPagina(1);}}
+                          style={{background:metaPorPag===n?'#f0b429':'#f5f6fa',color:metaPorPag===n?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',cursor:'pointer',fontFamily:'inherit',fontWeight:metaPorPag===n?700:400}}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                    <select value={filtroMetaMesLocal||''} onChange={ev=>setFiltroMetaMesLocal(ev.target.value)}
+                    <select value={filtroMetaMesLocal||''} onChange={ev=>{setFiltroMetaMesLocal(ev.target.value);setMetaPagina(1);}}
                       style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os meses</option>
                       {[...new Set((vmetasRows||[]).filter(v=>empresasNaMeta.some(e=>e.id===v.empresa_id)).map(v=>v.competencia_meta?.substring(0,7)).filter(Boolean))].sort().map(m=>(
                         <option key={m} value={m}>{fmtMes(m+'-01')}</option>
                       ))}
                     </select>
-                    <select value={filtroMetaProduto||''} onChange={ev=>setFiltroMetaProduto(ev.target.value)}
+                    <select value={filtroMetaProduto||''} onChange={ev=>{setFiltroMetaProduto(ev.target.value);setMetaPagina(1);}}
                       style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os produtos</option>
                       {[...new Set(empresasNaMeta.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=>(
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
-                    <select value={filtroMetaCadastro||''} onChange={ev=>setFiltroMetaCadastro(ev.target.value)}
+                    <select value={filtroMetaCadastro||''} onChange={ev=>{setFiltroMetaCadastro(ev.target.value);setMetaPagina(1);}}
                       style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os cadastros</option>
                       {[...new Set(empresasNaMeta.map(e=>e.data_cadastro?.substring(0,7)).filter(Boolean))].sort().reverse().map(m=>(
@@ -785,7 +799,11 @@ export default function DashboardVendedor() {
                                 if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
                                 return true;
                               });
-                          return baseEmpresas
+                          // Paginação
+                          const totalPgsM = Math.ceil(baseEmpresas.length / metaPorPag);
+                          const pgAtualM  = Math.min(metaPagina, totalPgsM || 1);
+                          const baseSlice = baseEmpresas.slice((pgAtualM-1)*metaPorPag, pgAtualM*metaPorPag);
+                          return baseSlice
                         .flatMap((e,i) => {
                           const entradas = filtroMetaCadastro
                             ? (filtroMetaMesLocal
@@ -854,7 +872,9 @@ export default function DashboardVendedor() {
                                   if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
                                   return true;
                                 });
-                            return `TOTAL (${base.length} empresas)`;
+                            const totalPgsM2 = Math.ceil(base.length / metaPorPag);
+                            const pgAtualM2  = Math.min(metaPagina, totalPgsM2 || 1);
+                            return `TOTAL (${base.length} empresas) · pág. ${pgAtualM2}/${totalPgsM2||1}`;
                           })()}
                         </td>
                         <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',textAlign:'right',fontSize:'0.8rem'}}>
@@ -871,6 +891,9 @@ export default function DashboardVendedor() {
                         </td>
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
                           {(()=>{
+                            // CORRIGIDO: soma TODAS as entradas (não só da página visível)
+                            // Para cada empresa da lista completa (sem paginar), soma valor_meta do banco
+                            // Se não tem no banco, usa o valorMeta calculado inline
                             const base = filtroMetaCadastro
                               ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
                               : empresasNaMeta.filter(e=>{
@@ -878,17 +901,57 @@ export default function DashboardVendedor() {
                                   if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
                                   return true;
                                 });
-                            const ent = base.flatMap(e=>{
-                              const all=(vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                              return filtroMetaMesLocal?all.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal):all;
-                            });
-                            return fmt(ent.reduce((s,v)=>s+(v.valor_meta||0),0));
+                            const total = base.reduce((s, e) => {
+                              const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
+                              const filtradas = filtroMetaMesLocal
+                                ? entradasBanco.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
+                                : entradasBanco;
+                              if (filtradas.length > 0) {
+                                return s + filtradas.reduce((sv,v)=>sv+(v.valor_meta||0),0);
+                              }
+                              // Sem entrada no banco → usa valorMeta calculado
+                              const metaComp = e.metaComp?.substring(0,7);
+                              if (filtroMetaMesLocal && metaComp !== filtroMetaMesLocal) return s;
+                              return s + (e.valorMeta || 0);
+                            }, 0);
+                            return fmt(total);
                           })()}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
+                {/* Paginação da tabela Empresas na Meta */}
+                {(()=>{
+                  const base = filtroMetaCadastro
+                    ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
+                    : empresasNaMeta.filter(e=>{
+                        if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                        if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
+                        return true;
+                      });
+                  const totalPgsM3 = Math.ceil(base.length / metaPorPag);
+                  if (totalPgsM3 <= 1) return null;
+                  const pgAtualM3 = Math.min(metaPagina, totalPgsM3);
+                  return (
+                    <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:14,flexWrap:'wrap'}}>
+                      <button onClick={()=>setMetaPagina(p=>Math.max(1,p-1))} disabled={pgAtualM3===1}
+                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===1?'default':'pointer',color:pgAtualM3===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
+                      {Array.from({length:Math.min(totalPgsM3,7)},(_,i)=>{
+                        const pg = totalPgsM3<=7?i+1:pgAtualM3<=4?i+1:pgAtualM3>=totalPgsM3-3?totalPgsM3-6+i:pgAtualM3-3+i;
+                        return (
+                          <button key={pg} onClick={()=>setMetaPagina(pg)}
+                            style={{background:pgAtualM3===pg?'#f0b429':'#f5f6fa',color:pgAtualM3===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pgAtualM3===pg?700:400,fontSize:'0.82rem'}}>
+                            {pg}
+                          </button>
+                        );
+                      })}
+                      <button onClick={()=>setMetaPagina(p=>Math.min(totalPgsM3,p+1))} disabled={pgAtualM3===totalPgsM3}
+                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===totalPgsM3?'default':'pointer',color:pgAtualM3===totalPgsM3?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
+                      <span style={{color:'#8b92b0',fontSize:'0.72rem',marginLeft:4}}>Pág. {pgAtualM3} de {totalPgsM3} · {base.length} empresas</span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -974,21 +1037,25 @@ export default function DashboardVendedor() {
               for (const e of lista) {
                 const equipe = e._cons?.equipe || e.gestor || 'Sem equipe';
                 const gestor = e.gestor || '—';
-                if (!equipeMap[equipe]) equipeMap[equipe] = { nome:equipe, gestor, vendedores:{}, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                if (!equipeMap[equipe]) equipeMap[equipe] = { nome:equipe, gestor, vendedores:{}, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0, fechadoBruto:0 };
                 const eq = equipeMap[equipe];
                 eq.empresas++;
                 const movE = mesesDisp.reduce((s,m)=>s+(e.movPorMes?.[m]||0),0);
                 eq.movTotal += movE;
                 eq.esperado += (e.esperadoMes||0);
+                eq.fechadoBruto += (e.potencial_movimentacao||0);
                 if (movE===0) eq.semMov++;
-                const entBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                if (entBanco.length>0) { eq.naMeta++; eq.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0); }
+                // CORRIGIDO: usa e.valorMeta (já calculado por consultor, com peso correto)
+                // em vez de somar vmetasRows diretamente (evita duplicação e usa valor correto)
+                const temMeta = (e.valorMeta || 0) > 0;
+                if (temMeta) { eq.naMeta++; eq.valorMeta += (e.valorMeta || 0); }
                 const vNome = e.vendedor||'—';
-                if (!eq.vendedores[vNome]) eq.vendedores[vNome] = { nome:vNome, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0 };
+                if (!eq.vendedores[vNome]) eq.vendedores[vNome] = { nome:vNome, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0, fechadoBruto:0 };
                 const vd = eq.vendedores[vNome];
                 vd.empresas++; vd.movTotal+=movE; vd.esperado+=(e.esperadoMes||0);
+                vd.fechadoBruto += (e.potencial_movimentacao||0); // valor bruto fechado
                 if(movE===0) vd.semMov++;
-                if(entBanco.length>0){vd.naMeta++;vd.valorMeta+=entBanco.reduce((s,v)=>s+(v.valor_meta||0),0);}
+                if(temMeta){vd.naMeta++;vd.valorMeta+=(e.valorMeta||0);}
               }
               const equipes = Object.values(equipeMap).sort((a,b)=>b.movTotal-a.movTotal);
               const qtdM = mesesDisp.filter(m=>m>='2026-01').length||1;
@@ -1005,14 +1072,26 @@ export default function DashboardVendedor() {
                             <div style={{fontWeight:700,fontSize:'1rem',color:'white'}}>👥 {eq.nome}</div>
                             <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas</div>
                           </div>
-                          <div style={{display:'flex',gap:20}}>
+                          <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                             <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.65rem',textTransform:'uppercase'}}>Movimentação acum.</div>
-                              <div style={{color:'#f0b429',fontWeight:700,fontSize:'1.1rem'}}>{fmt(eq.movTotal)}</div>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Novas Emp.</div>
+                              <div style={{color:'#60a5fa',fontWeight:700,fontSize:'1rem'}}>{eq.empresas}</div>
                             </div>
-                            <div style={{textAlign:'right',marginLeft:16}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.65rem',textTransform:'uppercase'}}>Meta apurada</div>
-                              <div style={{color:'#34d399',fontWeight:700,fontSize:'1.1rem'}}>{eq.valorMeta>0?fmt(eq.valorMeta):'—'}</div>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
+                              <div style={{color:'#a78bfa',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.fechadoBruto||0)}</div>
+                            </div>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
+                              <div style={{color:'#e8eaf0',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.esperado)}</div>
+                            </div>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
+                              <div style={{color:'#f0b429',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.movTotal)}</div>
+                            </div>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
+                              <div style={{color:'#34d399',fontWeight:700,fontSize:'1rem'}}>{eq.valorMeta>0?fmt(eq.valorMeta):'—'}</div>
                             </div>
                           </div>
                         </div>
@@ -1026,27 +1105,56 @@ export default function DashboardVendedor() {
                           <div style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Ranking de Vendedores</div>
                           <div style={{display:'flex',flexDirection:'column',gap:8}}>
                             {vendedores.map((vd,idx) => {
-                              const pctVd = vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
-                              const corVd = corPct(pctVd);
+                              const pctVd   = vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
+                              const corVd   = corPct(pctVd);
                               const medalha = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
+                              // Meta do consultor — busca em consultores pelo nome
+                              const consData = consultores.find(cc=>cc.nome===vd.nome);
+                              const metaConsultor = consData?.meta_mensal || 0;
+                              const pctMeta = metaConsultor>0?(vd.valorMeta/metaConsultor)*100:0;
+                              const corMeta = corPct(pctMeta);
                               return (
-                                <div key={vd.nome} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:idx===0?'rgba(240,180,41,0.05)':'transparent',borderRadius:8,border:idx===0?'1px solid rgba(240,180,41,0.15)':'1px solid transparent'}}>
-                                  <span style={{fontSize:'1rem',minWidth:28}}>{medalha}</span>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontWeight:600,fontSize:'0.82rem'}}>{vd.nome}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{vd.empresas} emp. · {vd.naMeta} na meta</div>
+                                <div key={vd.nome} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${idx===0?'rgba(240,180,41,0.2)':'#e4e7ef'}`,background:idx===0?'rgba(255,248,230,0.6)':'#fafafa',marginBottom:4}}>
+                                  {/* Linha principal */}
+                                  <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap'}}>
+                                    <span style={{fontSize:'1rem',minWidth:28,textAlign:'center'}}>{medalha}</span>
+                                    <div style={{flex:1,minWidth:120}}>
+                                      <div style={{fontWeight:700,fontSize:'0.85rem',color:'#1a1d2e'}}>{vd.nome}</div>
+                                      <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>
+                                        {vd.empresas} emp. · {vd.semMov} sem mov. · {vd.naMeta} na meta
+                                      </div>
+                                    </div>
+                                    {/* Bloco: Mov. Acum. */}
+                                    <div style={{textAlign:'right',minWidth:90}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
+                                      <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.movTotal)}</div>
+                                      <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>média: {fmt(Math.round(vd.movTotal/qtdM))}/mês</div>
+                                    </div>
+                                    {/* Bloco: Fechado Bruto */}
+                                    <div style={{textAlign:'right',minWidth:90}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
+                                      <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.fechadoBruto||0)}</div>
+                                      <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{vd.empresas} contratos</div>
+                                    </div>
+                                    {/* Bloco: Valor Esperado */}
+                                    <div style={{textAlign:'right',minWidth:90}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
+                                      <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.esperado)}</div>
+                                      <div style={{color:corVd,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctVd)} realizado</div>
+                                    </div>
+                                    {/* Bloco: Meta Apurada */}
+                                    <div style={{textAlign:'right',minWidth:90}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
+                                      <div style={{color:'#34d399',fontWeight:700,fontSize:'0.88rem'}}>{vd.valorMeta>0?fmt(vd.valorMeta):'—'}</div>
+                                      {metaConsultor>0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
+                                    </div>
                                   </div>
-                                  <div style={{textAlign:'right',minWidth:100}}>
-                                    <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.85rem'}}>{fmt(vd.movTotal)}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>média: {fmt(Math.round(vd.movTotal/qtdM))}/mês</div>
-                                  </div>
-                                  <div style={{textAlign:'right',minWidth:80}}>
-                                    <div style={{color:corVd,fontWeight:700,fontSize:'0.82rem'}}>{fmtPct(pctVd)}</div>
-                                  </div>
-                                  {vd.valorMeta>0 && <div style={{textAlign:'right',minWidth:80}}>
-                                    <div style={{color:'#34d399',fontWeight:700,fontSize:'0.8rem'}}>{fmt(vd.valorMeta)}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>meta apurada</div>
-                                  </div>}
+                                  {/* Barra de progresso da meta */}
+                                  {metaConsultor > 0 && (
+                                    <div style={{height:3,background:'#f0f2f8'}}>
+                                      <div style={{height:'100%',width:`${Math.min(pctMeta,100)}%`,background:corMeta,transition:'width 0.6s'}}/>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
