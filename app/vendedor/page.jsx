@@ -1025,7 +1025,6 @@ export default function DashboardVendedor() {
                       </table>
                     </div>
                   </div>
-                </div>
 
                   {/* ── GRÁFICOS DE PIZZA ── */}
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
