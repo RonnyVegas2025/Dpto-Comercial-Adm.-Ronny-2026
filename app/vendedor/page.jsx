@@ -99,6 +99,8 @@ export default function DashboardVendedor() {
   const [meses,          setMeses]          = useState([]);
   const [mesSelecionado, setMesSelecionado] = useState('');
   const [filtroMetaMesLocal, setFiltroMetaMesLocal] = useState('');
+  const [filtroMetaProduto,  setFiltroMetaProduto]  = useState('');
+  const [filtroMetaCadastro, setFiltroMetaCadastro] = useState('');
   const [busca,          setBusca]          = useState('');
   const [filtroProduto,  setFiltroProduto]  = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState('');
@@ -627,9 +629,13 @@ export default function DashboardVendedor() {
                       // Contratos novos: empresas cadastradas neste mês
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
                       // Meta considerada no mês
-                      const metaMes     = (vmetasRows||[])
-                        .filter(v => lista.some(e=>e.id===v.empresa_id) && v.competencia_meta?.substring(0,7)===m)
-                        .reduce((s,v)=>s+(v.valor_meta||0),0);
+                      // Quando o mês selecionado é este mês, usa kpis.totalValorMeta (já filtrado corretamente)
+                      // Senão calcula pela competencia_meta do banco
+                      const metaMes = mesSelecionado === m
+                        ? (kpis.totalValorMeta || 0)
+                        : (vmetasRows||[])
+                            .filter(v => lista.some(e=>e.id===v.empresa_id) && v.competencia_meta?.substring(0,7)===m)
+                            .reduce((s,v)=>s+(v.valor_meta||0),0);
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
                           {/* Cabeçalho do mês */}
@@ -682,13 +688,25 @@ export default function DashboardVendedor() {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
                   <div style={s.cardTitle}>🎯 Empresas na Meta</div>
                   <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                    {/* Filtro por mês */}
-                    <select
-                      value={filtroMetaMesLocal||''}
-                      onChange={ev => setFiltroMetaMesLocal(ev.target.value)}
+                    {/* Filtros */}
+                    <select value={filtroMetaMesLocal||''} onChange={ev=>setFiltroMetaMesLocal(ev.target.value)}
                       style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os meses</option>
                       {[...new Set((vmetasRows||[]).filter(v=>empresasNaMeta.some(e=>e.id===v.empresa_id)).map(v=>v.competencia_meta?.substring(0,7)).filter(Boolean))].sort().map(m=>(
+                        <option key={m} value={m}>{fmtMes(m+'-01')}</option>
+                      ))}
+                    </select>
+                    <select value={filtroMetaProduto||''} onChange={ev=>setFiltroMetaProduto(ev.target.value)}
+                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                      <option value="">Todos os produtos</option>
+                      {[...new Set(empresasNaMeta.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=>(
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    <select value={filtroMetaCadastro||''} onChange={ev=>setFiltroMetaCadastro(ev.target.value)}
+                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                      <option value="">Todos os cadastros</option>
+                      {[...new Set(empresasNaMeta.map(e=>e.data_cadastro?.substring(0,7)).filter(Boolean))].sort().reverse().map(m=>(
                         <option key={m} value={m}>{fmtMes(m+'-01')}</option>
                       ))}
                     </select>
@@ -712,7 +730,12 @@ export default function DashboardVendedor() {
                     </thead>
                     <tbody>
                       {empresasNaMeta
-                        .filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
+                        .filter(e => {
+                          if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                          if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
+                          if (filtroMetaCadastro && e.data_cadastro?.substring(0,7) !== filtroMetaCadastro) return false;
+                          return true;
+                        })
                         .flatMap((e,i) => {
                           const entradas = filtroMetaMesLocal
                             ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
@@ -754,7 +777,12 @@ export default function DashboardVendedor() {
                         <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>TOTAL</td>
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
                           {fmt(empresasNaMeta
-                            .filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
+                            .filter(e => {
+                          if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                          if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
+                          if (filtroMetaCadastro && e.data_cadastro?.substring(0,7) !== filtroMetaCadastro) return false;
+                          return true;
+                        })
                             .flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas)
                             .reduce((s,v)=>s+(v.valor_meta||0),0))}
                         </td>
