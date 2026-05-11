@@ -9,13 +9,14 @@ const supabase = createClient(
 );
 
 export const PERFIS = {
-  gestor_master:        'Gestor Master',
-  diretoria:            'Diretoria',
-  gestor_comercial:     'Gestor Comercial',
-  supervisor_comercial: 'Supervisor Comercial',
-  supervisor_adm:       'Supervisor Adm',
-  administrativo:       'Administrativo',
-  vendedor:             'Vendedor',
+  gestor_master:          'Gestor Master',
+  supervisor_adm_master:  'Supervisor Adm Master',
+  diretoria:              'Diretoria',
+  gestor_comercial:       'Gestor Comercial',
+  supervisor_comercial:   'Supervisor Comercial',
+  supervisor_adm:         'Supervisor Adm',
+  administrativo:         'Administrativo',
+  vendedor:               'Vendedor',
 };
 
 const AuthContext = createContext({
@@ -31,13 +32,11 @@ export function AuthProvider({ children }) {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
-    // Verifica sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) carregarPerfil(session.user);
       else setLoading(false);
     });
 
-    // Escuta mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) carregarPerfil(session.user);
       else { setUser(null); setProfile(null); setPermissoes({}); setLoading(false); }
@@ -57,7 +56,6 @@ export function AuthProvider({ children }) {
 
       if (profErr) {
         console.error('Erro ao carregar perfil:', profErr.message);
-        // Fallback: cria perfil básico com os dados do auth
         const fallback = {
           id: authUser.id,
           email: authUser.email,
@@ -80,12 +78,10 @@ export function AuthProvider({ children }) {
 
       const mapa = {};
       if (userPerms && userPerms.length > 0) {
-        // Usa permissões customizadas
         userPerms.forEach(p => {
           mapa[p.pagina] = { pode_ver: p.pode_ver, pode_editar: p.pode_editar };
         });
       } else {
-        // Fallback: usa permissões padrão do perfil
         const { data: perms } = await supabase
           .from('perfil_permissoes')
           .select('*')
@@ -110,19 +106,22 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }
 
-  const podeVer    = (pagina) => {
+  const podeVer = (pagina) => {
     if (!profile) return false;
+    // gestor_master e supervisor_adm_master veem tudo via permissões do banco
     if (profile.perfil === 'gestor_master') return true;
     return permissoes[pagina]?.pode_ver === true;
   };
+
   const podeEditar = (pagina) => {
     if (!profile) return false;
     if (profile.perfil === 'gestor_master') return true;
     return permissoes[pagina]?.pode_editar === true;
   };
 
-  // Gestor fixo do usuário — null = pode ver todos
-  const gestorFixo = profile?.perfil === 'gestor_master' ? null : (profile?.gestor_vinculado || null);
+  // Gestor fixo: só gestor_master e supervisor_adm_master veem tudo sem restrição
+  const perfisLivres = ['gestor_master', 'supervisor_adm_master', 'diretoria'];
+  const gestorFixo = perfisLivres.includes(profile?.perfil) ? null : (profile?.gestor_vinculado || null);
 
   return (
     <AuthContext.Provider value={{ user, profile, permissoes, loading, login, logout, podeVer, podeEditar, gestorFixo }}>
