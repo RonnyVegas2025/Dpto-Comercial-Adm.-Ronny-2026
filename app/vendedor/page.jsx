@@ -1094,6 +1094,11 @@ export default function DashboardVendedor() {
                                   </div>
                                 </div>
                               ))}
+                              {/* Linha total */}
+                              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                <span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total esperado/mês</span>
+                                <span style={{fontSize:'0.82rem',fontWeight:800,color:'#a78bfa'}}>{fmt(totalEsp)}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1438,6 +1443,39 @@ export default function DashboardVendedor() {
                         })}
                         {listaPage.length===0 && <tr><td colSpan={20} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>}
                       </tbody>
+                      {/* ── RODAPÉ COM TOTAIS (lista completa filtrada, não só a página) ── */}
+                      {listaCart.length > 0 && (
+                        <tfoot>
+                          <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
+                            {colV('empresa') && <td style={{...s.td,fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
+                              TOTAL ({listaCart.length} empresas)
+                            </td>}
+                            {colV('produto') && <td style={s.td}/>}
+                            <td style={s.td}/>{/* vendedor */}
+                            {colV('esperado') && <td style={{...s.td,fontWeight:700,color:'#a78bfa'}}>
+                              {fmt(listaCart.reduce((s,e)=>s+(e.esperadoMes||0),0))}
+                            </td>}
+                            {mesesFiltrados.map(m => (
+                              <td key={m} style={{...s.td,textAlign:'right',fontWeight:700,color:'#f0b429'}}>
+                                {(()=>{
+                                  const t = listaCart.reduce((s,e)=>s+(e.movPorMes?.[m]||0),0);
+                                  return t > 0 ? fmt(t) : <span style={{color:'#d1d5e8'}}>—</span>;
+                                })()}
+                              </td>
+                            ))}
+                            {colV('media') && <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#f0b429'}}>
+                              {fmt(listaCart.reduce((s,e)=>s+(e.mediaMovMes||0),0))}
+                            </td>}
+                            {colV('meta') && <td style={{...s.td,textAlign:'right',fontWeight:800,color:'#34d399'}}>
+                              {(()=>{
+                                const t = listaCart.reduce((s,e)=>s+(e.valorMeta||0),0);
+                                return t > 0 ? fmt(t) : <span style={{color:'#d1d5e8'}}>—</span>;
+                              })()}
+                            </td>}
+                            {colV('status') && <td style={s.td}/>}
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
                   {totalPags > 1 && (
