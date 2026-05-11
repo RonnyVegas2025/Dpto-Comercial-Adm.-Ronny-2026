@@ -965,9 +965,15 @@ export default function DashboardVendedor() {
                       {(() => {
                         const ultMes = [...mesesDisp].filter(m=>m>='2026-01').pop();
                         const ultVal = ultMes ? lista.reduce((s,e)=>s+(e.movPorMes[ultMes]||0),0) : 0;
+                        const espMensal = lista.reduce((s,e)=>s+(e.esperadoMes||0),0);
+                        const pctUlt = espMensal > 0 ? (ultVal/espMensal)*100 : 0;
+                        const corUlt = pctUlt>=100?'#34d399':pctUlt>=50?'#f0b429':'#f87171';
                         return <>
                           <div style={{fontSize:'1.3rem',fontWeight:700,color:'#f0b429'}}>{fmt(ultVal)}</div>
-                          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>{ultMes?fmtMes(ultMes+'-01'):''}</div>
+                          <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                            <span style={{color:corUlt,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctUlt)}</span>
+                            <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>vs esperado · {ultMes?fmtMes(ultMes+'-01'):''}</span>
+                          </div>
                         </>;
                       })()}
                     </div>
@@ -994,15 +1000,12 @@ export default function DashboardVendedor() {
                                 <span style={{color:'#f0b429',fontWeight:700,fontSize:'0.82rem'}}>{fmt(cat.movTotal)}</span>
                               </div>
                             </div>
-                            {/* Barra dupla: movimentação e esperado */}
+                            {/* Barra: movimentado % vs esperado acumulado (capped 100%) */}
                             <div style={{position:'relative',height:10,background:'#f0f2f8',borderRadius:5,overflow:'hidden'}}>
-                              {/* Esperado (fundo mais claro) */}
-                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${pctEsp}%`,background:'#e4e7ef',borderRadius:5}}/>
-                              {/* Movimentado */}
-                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${pctMov}%`,background:cor,borderRadius:5,opacity:0.85}}/>
+                              <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor,borderRadius:5}}/>
                             </div>
                             <div style={{display:'flex',justifyContent:'space-between',marginTop:3,fontSize:'0.65rem',color:'#8b92b0'}}>
-                              <span>{cat.naMeta} na meta · {fmt(cat.valorMeta)} apurado</span>
+                              <span>{fmt(cat.movTotal)} movimentado</span>
                               <span>esperado acum.: {fmt(cat.esperadoAcum)}</span>
                             </div>
                           </div>
@@ -1018,7 +1021,7 @@ export default function DashboardVendedor() {
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
                         <thead>
                           <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado Acum.','% Realizado'].map(h=>(
+                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','Esperado Acum.','% Realizado'].map(h=>(
                               <th key={h} style={{padding:'8px 12px',textAlign:['Empresas','Sem Mov.'].includes(h)?'center':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                             ))}
                           </tr>
@@ -1034,6 +1037,7 @@ export default function DashboardVendedor() {
                                 <td style={{padding:'10px 12px',textAlign:'center',color:cat.semMov>0?'#f87171':'#8b92b0'}}>{cat.semMov}</td>
                                 <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cat.movTotal)}</td>
                                 <td style={{padding:'10px 12px',color:'#60a5fa',fontWeight:600}}>{fmt(Math.round(cat.movTotal/qtdMeses2026))}</td>
+                                <td style={{padding:'10px 12px',color:'#a78bfa'}}>{fmt(cat.esperadoMes)}</td>
                                 <td style={{padding:'10px 12px',color:'#6b7280'}}>{fmt(cat.esperadoAcum)}</td>
                                 <td style={{padding:'10px 12px'}}>
                                   <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -1055,6 +1059,7 @@ export default function DashboardVendedor() {
                             <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#f87171'}}>{cats.reduce((s,c)=>s+c.semMov,0)}</td>
                             <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cats.reduce((s,c)=>s+c.movTotal,0))}</td>
                             <td style={{padding:'10px 12px',fontWeight:700,color:'#60a5fa'}}>{fmt(Math.round(cats.reduce((s,c)=>s+c.movTotal,0)/qtdMeses2026))}</td>
+                            <td style={{padding:'10px 12px',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</td>
                             <td style={{padding:'10px 12px',fontWeight:700,color:'#6b7280'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoAcum,0))}</td>
                             <td style={{padding:'10px 12px'}}>
                               <span style={{color:corPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100),fontWeight:700,fontSize:'0.75rem'}}>
