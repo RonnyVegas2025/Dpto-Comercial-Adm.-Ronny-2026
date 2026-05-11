@@ -921,30 +921,30 @@ export default function DashboardVendedor() {
 
             {/* ── CATEGORIAS ── */}
             {aba === 'categorias' && (() => {
+              try {
               if (!lista || lista.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Nenhuma empresa carregada.</div>;
-              // Agrupa empresas por categoria
-              const meses2026Cat = mesesDisp.filter(m=>m>='2026-01');
+              const meses2026Cat = (mesesDisp||[]).filter(m=>m>='2026-01');
               const qtdMeses2026 = meses2026Cat.length || 1;
               const catMap = {};
               for (const e of lista) {
-                const cat = (e.categoria || 'Outros').trim() || 'Outros';
+                const cat = String(e.categoria||'Outros').trim()||'Outros';
                 if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperadoMes:0, esperadoAcum:0, naMeta:0, valorMeta:0, semMov:0 };
                 catMap[cat].empresas++;
-                catMap[cat].movTotal    += mesesDisp.reduce((s,m)=>s+(e.movPorMes?.[m]||0),0);
+                const movE = (mesesDisp||[]).reduce((s,m)=>s+((e.movPorMes||{})[m]||0),0);
+                catMap[cat].movTotal    += movE;
                 catMap[cat].esperadoMes += (e.esperadoMes||0);
-                catMap[cat].esperadoAcum += (e.esperadoMes||0) * mesesDisp.length;
+                catMap[cat].esperadoAcum += (e.esperadoMes||0) * (mesesDisp||[]).length;
                 const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
                 if (entradasBanco.length > 0) {
                   catMap[cat].naMeta++;
                   catMap[cat].valorMeta += entradasBanco.reduce((s,v)=>s+(v.valor_meta||0),0);
                 }
-                const movRec = mesesDisp.reduce((s,m)=>s+(e.movPorMes?.[m]||0),0);
-                if (movRec === 0) catMap[cat].semMov++;
+                if (movE === 0) catMap[cat].semMov++;
               }
               const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
               if (cats.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Sem categorias.</div>;
-              const maxMov  = Math.max(...cats.map(c=>c.movTotal), 1);
-              const maxAcum = Math.max(...cats.map(c=>c.esperadoAcum), 1);
+              const maxMov  = cats.reduce((mx,c)=>Math.max(mx,c.movTotal),1);
+              const maxAcum = cats.reduce((mx,c)=>Math.max(mx,c.esperadoAcum),1);
 
               return (
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -1069,6 +1069,10 @@ export default function DashboardVendedor() {
                   </div>
                 </div>
               );
+              } catch(err) {
+                console.error('[Categorias]', err);
+                return <div style={{...s.card,padding:32,color:'#f87171'}}>Erro ao carregar categorias. Verifique o console.</div>;
+              }
             })()}
 
             {/* ── CARTEIRA ── */}
