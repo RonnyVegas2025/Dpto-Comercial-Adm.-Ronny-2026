@@ -183,7 +183,7 @@ export default function DashboardVendedor() {
         supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true).then(r => r.data||[]),
         // metas gravadas no banco (excluindo upsell para não duplicar)
         empIds.length ? supabase.from('valor_meta_empresa')
-          .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra')
+          .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
           .in('empresa_id', empIds)
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
@@ -275,25 +275,31 @@ export default function DashboardVendedor() {
 
           // ── CÁLCULO DO VALOR DE META ──
           const validadeConsultor = validadeMap[cons.id] || null;
-          // Busca entrada específica deste consultor (não upsell) no banco
+          // Busca entrada específica deste consultor no banco
           const entradaBanco = (vmetasRows||[]).find(v =>
             v.empresa_id === e.id &&
             v.regra !== 'upsell' &&
             (v.consultor_id === cons.id || v.consultor_id === null)
           );
-          // Upsell separado
           const entradaUpsell = (vmetasRows||[]).find(v =>
             v.empresa_id === e.id && v.regra === 'upsell'
           );
-          const metaCalc = entradaBanco
-            ? {
-                valor_meta:       (entradaBanco.valor_meta||0) + (entradaUpsell?.valor_meta||0),
-                competencia_meta: entradaBanco.competencia_meta,
-                regra:            entradaBanco.regra,
-                valor_bruto:      entradaBanco.valor_bruto || 0,
-                valor_considerado: entradaBanco.valor_considerado || 0,
-              }
-            : calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+
+          let metaCalc;
+          if (entradaBanco) {
+            // Usa EXATAMENTE os valores do banco — não recalcula
+            const pctBanco = entradaBanco.pct_consultor || pct;
+            metaCalc = {
+              valor_meta:        (entradaBanco.valor_meta || 0) + (entradaUpsell?.valor_meta || 0),
+              competencia_meta:  entradaBanco.competencia_meta,
+              regra:             entradaBanco.regra,
+              valor_bruto:       entradaBanco.valor_bruto || 0,
+              valor_considerado: entradaBanco.valor_considerado || 0,
+              pct_consultor:     pctBanco,
+            };
+          } else {
+            metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+          }
 
           listaProcessada.push({
             ...e,
