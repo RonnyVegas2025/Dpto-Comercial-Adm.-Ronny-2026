@@ -267,12 +267,26 @@ export default function DashboardVendedor() {
           if (aderencia >= 50 && aderencia < 90) situacao = 'dentro do esperado';
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
-          // ── CÁLCULO DO VALOR DE META (inline, baseado nas liberações) ──
+          // ── CÁLCULO DO VALOR DE META ──
           const validadeConsultor = validadeMap[cons.id] || null;
-          // Prioriza meta gravada no banco; senão calcula inline
-          const metaGravada = vmetaEmpMap[e.id];
-          const metaCalc = metaGravada
-            ? { valor_meta: metaGravada.valor_meta, competencia_meta: metaGravada.competencia_meta, regra: metaGravada.regra, valor_bruto: 0, valor_considerado: metaGravada.valor_meta / (pct/100) }
+          // Busca entrada específica deste consultor (não upsell) no banco
+          const entradaBanco = (vmetasRows||[]).find(v =>
+            v.empresa_id === e.id &&
+            v.regra !== 'upsell' &&
+            (v.consultor_id === cons.id || v.consultor_id === null)
+          );
+          // Upsell separado
+          const entradaUpsell = (vmetasRows||[]).find(v =>
+            v.empresa_id === e.id && v.regra === 'upsell'
+          );
+          const metaCalc = entradaBanco
+            ? {
+                valor_meta:       (entradaBanco.valor_meta||0) + (entradaUpsell?.valor_meta||0),
+                competencia_meta: entradaBanco.competencia_meta,
+                regra:            entradaBanco.regra,
+                valor_bruto:      entradaBanco.valor_bruto || 0,
+                valor_considerado: entradaBanco.valor_considerado || 0,
+              }
             : calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
 
           listaProcessada.push({
@@ -304,6 +318,7 @@ export default function DashboardVendedor() {
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
       // totalValorMeta: soma das metas gravadas no banco filtradas pelo mês selecionado
+      // Usa entrada específica do consultor (não soma todas)
       const totalValorMeta = listaProcessada.reduce((s,e) => {
         const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
         if (todasEntradas.length > 0) {
@@ -312,7 +327,6 @@ export default function DashboardVendedor() {
             : todasEntradas;
           return s + filtradas.reduce((sv,v) => sv + (v.valor_meta||0), 0);
         }
-        // Sem meta gravada: usa cálculo inline (só conta se mês da meta bate)
         const metaComp = e.metaComp?.substring(0,7);
         if (mesSelecionado && metaComp !== mesSelecionado) return s;
         return s + (e.valorMeta||0);
