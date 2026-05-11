@@ -1158,7 +1158,7 @@ export default function DashboardVendedor() {
                             <div style={{fontWeight:700,fontSize:'1rem',color:'white'}}>👥 {eq.nome}</div>
                             <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas · {vendedores.length} vendedor{vendedores.length!==1?'es':''}</div>
                           </div>
-                          <div style={{display:'flex',gap:20'}}>
+                          <div style={{display:'flex',gap:20}}>
                             <div style={{textAlign:'right'}}>
                               <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.65rem',textTransform:'uppercase'}}>Movimentação acum.</div>
                               <div style={{color:'#f0b429',fontWeight:700,fontSize:'1.1rem'}}>{fmt(eq.movTotal)}</div>
