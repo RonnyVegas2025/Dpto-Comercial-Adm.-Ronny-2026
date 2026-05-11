@@ -525,9 +525,20 @@ export default function DashboardVendedor() {
                   {mesSelecionado ? 'Movimentação do mês' : 'Média por mês'}
                 </div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#f0b429'}}>
-                  {mesSelecionado ? fmt(kpis.totalMovReal) : fmt(Math.round(kpis.totalMovReal/(mesesDisp.length||1)))}
+                  {(() => {
+                    if (mesSelecionado) return fmt(kpis.totalMovReal);
+                    const meses2026 = mesesDisp.filter(m => m >= '2026-01');
+                    const qtd = meses2026.length || 1;
+                    const totalMov2026 = lista.reduce((s,e) => s + meses2026.reduce((sm,m) => sm+(e.movPorMes[m]||0), 0), 0);
+                    return fmt(Math.round(totalMov2026/qtd));
+                  })()}
                 </div>
-                {!mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>total: {fmt(kpis.totalMovReal)} · {mesesDisp.length} meses</div>}
+                {!mesSelecionado && (() => {
+                    const meses2026 = mesesDisp.filter(m => m >= '2026-01');
+                    return <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>
+                      média {meses2026.length} meses 2026 · total: {fmt(kpis.totalMovReal)}
+                    </div>;
+                  })()}
                 {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
               </div>
               {/* KPI: Valor Apurado Meta */}
@@ -556,7 +567,9 @@ export default function DashboardVendedor() {
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 {(() => {
                   const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
-                  const mediaMes   = mesSelecionado ? kpis.totalMovReal : Math.round(kpis.totalMovReal/(mesesDisp.length||1));
+                  const meses2026b = mesesDisp.filter(m => m >= '2026-01');
+                  const totalMov2026b = lista.reduce((s,e) => s + meses2026b.reduce((sm,m) => sm+(e.movPorMes[m]||0),0), 0);
+                  const mediaMes = mesSelecionado ? kpis.totalMovReal : Math.round(totalMov2026b/(meses2026b.length||1));
                   const pctMov     = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
                   const corMov     = corPct(pctMov);
                   return (
@@ -729,17 +742,47 @@ export default function DashboardVendedor() {
                       </tr>
                     </thead>
                     <tbody>
-                      {empresasNaMeta
-                        .filter(e => {
-                          if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                          if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
-                          if (filtroMetaCadastro && e.data_cadastro?.substring(0,7) !== filtroMetaCadastro) return false;
-                          return true;
-                        })
+                      {(()=>{
+                          // Quando filtro de cadastro ativo: mostra TODAS as empresas do mês (com ou sem meta)
+                          const baseEmpresas = filtroMetaCadastro
+                            ? lista
+                                .filter(e => e.data_cadastro?.substring(0,7) === filtroMetaCadastro)
+                                .filter(e => !filtroMetaProduto || e.produto_contratado === filtroMetaProduto)
+                                .map(e => {
+                                  const entradas = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
+                                  return {...e, _metaEntradas: entradas};
+                                })
+                            : empresasNaMeta.filter(e => {
+                                if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                                if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
+                                return true;
+                              });
+                          return baseEmpresas
                         .flatMap((e,i) => {
-                          const entradas = filtroMetaMesLocal
-                            ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
-                            : e._metaEntradas;
+                          const entradas = filtroMetaCadastro
+                            ? (filtroMetaMesLocal
+                                ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
+                                : e._metaEntradas)
+                            : (filtroMetaMesLocal
+                                ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
+                                : e._metaEntradas);
+                          // Empresa sem meta: mostra uma linha com valores zerados
+                          if (entradas.length === 0) {
+                            return [(
+                              <tr key={`${i}-noMeta`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white',opacity:0.7}}>
+                                <td style={{padding:'10px 12px',fontWeight:600}}>
+                                  <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none'}}>{e.nome} ↗</a>
+                                  <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
+                                </td>
+                                <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem'}}>{e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}</td>
+                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                                <td style={{padding:'10px 12px'}}><span style={{color:'#9ca3af',fontSize:'0.72rem'}}>sem meta</span></td>
+                                <td style={{padding:'10px 12px',color:'#9ca3af',fontSize:'0.72rem'}}>—</td>
+                                <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
+                                <td style={{padding:'10px 12px',textAlign:'right',color:'#9ca3af'}}>—</td>
+                              </tr>
+                            )];
+                          }
                           return entradas.map((entrada, j) => (
                             <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
                               <td style={{padding:'10px 12px',fontWeight:600}}>
@@ -774,7 +817,16 @@ export default function DashboardVendedor() {
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                        <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>TOTAL</td>
+                        <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
+                          TOTAL ({filtroMetaCadastro
+                            ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).length
+                            : empresasNaMeta.filter(e => {
+                                if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                                if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
+                                return true;
+                              }).length
+                          } empresas)
+                        </td>
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
                           {fmt(empresasNaMeta
                             .filter(e => {
@@ -791,7 +843,7 @@ export default function DashboardVendedor() {
                   </table>
                 </div>
               </div>
-            )}
+            )})()}
 
             {/* ── CARTEIRA ── */}
             {aba === 'carteira' && (
