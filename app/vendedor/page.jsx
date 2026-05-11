@@ -1038,9 +1038,9 @@ export default function DashboardVendedor() {
                                 <td style={{padding:'10px 12px'}}>
                                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                                     <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
-                                      <div style={{height:'100%',width:`${Math.min(pctRealCat,100)}%`,background:cor}}/>
+                                      <div style={{height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor}}/>
                                     </div>
-                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctRealCat)}</span>
+                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span>
                                   </div>
                                 </td>
 
