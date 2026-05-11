@@ -954,20 +954,27 @@ export default function DashboardVendedor() {
               return (
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
                   {/* KPIs de categorias */}
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
                     <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias ativas</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias Ativas</div>
                       <div style={{fontSize:'1.4rem',fontWeight:700}}>{cats.length}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>Maior: {cats[0]?.nome} ({cats[0]?.empresas} emp.)</div>
                     </div>
                     <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Maior categoria</div>
-                      <div style={{fontSize:'1rem',fontWeight:700,color:'#f0b429'}}>{cats[0]?.nome}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{cats[0]?.empresas} empresas</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Esperado Mensal</div>
+                      <div style={{fontSize:'1.3rem',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>potencial × peso / mês</div>
                     </div>
                     <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Maior movimentação</div>
-                      <div style={{fontSize:'1rem',fontWeight:700,color:'#f0b429'}}>{fmt(cats[0]?.movTotal||0)}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{cats[0]?.nome}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Última Movimentação</div>
+                      {(() => {
+                        const ultMes = [...mesesDisp].filter(m=>m>='2026-01').pop();
+                        const ultVal = ultMes ? lista.reduce((s,e)=>s+(e.movPorMes[ultMes]||0),0) : 0;
+                        return <>
+                          <div style={{fontSize:'1.3rem',fontWeight:700,color:'#f0b429'}}>{fmt(ultVal)}</div>
+                          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:4}}>{ultMes?fmtMes(ultMes+'-01'):''}</div>
+                        </>;
+                      })()}
                     </div>
                   </div>
 
@@ -1016,7 +1023,7 @@ export default function DashboardVendedor() {
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
                         <thead>
                           <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado Acum.','% Realizado','Na Meta','Meta Apurada'].map(h=>(
+                            {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado Acum.','% Realizado'].map(h=>(
                               <th key={h} style={{padding:'8px 12px',textAlign:['Empresas','Sem Mov.'].includes(h)?'center':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                             ))}
                           </tr>
@@ -1036,13 +1043,12 @@ export default function DashboardVendedor() {
                                 <td style={{padding:'10px 12px'}}>
                                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                                     <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
-                                      <div style={{height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor}}/>
+                                      <div style={{height:'100%',width:`${Math.min(pctRealCat,100)}%`,background:cor}}/>
                                     </div>
-                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span>
+                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctRealCat)}</span>
                                   </div>
                                 </td>
-                                <td style={{padding:'10px 12px',textAlign:'center',color:'#34d399',fontWeight:600}}>{cat.naMeta}</td>
-                                <td style={{padding:'10px 12px',fontWeight:700,color:'#34d399'}}>{cat.valorMeta>0?fmt(cat.valorMeta):'—'}</td>
+
                               </tr>
                             );
                           })}
@@ -1060,8 +1066,7 @@ export default function DashboardVendedor() {
                                 {fmtPct(cats.reduce((s,c)=>s+c.movTotal,0)/Math.max(cats.reduce((s,c)=>s+c.esperadoAcum,0),1)*100)}
                               </span>
                             </td>
-                            <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#34d399'}}>{cats.reduce((s,c)=>s+c.naMeta,0)}</td>
-                            <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399'}}>{fmt(cats.reduce((s,c)=>s+c.valorMeta,0))}</td>
+
                           </tr>
                         </tfoot>
                       </table>
