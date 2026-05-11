@@ -1530,55 +1530,87 @@ export default function DashboardVendedor() {
                     const isAtu    = c.id === consultorId;
                     const maxMeta  = Math.max(...ranking.map(x=>x.valorMeta), 1);
                     const qtdM     = mesesDisp.filter(m=>m>='2026-01').length || 1;
-                    // Meta do consultor
-                    const consData    = consultores.find(cc=>cc.id===c.id);
-                    const metaConsult = consData?.meta_mensal || 0;
-                    const pctMeta     = metaConsult > 0 ? (c.valorMeta / metaConsult) * 100 : 0;
-                    const corMeta     = corPct(pctMeta);
+
+                    // Meta do consultor — mensal e ACUMULADA (meses válidos no período)
+                    const consData     = consultores.find(cc=>cc.id===c.id);
+                    const metaMensal   = consData?.meta_mensal || 0;
+                    // Meta acumulada: meta_mensal × nº de meses válidos (>= 2026-01 e >= meta_valida_desde)
+                    const validaMes    = (consData?.meta_valida_desde ? String(consData.meta_valida_desde).substring(0,7) : '2026-01');
+                    const mesesValidos = mesesDisp.filter(m => m >= '2026-01' && m >= validaMes);
+                    const metaAcum     = metaMensal * (mesesValidos.length || 1);
+                    // % correta: valorMeta ÷ metaAcumulada (não ÷ metaMensal)
+                    const pctMeta      = metaAcum > 0 ? (c.valorMeta / metaAcum) * 100 : 0;
+                    const corMeta      = corPct(pctMeta);
+
                     // Aderência mov vs esperado
-                    const pctAdere    = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
-                    const corAdere    = corPct(pctAdere);
+                    const pctAdere = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
+                    const corAdere = corPct(pctAdere);
+
                     return (
                       <div key={c.id} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`,background:isAtu?'rgba(255,248,230,0.6)':'#fafafa'}}>
-                        {/* Linha principal */}
                         <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap'}}>
                           <span style={{fontWeight:700,fontSize:'1rem',minWidth:28,textAlign:'center',color:corM}}>{medal}</span>
+
+                          {/* Nome + info */}
                           <div style={{flex:1,minWidth:120}}>
                             <div style={{fontWeight:700,fontSize:'0.88rem',color:isAtu?'#b45309':'#1a1d2e'}}>{c.nome}</div>
                             <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>
                               {c.empresas} emp. · {c.naMeta||0} na meta · gestor: {c.gestor}
                             </div>
                           </div>
-                          {/* Bloco: Mov. Acum. */}
-                          <div style={{textAlign:'right',minWidth:90}}>
-                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
-                            <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.movReal)}</div>
-                            <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>média: {fmt(Math.round(c.movReal/qtdM))}/mês</div>
+
+                          {/* ── GRUPO 1: Meta Mensal + Meta Acumulada ── */}
+                          <div style={{display:'flex',gap:10,padding:'6px 12px',background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8}}>
+                            {metaMensal > 0 && (
+                              <div style={{textAlign:'right',minWidth:80}}>
+                                <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Mensal</div>
+                                <div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaMensal)}</div>
+                                <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>/mês</div>
+                              </div>
+                            )}
+                            {metaMensal > 0 && (
+                              <div style={{textAlign:'right',minWidth:80}}>
+                                <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Acum.</div>
+                                <div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaAcum)}</div>
+                                <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{mesesValidos.length} meses</div>
+                              </div>
+                            )}
+                            {!metaMensal && (
+                              <div style={{color:'#8b92b0',fontSize:'0.72rem',padding:'4px 8px'}}>Meta não cadastrada</div>
+                            )}
                           </div>
+
+                          {/* ── SEPARADOR ── */}
+                          <div style={{width:1,height:36,background:'#e4e7ef',flexShrink:0}}/>
+
+                          {/* ── GRUPO 2: Fechado Bruto · Esperado/mês · Meta Apurada ── */}
                           {/* Bloco: Fechado Bruto */}
-                          <div style={{textAlign:'right',minWidth:90}}>
+                          <div style={{textAlign:'right',minWidth:85}}>
                             <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
-                            <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.fechadoBruto||0)}</div>
+                            <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.fechadoBruto||0)}</div>
                             <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{c.empresas} contratos</div>
                           </div>
                           {/* Bloco: Esperado/mês */}
-                          <div style={{textAlign:'right',minWidth:90}}>
+                          <div style={{textAlign:'right',minWidth:85}}>
                             <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
-                            <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.esperado)}</div>
-                            <div style={{color:corAdere,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctAdere)} realizado</div>
+                            <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.esperado)}</div>
+                            <div style={{color:corAdere,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctAdere)} realiz.</div>
                           </div>
                           {/* Bloco: Meta Apurada */}
-                          <div style={{textAlign:'right',minWidth:90}}>
+                          <div style={{textAlign:'right',minWidth:85}}>
                             <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
-                            <div style={{color:'#34d399',fontWeight:700,fontSize:'0.88rem'}}>{fmt(c.valorMeta)}</div>
-                            {metaConsult > 0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
+                            <div style={{color:'#34d399',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.valorMeta)}</div>
+                            {metaAcum > 0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
                           </div>
+
                           {isAtu && <span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
                         </div>
-                        {/* Barra de progresso da meta */}
+                        {/* Barra: apurado vs meta acumulada */}
                         <div style={{height:3,background:'#f0f2f8'}}>
-                          <div style={{height:'100%',width:`${Math.min(metaConsult>0?pctMeta:(c.valorMeta/maxMeta)*100,100)}%`,
-                            background:isAtu?'#f0b429':metaConsult>0?corMeta:i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}/>
+                          <div style={{height:'100%',
+                            width:`${Math.min(metaAcum>0?pctMeta:(c.valorMeta/maxMeta)*100, 100)}%`,
+                            background:isAtu?'#f0b429':metaAcum>0?corMeta:i<3?'#34d399':'#d1d5e8',
+                            transition:'width 0.6s'}}/>
                         </div>
                       </div>
                     );
