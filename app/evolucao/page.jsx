@@ -750,7 +750,7 @@ export default function Evolucao() {
       const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
         supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
-          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, tipo),
+         consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
           consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
           consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
           .eq('ativo', true),
@@ -962,7 +962,7 @@ export default function Evolucao() {
           ultimoValor: vals[vals.length - 1] || 0,
           depto:       cons.equipe || cons.setor || '—',
           gestor:      cons.gestor || '—',
-          diretor:     cons.gestor || '—',
+          diretor:     cons.diretorObj?.nome || cons.diretor || '—',
           vendedor:    cons.nome   || '—',
           produto:     e.produto_contratado || '—',
           _pct:        pct,
