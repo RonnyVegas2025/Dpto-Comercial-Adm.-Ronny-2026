@@ -103,6 +103,7 @@ export default function DashboardVendedor() {
   const [consultorId,    setConsultorId]    = useState('');
   const [gestorFiltro,   setGestorFiltro]   = useState('Geral');
   const [gestores,       setGestores]       = useState(['Geral']);
+  const [perfilUsuario,  setPerfilUsuario]  = useState(null); // perfil do usuário logado
   const [dados,          setDados]          = useState(null);
   const [loading,        setLoading]        = useState(false);
   const [aba,            setAba]            = useState('resumo');
@@ -126,14 +127,58 @@ export default function DashboardVendedor() {
   useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
 
   async function carregarBase() {
+    // 1. Verifica usuário logado e busca perfil + visibilidade
+    let consultorIdsPermitidos = null; // null = sem restrição
+    let perfil = null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const [{ data: prof }, { data: vis }] = await Promise.all([
+          supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
+          supabase.from('user_visibilidade').select('tipo,consultor_ids').eq('user_id', user.id).single(),
+        ]);
+        perfil = prof;
+        setPerfilUsuario(prof);
+        // Aplica restrição de visibilidade para gestor_comercial, supervisor e vendedor
+        const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+        if (prof && perfisRestritos.includes(prof.perfil)) {
+          if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
+            consultorIdsPermitidos = vis.consultor_ids;
+          } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
+            // Para equipes: filtra após buscar
+            consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
+          }
+        }
+      }
+    } catch(_) { /* sem auth configurado — modo dev */ }
+
+    // 2. Busca consultores
     const [{ data: cons }, { data: libs }, { data: validades }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,gestor_id,equipe,gestorObj:gestor_id(id,nome)').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
       supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true),
     ]);
     const validadeMap = Object.fromEntries((validades||[]).map(v=>[v.id, v.meta_valida_desde]));
-    const consComValidade = (cons||[]).map(c => ({...c, meta_valida_desde: validadeMap[c.id]||null}));
+    let consComValidade = (cons||[]).map(c => ({
+      ...c,
+      meta_valida_desde: validadeMap[c.id]||null,
+      // Usa nome do gestor via JOIN (gestor_id) — mais confiável que campo texto
+      gestor: c.gestorObj?.nome || c.gestor || null,
+    }));
+
+    // 3. Aplica filtro de visibilidade
+    if (consultorIdsPermitidos && typeof consultorIdsPermitidos === 'object') {
+      // visibilidade por IDs específicos
+      const idSet = new Set(consultorIdsPermitidos);
+      consComValidade = consComValidade.filter(c => idSet.has(c.id));
+    } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
+      // visibilidade por equipes
+      const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
+      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) || equipes.includes(c.gestor));
+    }
+
     setConsultores(consComValidade);
+    // Gestores visíveis: só os que têm consultores no filtro
     const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
     setGestores(gs);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
@@ -147,7 +192,7 @@ export default function DashboardVendedor() {
         id, produto_id, nome, cnpj, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, cartoes_emitidos, data_cadastro,
         taxa_positiva, taxa_negativa, pct_principal, pct_agregado_1, pct_agregado_2,
-        consultor_principal:consultor_principal_id (id, nome, gestor, equipe, meta_mensal),
+        consultor_principal:consultor_principal_id (id, nome, gestor, gestor_id, equipe, meta_mensal, gestorObj:gestor_id(id,nome)),
         consultor_agregado:consultor_agregado_id (id, nome),
         consultor_agregado_2:consultor_agregado_2_id (id, nome),
         parceiro:parceiro_id (nome)
@@ -159,7 +204,7 @@ export default function DashboardVendedor() {
       if (consultorId) {
         empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
       } else if (gestorFiltro !== 'Geral') {
-        const ids = consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id);
+        const ids = consultores.filter(c=>(c.gestorObj?.nome||c.gestor)===gestorFiltro).map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
         empQuery = empQuery.in('consultor_principal_id', ids);
       }
@@ -243,7 +288,8 @@ export default function DashboardVendedor() {
           if (consultorId && cons.id !== consultorId) continue;
           if (gestorFiltro !== 'Geral' && !consultorId) {
             const consCompleto = consultores.find(c=>c.id===cons.id);
-            if (!consCompleto || consCompleto.gestor !== gestorFiltro) continue;
+            const gestorConsultor = consCompleto?.gestorObj?.nome || consCompleto?.gestor;
+            if (!consCompleto || gestorConsultor !== gestorFiltro) continue;
           }
 
           const fator = pct / 100;
@@ -303,7 +349,7 @@ export default function DashboardVendedor() {
             _cons:       cons,
             _pct:        pct,
             vendedor:    cons.nome,
-            gestor:      cons.gestor || '—',
+            gestor:      cons.gestorObj?.nome || cons.gestor || '—',
             movPorMes,
             totalMov,
             mediaMovMes,
@@ -365,7 +411,7 @@ export default function DashboardVendedor() {
       const rankingMap = {};
       listaProcessada.forEach(e => {
         const cid = e._cons.id;
-        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
+        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e._cons?.gestorObj?.nome||e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
         rankingMap[cid].movReal      += e.mediaMovMes;
         rankingMap[cid].esperado     += e.esperadoMes;
         rankingMap[cid].empresas     += 1;
@@ -818,7 +864,7 @@ export default function DashboardVendedor() {
                             return [(
                               <tr key={`${i}-noMeta`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white',opacity:0.7}}>
                                 <td style={{padding:'10px 12px',fontWeight:600}}>
-                                  <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none'}}>{e.nome} ↗</a>
+                                  <span style={{color:'#1a1d2e',fontWeight:600}}>{e.nome}</span>
                                   <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
                                 </td>
                                 <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem'}}>{e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}</td>
@@ -833,11 +879,7 @@ export default function DashboardVendedor() {
                           return entradas.map((entrada, j) => (
                             <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
                               <td style={{padding:'10px 12px',fontWeight:600}}>
-                                <a href={`/gestao/${e.id}`} target="_blank" style={{color:'#1a1d2e',textDecoration:'none',fontWeight:600}}
-                                  onMouseEnter={ev=>ev.currentTarget.style.color='#f0b429'}
-                                  onMouseLeave={ev=>ev.currentTarget.style.color='#1a1d2e'}>
-                                  {e.nome} ↗
-                                </a>
+                                <span style={{fontWeight:600,color:'#1a1d2e'}}>{e.nome}</span>
                                 <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
                               </td>
                               <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem',whiteSpace:'nowrap'}}>
@@ -1398,7 +1440,7 @@ export default function DashboardVendedor() {
                           return (
                             <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
                               {colV('empresa') && <td style={s.td}>
-                                <a href={`/gestao/${e.id}`} style={{fontWeight:600,color:'#1a1d2e',textDecoration:'none'}}>{e.nome}</a>
+                                <span>{e.nome}</span>
                                 <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
                               </td>}
                               {colV('produto') && <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
