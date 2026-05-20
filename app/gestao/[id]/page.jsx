@@ -41,10 +41,6 @@ const TIPO_CRM = {
   outro:      { icon:'📌', label:'Outro',        cor:'#6b7280' },
 };
 
-// ─── Calcula meta automática ───────────────────────────────────────────────
-// Regra de peso:
-//   Vegas Benefícios → peso do produto aplica na meta (ex: 30% → R$10k vira R$3k)
-//   Todos os outros  → peso é só para previsão de faturamento; meta usa 100%
 function calcularMetaAutomatica(empresa, movimentos, ajustes) {
   const cat     = (empresa?.categoria        || '').toLowerCase();
   const produto = (empresa?.produto_contratado || '').toLowerCase().trim();
@@ -53,8 +49,6 @@ function calcularMetaAutomatica(empresa, movimentos, ajustes) {
   if (!isBenef && !isConv) return null;
 
   const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
-
-  // Peso só entra na meta se for especificamente "Vegas Benefícios"
   const isVegasBeneficios = produto === 'vegas benefícios' || produto === 'vegas beneficios';
   const peso = isVegasBeneficios ? (empresa?.peso_categoria ?? 1) : 1;
   const pct  = empresa?.pct_principal ?? 100;
@@ -67,31 +61,23 @@ function calcularMetaAutomatica(empresa, movimentos, ajustes) {
 
   let mesAlvo = null;
   if (isBenef) {
-    mesAlvo = comValor[0]; // 1ª recarga
+    mesAlvo = comValor[0];
   } else {
     if (comValor.length < 3) return { pendente: true, progresso: comValor.length, precisam: 3, regra: 'convenio' };
-    mesAlvo = comValor[2]; // 3ª liberação
+    mesAlvo = comValor[2];
   }
 
-  const comp            = mesAlvo.competencia?.substring(0, 10);
-  const aj              = ajusteMap[comp];
-  const valorBruto      = mesAlvo.total_liberado;
+  const comp             = mesAlvo.competencia?.substring(0, 10);
+  const aj               = ajusteMap[comp];
+  const valorBruto       = mesAlvo.total_liberado;
   const valorConsiderado = aj ? aj.valor_considerado : valorBruto;
-
-  // Valor meta = movimentação × peso do produto × % do consultor
-  const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
+  const valorMeta        = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
 
   return {
-    pendente:          false,
-    comp,
-    mesLabel:          fmtMes(comp),
-    valorBruto,
-    valorConsiderado,
-    valorMeta,
-    peso,
-    pct,
-    regra:             isBenef ? 'beneficio' : 'convenio',
-    temAjuste:         !!aj,
+    pendente: false, comp, mesLabel: fmtMes(comp),
+    valorBruto, valorConsiderado, valorMeta, peso, pct,
+    regra: isBenef ? 'beneficio' : 'convenio',
+    temAjuste: !!aj,
   };
 }
 
@@ -107,7 +93,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [valorMetas,   setValorMetas]   = useState([]);
 
   const [editandoMes,    setEditandoMes]    = useState(null);
-  const [ajusteForm,     setAjusteForm]     = useState({ valor:'', motivo:'upsell', observacao:'' });
+  const [ajusteForm,     setAjusteForm]     = useState({ valor:'', motivo:'correcao', observacao:'' });
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const [metaMes,      setMetaMes]      = useState(null);
@@ -115,15 +101,15 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [salvandoMeta, setSalvandoMeta] = useState(false);
   const [erroMeta,     setErroMeta]     = useState('');
 
-  const [aplicandoAuto,     setAplicandoAuto]     = useState(false);
-  const [mesSelecionado,    setMesSelecionado]    = useState(null);   // troca manual do mês da meta
-  const [trocandoMes,       setTrocandoMes]       = useState(false);  // mostra o select de troca
-  const [inserindoValor,    setInserindoValor]    = useState(null);
-  const [valorInserir,      setValorInserir]      = useState('');
-  const [salvandoInserir,   setSalvandoInserir]   = useState(false);
-  const [upsellMes,         setUpsellMes]         = useState(null);   // comp do mês em upsell
-  const [salvandoUpsell,    setSalvandoUpsell]    = useState(false);
-  const [removendoMeta, setRemovendoMeta] = useState(false);
+  const [aplicandoAuto,   setAplicandoAuto]   = useState(false);
+  const [mesSelecionado,  setMesSelecionado]  = useState(null);
+  const [trocandoMes,     setTrocandoMes]     = useState(false);
+  const [inserindoValor,  setInserindoValor]  = useState(null);
+  const [valorInserir,    setValorInserir]    = useState('');
+  const [salvandoInserir, setSalvandoInserir] = useState(false);
+  const [upsellMes,       setUpsellMes]       = useState(null);
+  const [salvandoUpsell,  setSalvandoUpsell]  = useState(false);
+  const [removendoMeta,   setRemovendoMeta]   = useState(false);
 
   const [loading,   setLoading]   = useState(true);
   const [salvando,  setSalvando]  = useState(false);
@@ -152,13 +138,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
     `).eq('id', id).single();
 
     const [
-      { data: cons },
-      { data: parc },
-      { data: prods },
-      { data: hist },
-      { data: movs },
-      { data: ajms },
-      { data: vmetas },
+      { data: cons }, { data: parc }, { data: prods },
+      { data: hist }, { data: movs }, { data: ajms }, { data: vmetas },
     ] = await Promise.all([
       supabase.from('consultores').select('id,nome,gestor').eq('ativo',true).order('nome'),
       supabase.from('parceiros').select('id,nome').order('nome'),
@@ -166,7 +147,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
       supabase.from('historico_empresa').select('*').eq('empresa_id',id).order('criado_em',{ascending:false}),
       supabase.from('liberacoes').select('competencia,total_liberado').eq('produto_id', emp?.produto_id||0).order('competencia'),
       supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia'),
-      // Busca sem campo observacao para evitar erro de schema
       supabase.from('valor_meta_empresa')
         .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
         .eq('empresa_id', id).order('competencia_meta'),
@@ -221,15 +201,38 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   const ajusteMap = Object.fromEntries(ajustes.map(a => [a.competencia?.substring(0,10), a]));
   const metaMap   = Object.fromEntries(valorMetas.map(v => [v.competencia_meta?.substring(0,10), v]));
+  const libMap    = Object.fromEntries(movimentos.map(m => [m.competencia?.substring(0,10), m]));
 
-  // Calcula meses zerados esperados para Convênio/Mobilidade
-  // São os 3 meses corridos que deveriam aparecer mas não têm registro
+  // ── PATCH: Gera lista de todos os meses desde o cadastro até hoje ──────────
+  const mesesParaExibir = useMemo(() => {
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const inicioCad = empresa?.data_cadastro?.substring(0,7);
+    const inicioMov = movimentos.length > 0 ? movimentos[0].competencia?.substring(0,7) : null;
+    const inicio = inicioCad || inicioMov || mesAtual;
+    const meses = [];
+    let [y, mo] = inicio.split('-').map(Number);
+    const [yFim, mFim] = mesAtual.split('-').map(Number);
+    while (y < yFim || (y === yFim && mo <= mFim)) {
+      const comp = `${y}-${String(mo).padStart(2,'0')}`;
+      const lib  = movimentos.find(mv => mv.competencia?.substring(0,7) === comp);
+      meses.push({
+        comp:           comp + '-01',
+        competencia:    comp + '-01',
+        total_liberado: lib?.total_liberado ?? 0,
+        temRegistro:    !!lib,
+      });
+      mo++;
+      if (mo > 12) { mo = 1; y++; }
+    }
+    return meses;
+  }, [empresa, movimentos]);
+
   const mesesZeradosEsperados = useMemo(() => {
     const isConvMob = (empresa?.categoria||'').toLowerCase().match(/conv|mobil/);
     if (!isConvMob) return [];
     const comValor = movimentos.filter(m => m.total_liberado > 0).sort((a,b) => a.competencia.localeCompare(b.competencia));
     if (comValor.length === 0) return [];
-    // 3 meses corridos a partir do 1º com valor
     const [y0,m0] = comValor[0].competencia.substring(0,7).split('-').map(Number);
     const compsMov = new Set(movimentos.map(m => m.competencia?.substring(0,7)));
     const zerados = [];
@@ -237,7 +240,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
       const d    = new Date(y0, m0-1+i, 1);
       const comp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       if (!compsMov.has(comp)) {
-        // Só mostra se o mês já passou
         const hoje = new Date();
         const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
         if (comp < mesAtual) zerados.push(comp);
@@ -245,6 +247,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
     }
     return zerados;
   }, [empresa, movimentos]);
+
   const totalMetaApurado = valorMetas.reduce((s,v) => s+(v.valor_meta||0), 0);
 
   async function salvar() {
@@ -304,7 +307,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
     const comp = competencia?.substring(0,10);
     const payload = {
       empresa_id: id, produto_id: empresa.produto_id, competencia: comp,
-      valor_original: valorOriginal, valor_considerado: parseFloat(ajusteForm.valor),
+      valor_original: valorOriginal || 0,
+      valor_considerado: parseFloat(ajusteForm.valor),
       motivo: ajusteForm.motivo, observacao: ajusteForm.observacao||null,
     };
     const { error } = await supabase.from('ajustes_movimentacao')
@@ -313,7 +317,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
       const { data } = await supabase.from('ajustes_movimentacao').select('*').eq('empresa_id', id).order('competencia');
       setAjustes(data||[]);
       setEditandoMes(null);
-      setAjusteForm({ valor:'', motivo:'upsell', observacao:'' });
+      setAjusteForm({ valor:'', motivo:'correcao', observacao:'' });
     }
     setSalvandoAjuste(false);
   }
@@ -325,16 +329,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
     setAjustes(a => a.filter(x => x.competencia?.substring(0,10) !== comp));
   }
 
-  // ── Salvar meta: delete → insert (sem campo observacao) ──────────────────
   async function salvarMetaComp(comp, payload) {
     setErroMeta('');
     await supabase.from('valor_meta_empresa')
       .delete().eq('empresa_id', id).eq('competencia_meta', comp);
     const { error } = await supabase.from('valor_meta_empresa').insert(payload);
-    if (error) {
-      setErroMeta('Erro ao salvar: ' + error.message);
-      return false;
-    }
+    if (error) { setErroMeta('Erro ao salvar: ' + error.message); return false; }
     const { data } = await supabase.from('valor_meta_empresa')
       .select('id,empresa_id,produto_id,consultor_id,competencia_meta,valor_bruto,valor_considerado,valor_meta,pct_consultor,regra,mes_sequencia')
       .eq('empresa_id', id).order('competencia_meta');
@@ -342,45 +342,21 @@ export default function GestaoEmpresaDetalhe({ params }) {
     return true;
   }
 
-  // Payload base — apenas colunas que existem na tabela (sem observacao)
   function montarPayload(comp, valorBruto, valorConsiderado, valorMeta, regra, mesSeq) {
     return {
-      empresa_id:        id,
-      produto_id:        empresa?.produto_id,
-      consultor_id:      empresa?.consultor_principal_id || null,
-      competencia_meta:  comp,
-      valor_bruto:       valorBruto,
-      valor_considerado: valorConsiderado,
-      valor_meta:        valorMeta,
-      pct_consultor:     empresa?.pct_principal ?? 100,
-      regra,
-      mes_sequencia:     mesSeq,
+      empresa_id: id, produto_id: empresa?.produto_id,
+      consultor_id: empresa?.consultor_principal_id || null,
+      competencia_meta: comp, valor_bruto: valorBruto,
+      valor_considerado: valorConsiderado, valor_meta: valorMeta,
+      pct_consultor: empresa?.pct_principal ?? 100, regra, mes_sequencia: mesSeq,
     };
-  }
-
-  async function aplicarMetaAuto() {
-    if (!metaAuto || metaAuto.pendente) return;
-    setAplicandoAuto(true);
-    const payload = montarPayload(
-      metaAuto.comp,
-      metaAuto.valorBruto,
-      metaAuto.valorConsiderado,
-      metaAuto.valorMeta,
-      metaAuto.regra,
-      metaAuto.regra === 'beneficio' ? 1 : 3
-    );
-    await salvarMetaComp(metaAuto.comp, payload);
-    setAplicandoAuto(false);
   }
 
   async function salvarMetaManual(comp, valorBruto) {
     if (!metaForm.valor) return;
     setSalvandoMeta(true);
     const payload = montarPayload(
-      comp,
-      valorBruto,
-      valorBruto,
-      parseFloat(metaForm.valor),
+      comp, valorBruto, valorBruto, parseFloat(metaForm.valor),
       metaForm.regra,
       metaForm.regra === 'beneficio' ? 1 : metaForm.regra === 'convenio' ? 3 : 0
     );
@@ -398,9 +374,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
   }
 
   function abrirMetaManual(comp, valConsiderado) {
-    const peso     = empresa?.peso_categoria ?? 1;
-    const pct      = empresa?.pct_principal  ?? 100;
-    const valMeta  = Math.round(valConsiderado * peso * (pct/100) * 100) / 100;
+    const peso    = empresa?.peso_categoria ?? 1;
+    const pct     = empresa?.pct_principal  ?? 100;
+    const valMeta = Math.round(valConsiderado * peso * (pct/100) * 100) / 100;
     const existente = metaMap[comp];
     setMetaForm({
       valor: existente ? existente.valor_meta : valMeta,
@@ -435,10 +411,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const mesesAtivos = movimentos.filter(m=>m.total_liberado>0).length;
   const produtos_list = ['Benefícios','Bônus','Convênio','Mobilidade','Taxa Negativa'];
   const MOTIVOS_LABEL = {upsell:'📈 Up-sell',ajuste:'✏️ Ajuste',negociacao:'🤝 Negociação',correcao:'🔧 Correção',outro:'📌 Outro'};
-  const peso      = empresa.peso_categoria ?? 1;
-  const pctCons   = empresa.pct_principal  ?? 100;
-  const cat       = (empresa.categoria||'').toLowerCase();
-  const elegivel  = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
+  const peso    = empresa.peso_categoria ?? 1;
+  const pctCons = empresa.pct_principal  ?? 100;
+  const cat     = (empresa.categoria||'').toLowerCase();
+  const elegivel = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
 
   const abas = [
     { key:'crm',        label:'📝 CRM',              badge: historico.length },
@@ -466,7 +442,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
               <span style={{color:'#8b92b0',fontSize:'0.8rem'}}>ID {empresa.produto_id}</span>
               {empresa.cnpj&&<><span style={{color:'#d1d5e8'}}>·</span><span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
               <span style={{background:cor.bg,color:cor.text,border:`1px solid ${cor.border}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>{empresa.categoria}</span>
-              {/* Badge do peso do produto */}
               <span style={{background:'rgba(240,180,41,0.1)',color:'#b45309',border:'1px solid rgba(240,180,41,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
                 ⚖️ Peso: {fmtPct(peso*100)}
               </span>
@@ -504,9 +479,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
           <span style={{...sp.resumoV,color:'#2563eb'}}>{fmt(totalMovimentado)}</span>
           <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{mesesAtivos} meses ativos</span>
         </div>
-        <div style={{...sp.resumoCard, border: totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef', background: totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff'}}>
+        <div style={{...sp.resumoCard,border:totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef',background:totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff'}}>
           <span style={sp.resumoL}>🎯 Apurado na Meta</span>
-          <span style={{...sp.resumoV, color: totalMetaApurado>0?'#16a34a':'#d1d5e8'}}>
+          <span style={{...sp.resumoV,color:totalMetaApurado>0?'#16a34a':'#d1d5e8'}}>
             {totalMetaApurado>0?fmt(totalMetaApurado):'—'}
           </span>
           <span style={{color:totalMetaApurado>0?'#6b7280':'#b0b7cc',fontSize:'0.68rem'}}>
@@ -725,11 +700,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 </div>
               )}
               {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(()=>{
-                // Meses disponíveis para troca manual (todos com valor > 0)
                 const mesesDisponiveis = movimentos
                   .filter(m => m.total_liberado > 0)
                   .sort((a,b) => a.competencia.localeCompare(b.competencia));
-                // Mês efetivo: manual ou automático
                 const mesEfetivo = mesSelecionado
                   ? mesesDisponiveis.find(m => m.competencia?.substring(0,10) === mesSelecionado) || mesesDisponiveis[0]
                   : mesesDisponiveis[metaAuto.regra === 'beneficio' ? 0 : 2] || mesesDisponiveis[0];
@@ -766,7 +739,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
                         </div>
                       </div>
                       <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                        {/* Botão trocar mês */}
                         <button onClick={()=>setTrocandoMes(t=>!t)}
                           style={{background:trocandoMes?'rgba(96,165,250,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${trocandoMes?'rgba(96,165,250,0.4)':'rgba(107,114,128,0.2)'}`,borderRadius:7,padding:'6px 14px',color:trocandoMes?'#2563eb':'#6b7280',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
                           📅 {trocandoMes ? 'Fechar' : 'Trocar mês'}
@@ -779,24 +751,18 @@ export default function GestaoEmpresaDetalhe({ params }) {
                         )}
                         <button
                           onClick={async () => {
-                            setAplicandoAuto(true);
-                            setErroMeta('');
-                            // Se troca de mês: remove TODAS as entradas anteriores desta empresa
-                            // para não ficar com dois meses marcados
+                            setAplicandoAuto(true); setErroMeta('');
                             if (isManual) {
-                              await supabase.from('valor_meta_empresa')
-                                .delete().eq('empresa_id', empresa.id);
+                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id);
                             } else {
-                              await supabase.from('valor_meta_empresa')
-                                .delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
+                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
                             }
                             const { error } = await supabase.from('valor_meta_empresa').insert({
                               empresa_id: empresa.id, produto_id: empresa.produto_id,
                               consultor_id: empresa.consultor_principal_id || null,
                               competencia_meta: compEfetivo,
                               valor_bruto: mesEfetivo?.total_liberado || 0,
-                              valor_considerado: valorConsidEf,
-                              valor_meta: valorMetaEf,
+                              valor_considerado: valorConsidEf, valor_meta: valorMetaEf,
                               pct_consultor: pctCons,
                               regra: isManual ? 'manual' : metaAuto.regra,
                               mes_sequencia: isManual ? 0 : (metaAuto.regra === 'beneficio' ? 1 : 3),
@@ -811,8 +777,6 @@ export default function GestaoEmpresaDetalhe({ params }) {
                         </button>
                       </div>
                     </div>
-
-                    {/* Seletor de mês expandível */}
                     {trocandoMes && (
                       <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(240,180,41,0.15)'}}>
                         <div style={{color:'#6b7280',fontSize:'0.72rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
@@ -824,7 +788,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             const aj   = ajusteMap[comp];
                             const val  = aj ? aj.valor_considerado : mv.total_liberado;
                             const metaVal = Math.round(val * metaAuto.peso * (pctCons/100) * 100) / 100;
-                            const isAuto   = !mesSelecionado && comp === compEfetivo;
+                            const isAuto     = !mesSelecionado && comp === compEfetivo;
                             const isSelected = mesSelecionado === comp || isAuto;
                             return (
                               <button key={comp} onClick={()=>{setMesSelecionado(comp);setTrocandoMes(false);}}
@@ -873,39 +837,38 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
           {erroMeta&&<div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'#dc2626',fontSize:'0.82rem'}}>❌ {erroMeta}</div>}
 
-          {/* Header */}
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
             <div style={sp.cardTitle}>📊 HISTÓRICO DE MOVIMENTAÇÃO</div>
             <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>✏️ ajustar valor · 🎯 entrada manual na meta</div>
           </div>
 
-          {movimentos.length===0?(
+          {mesesParaExibir.length===0?(
             <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
               <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
               <div style={{fontWeight:600}}>Nenhuma movimentação registrada</div>
             </div>
           ):(
             <>
-              {/* Verifica se é Vegas Benefícios para aplicar peso na meta */}
-              {(() => {
-              const isVegasBeneficios = ((empresa?.produto_contratado||'').toLowerCase().trim()==='vegas benefícios'||
-                                        (empresa?.produto_contratado||'').toLowerCase().trim()==='vegas beneficios');
-              return (
-              <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
-                {[
-                  {label:'Total Bruto',      val:fmt(totalMovimentado),bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
-                  {label:'Total Considerado',val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
-                  {label:'Ajustes Ativos',   val:ajustes.length,bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
-                  {label:'Meses Ativos',     val:`${mesesAtivos} de ${movimentos.length}`,bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
-                  {label:isVegasBeneficios?`🎯 Meta (${fmtPct(peso*100)}% peso)`:'🎯 Apurado Meta',val:totalMetaApurado>0?fmt(totalMetaApurado):'—',bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
-                ].map(({label,val,bg,border,cor})=>(
-                  <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
-                    <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
-                    <div style={{fontWeight:800,fontSize:'1.1rem',color:cor}}>{val}</div>
+              {(()=>{
+                const isVegasBeneficios = ((empresa?.produto_contratado||'').toLowerCase().trim()==='vegas benefícios'||
+                                          (empresa?.produto_contratado||'').toLowerCase().trim()==='vegas beneficios');
+                return (
+                  <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
+                    {[
+                      {label:'Total Bruto',       val:fmt(totalMovimentado),             bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
+                      {label:'Total Considerado',  val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
+                      {label:'Ajustes Ativos',     val:ajustes.length,                    bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
+                      {label:'Meses Ativos',       val:`${mesesAtivos} de ${mesesParaExibir.length}`, bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
+                      {label:isVegasBeneficios?`🎯 Meta (${fmtPct(peso*100)}% peso)`:'🎯 Apurado Meta', val:totalMetaApurado>0?fmt(totalMetaApurado):'—', bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
+                    ].map(({label,val,bg,border,cor})=>(
+                      <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
+                        <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
+                        <div style={{fontWeight:800,fontSize:'1.1rem',color:cor}}>{val}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              );})()}
+                );
+              })()}
 
               <div style={{border:'1px solid #e4e7ef',borderRadius:10,overflow:'hidden'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
@@ -917,7 +880,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Meses zerados esperados (Convênio/Mobilidade sem registro) */}
+                    {/* Meses zerados esperados (Convênio/Mobilidade) */}
                     {mesesZeradosEsperados.map(comp => {
                       const eInserindo = inserindoValor === comp;
                       const metaGravada = metaMap[comp];
@@ -927,9 +890,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             <td style={{padding:'12px 16px',fontWeight:600}}>
                               <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                                 <span style={{color:'#9ca3af'}}>{fmtMes(comp+'-01')}</span>
-                                <span style={{background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',color:'#f87171',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:700}}>
-                                  sem registro
-                                </span>
+                                <span style={{background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',color:'#f87171',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:700}}>sem registro</span>
                                 {metaGravada && (
                                   <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>
                                     ✅ {fmt(metaGravada.valor_meta)}
@@ -939,9 +900,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             </td>
                             <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
                             <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
-                            <td style={{padding:'12px 16px',color:'#9ca3af',fontSize:'0.75rem',fontStyle:'italic'}}>
-                              mês sem movimentação
-                            </td>
+                            <td style={{padding:'12px 16px',color:'#9ca3af',fontSize:'0.75rem',fontStyle:'italic'}}>mês sem movimentação</td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                                 {!metaGravada ? (
@@ -952,8 +911,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                 ) : (
                                   <button onClick={async ()=>{
                                     if(!confirm('Remover a meta deste mês?')) return;
-                                    await supabase.from('valor_meta_empresa').delete()
-                                      .eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01');
+                                    await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01');
                                     await carregar();
                                   }}
                                     style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
@@ -963,12 +921,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </div>
                             </td>
                           </tr>
-                          {/* Painel: aplicar meta usando mês anterior com valor */}
                           {eInserindo && (()=>{
-                            // Acha o último mês com valor dentro dos 3 corridos
-                            const comValorOrdenados = movimentos
-                              .filter(m => m.total_liberado > 0)
-                              .sort((a,b) => a.competencia.localeCompare(b.competencia));
+                            const comValorOrdenados = movimentos.filter(m => m.total_liberado > 0).sort((a,b) => a.competencia.localeCompare(b.competencia));
                             const primeiroCom = comValorOrdenados[0];
                             const [y0,m0] = (primeiroCom?.competencia||'').substring(0,7).split('-').map(Number);
                             const tresMeses = [0,1,2].map(i=>{
@@ -979,16 +933,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               const val = aj ? aj.valor_considerado : (lib?.total_liberado||0);
                               return {comp:c2, val, label:fmtMes(c2+'-01')};
                             });
-                            // Usa o 3º se tiver valor; senão o último com valor
-                            const mesParaMeta = tresMeses[2].val > 0
-                              ? tresMeses[2]
-                              : [...tresMeses].reverse().find(m=>m.val>0);
+                            const mesParaMeta = tresMeses[2].val > 0 ? tresMeses[2] : [...tresMeses].reverse().find(m=>m.val>0);
                             const _prodNorm = (empresa?.produto_contratado||'').toLowerCase().trim();
                             const _isVB = _prodNorm==='vegas benefícios'||_prodNorm==='vegas beneficios';
                             const _pesoMeta = _isVB ? peso : 1;
-                            const valorMetaCalc = mesParaMeta
-                              ? Math.round(mesParaMeta.val * _pesoMeta * (pctCons/100) * 100) / 100
-                              : 0;
+                            const valorMetaCalc = mesParaMeta ? Math.round(mesParaMeta.val * _pesoMeta * (pctCons/100) * 100) / 100 : 0;
                             return (
                               <tr style={{background:'rgba(96,165,250,0.04)',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
                                 <td colSpan={5} style={{padding:'16px 20px'}}>
@@ -997,57 +946,29 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       🎯 Aplicar meta para {fmtMes(comp+'-01')} (3º mês corrido zerado)
                                     </div>
                                     <div style={{color:'#6b7280',fontSize:'0.75rem'}}>
-                                      Fev/{comp.split('-')[0]} não teve movimentação. O sistema usará o valor de <strong style={{color:'#1a1d2e'}}>{mesParaMeta?.label||'—'}</strong> como base da meta.
+                                      {fmtMes(comp+'-01')} não teve movimentação. O sistema usará o valor de <strong style={{color:'#1a1d2e'}}>{mesParaMeta?.label||'—'}</strong> como base da meta.
                                     </div>
                                   </div>
                                   {mesParaMeta ? (
                                     <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px'}}>
-                                      <div>
-                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Mês de referência</div>
-                                        <div style={{fontWeight:700,color:'#2563eb'}}>{mesParaMeta.label}</div>
-                                      </div>
-                                      <div>
-                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor movimentado</div>
-                                        <div style={{fontWeight:700,color:'#1a1d2e'}}>{fmt(mesParaMeta.val)}</div>
-                                      </div>
-                                      {_pesoMeta < 1 && <div>
-                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso</div>
-                                        <div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoMeta*100)}</div>
-                                      </div>}
-                                      <div>
-                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div>
-                                        <div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div>
-                                      </div>
-                                      <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
-                                        <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta</div>
-                                        <div style={{fontWeight:800,color:'#16a34a',fontSize:'1.1rem'}}>{fmt(valorMetaCalc)}</div>
-                                      </div>
-                                      <button
-                                        disabled={salvandoInserir}
+                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Mês de referência</div><div style={{fontWeight:700,color:'#2563eb'}}>{mesParaMeta.label}</div></div>
+                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor movimentado</div><div style={{fontWeight:700,color:'#1a1d2e'}}>{fmt(mesParaMeta.val)}</div></div>
+                                      {_pesoMeta < 1 && <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoMeta*100)}</div></div>}
+                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
+                                      <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta</div><div style={{fontWeight:800,color:'#16a34a',fontSize:'1.1rem'}}>{fmt(valorMetaCalc)}</div></div>
+                                      <button disabled={salvandoInserir}
                                         onClick={async () => {
                                           setSalvandoInserir(true);
-                                          // Salva direto na valor_meta_empresa com o mês zerado como competencia_meta
-                                          // e o valor calculado do mês de referência
-                                          await supabase.from('valor_meta_empresa')
-                                            .delete().eq('empresa_id', empresa.id);
+                                          await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id);
                                           const { error } = await supabase.from('valor_meta_empresa').insert({
-                                            empresa_id:       empresa.id,
-                                            produto_id:       empresa.produto_id,
-                                            consultor_id:     empresa.consultor_principal_id || null,
-                                            competencia_meta: comp+'-01',
-                                            valor_bruto:      mesParaMeta.val,
-                                            valor_considerado: mesParaMeta.val,
-                                            valor_meta:       valorMetaCalc,
-                                            pct_consultor:    pctCons,
-                                            regra:            'convenio',
-                                            mes_sequencia:    3,
+                                            empresa_id: empresa.id, produto_id: empresa.produto_id,
+                                            consultor_id: empresa.consultor_principal_id || null,
+                                            competencia_meta: comp+'-01', valor_bruto: mesParaMeta.val,
+                                            valor_considerado: mesParaMeta.val, valor_meta: valorMetaCalc,
+                                            pct_consultor: pctCons, regra: 'convenio', mes_sequencia: 3,
                                           });
-                                          if (!error) {
-                                            await carregar();
-                                            setInserindoValor(null);
-                                          } else {
-                                            alert('Erro: ' + error.message);
-                                          }
+                                          if (!error) { await carregar(); setInserindoValor(null); }
+                                          else { alert('Erro: ' + error.message); }
                                           setSalvandoInserir(false);
                                         }}
                                         style={{background:'#16a34a',color:'white',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',marginLeft:'auto'}}>
@@ -1061,33 +982,40 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </tr>
                             );
                           })()}
-
                         </React.Fragment>
                       );
                     })}
-                    {movimentos.map((m,i)=>{
+
+                    {/* ── PATCH: Exibe TODOS os meses desde o cadastro ── */}
+                    {mesesParaExibir.map((m,i)=>{
                       const comp           = m.competencia?.substring(0,10);
                       const ajuste         = ajusteMap[comp];
-                      const valConsiderado = ajuste?ajuste.valor_considerado:m.total_liberado;
+                      const valConsiderado = ajuste ? ajuste.valor_considerado : m.total_liberado;
                       const temAjuste      = !!ajuste;
                       const eEditando      = editandoMes===comp;
                       const eMetaAberta    = metaMes===comp;
                       const metaGravada    = metaMap[comp];
                       const temMeta        = !!metaGravada;
                       const ehMesMetaAuto  = metaAuto&&!metaAuto.pendente&&metaAuto.comp===comp;
-                      // Peso só aplica na meta para Vegas Benefícios; demais produtos usam 100%
                       const _prodNorm  = (empresa?.produto_contratado||'').toLowerCase().trim();
                       const _isVB      = _prodNorm==='vegas benefícios'||_prodNorm==='vegas beneficios';
                       const _pesoMeta  = _isVB ? peso : 1;
                       const valorMetaCalc = Math.round(valConsiderado*_pesoMeta*(pctCons/100)*100)/100;
 
                       return(
-                        <>
-                          <tr key={comp} style={{borderTop:'1px solid #f0f2f8',
-                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(240,180,41,0.04)':temAjuste?'#fffbeb':i%2===0?'#ffffff':'#fafafa'}}>
+                        <React.Fragment key={comp}>
+                          <tr style={{borderTop:'1px solid #f0f2f8',
+                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(240,180,41,0.04)':temAjuste?'#fffbeb':!m.temRegistro?'rgba(248,113,113,0.03)':i%2===0?'#ffffff':'#fafafa',
+                            opacity:!m.temRegistro&&!temAjuste&&!temMeta?0.85:1}}>
                             <td style={{padding:'12px 16px',fontWeight:600}}>
                               <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                                 {fmtMes(m.competencia)}
+                                {/* PATCH: badge "sem mov." em meses sem registro */}
+                                {!m.temRegistro && !temAjuste && (
+                                  <span style={{background:'rgba(156,163,175,0.12)',color:'#9ca3af',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:600}}>
+                                    sem mov.
+                                  </span>
+                                )}
                                 {temMeta&&(
                                   <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,whiteSpace:'nowrap'}}>
                                     ✅ {fmt(metaGravada.valor_meta)}
@@ -1101,10 +1029,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </div>
                             </td>
                             <td style={{padding:'12px 16px',textAlign:'right',color:'#6b7280',fontWeight:temAjuste?400:700}}>
-                              {m.total_liberado>0?<span style={{textDecoration:temAjuste?'line-through':''}}>{fmt(m.total_liberado)}</span>:'—'}
+                              {m.total_liberado>0
+                                ? <span style={{textDecoration:temAjuste?'line-through':''}}>{fmt(m.total_liberado)}</span>
+                                : <span style={{color:'#d1d5db',fontSize:'0.78rem'}}>—</span>}
                             </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',fontWeight:700,color:temAjuste?'#f0b429':'#16a34a',fontSize:'1rem'}}>
-                              {valConsiderado>0?fmt(valConsiderado):'—'}
+                            <td style={{padding:'12px 16px',textAlign:'right',fontWeight:700,color:temAjuste?'#f0b429':m.temRegistro?'#16a34a':'#9ca3af',fontSize:'1rem'}}>
+                              {valConsiderado>0?fmt(valConsiderado):<span style={{color:'#d1d5db'}}>—</span>}
                               {temAjuste&&<div style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:400}}>ajustado</div>}
                             </td>
                             <td style={{padding:'12px 16px',maxWidth:220}}>
@@ -1117,11 +1047,13 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             </td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:m.total_liberado,motivo:ajuste?.motivo||'upsell',observacao:ajuste?.observacao||''});setMetaMes(null);}}
+                                {/* Botão Ajustar — disponível em TODOS os meses */}
+                                <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:(m.total_liberado||''),motivo:ajuste?.motivo||'correcao',observacao:ajuste?.observacao||''});setMetaMes(null);}}
                                   style={{background:eEditando?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${eEditando?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'#f0b429':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
                                   {eEditando?'✕':'✏️ Ajustar'}
                                 </button>
-                                {m.total_liberado>0&&(
+                                {/* Botão Meta — disponível com movimentação bruta OU com ajuste manual */}
+                                {(m.total_liberado>0 || temAjuste)&&(
                                   <button onClick={()=>abrirMetaManual(comp,valConsiderado)}
                                     style={{background:eMetaAberta?'rgba(52,211,153,0.15)':temMeta?'rgba(52,211,153,0.08)':'#f5f6fa',border:`1px solid ${eMetaAberta?'rgba(52,211,153,0.4)':temMeta?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eMetaAberta?'#16a34a':temMeta?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
                                     {eMetaAberta?'✕':temMeta?'✅ Meta':'🎯 Meta'}
@@ -1133,11 +1065,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                 {temMeta&&!eMetaAberta&&(
                                   <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
                                 )}
-                                {/* Upsell: apenas em meses POSTERIORES ao mês da meta, com excedente */}
+                                {/* Upsell */}
                                 {m.total_liberado > 0 && valorMetas.length > 0 && (() => {
                                   const metaBase    = valorMetas.find(v => v.regra !== 'upsell');
                                   const mesMetaComp = metaBase?.competencia_meta?.substring(0,7) || '';
-                                  // Só mostra em meses APÓS o mês da meta
                                   if (comp <= mesMetaComp) return null;
                                   const valorBase   = metaBase?.valor_considerado || 0;
                                   const excedente   = m.total_liberado - valorBase;
@@ -1151,51 +1082,63 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     </button>
                                   );
                                 })()}
-                                {/* Botão remover registro da liberacoes — aparece sempre para permitir desfazer inserções erradas */}
-                                <button
-                                  onClick={async () => {
-                                    if(!confirm(`Remover o registro de ${fmtMes(m.competencia)} da movimentação?\n\nIsso NÃO afeta metas já gravadas.`)) return;
-                                    await supabase.from('liberacoes')
-                                      .delete()
-                                      .eq('empresa_id', empresa.id)
-                                      .eq('competencia', m.competencia);
-                                    await carregar();
-                                  }}
-                                  title="Remover este registro de movimentação"
-                                  style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.1)',borderRadius:7,padding:'5px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.72rem',fontFamily:'inherit',opacity:0.7}}
-                                >
-                                  🗑️
-                                </button>
+                                {/* Remover registro */}
+                                {m.temRegistro && (
+                                  <button
+                                    onClick={async () => {
+                                      if(!confirm(`Remover o registro de ${fmtMes(m.competencia)} da movimentação?`)) return;
+                                      await supabase.from('liberacoes').delete().eq('produto_id', empresa.produto_id).eq('competencia', m.competencia);
+                                      await carregar();
+                                    }}
+                                    title="Remover este registro de movimentação"
+                                    style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.1)',borderRadius:7,padding:'5px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.72rem',fontFamily:'inherit',opacity:0.7}}>
+                                    🗑️
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
 
-                          {/* Painel: Ajuste */}
+                          {/* Painel: Ajuste — funciona em meses com e sem movimentação */}
                           {eEditando&&(
                             <tr key={comp+'-adj'} style={{background:'#fffbeb'}}>
                               <td colSpan={5} style={{padding:'16px 20px'}}>
                                 <div style={{background:'#ffffff',border:'1px solid #fde68a',borderRadius:10,padding:16}}>
-                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</div>
+                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>
+                                    {m.temRegistro
+                                      ? <>✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</>
+                                      : <>➕ Inserir valor manual — {fmtMes(m.competencia)} <span style={{color:'#9ca3af',fontWeight:400}}>(sem movimentação registrada)</span></>
+                                    }
+                                  </div>
+                                  {!m.temRegistro && (
+                                    <div style={{background:'rgba(96,165,250,0.06)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:'0.78rem',color:'#4b5563'}}>
+                                      💡 Insira o valor real da movimentação para este mês. Ele ficará registrado como "ajuste manual" e poderá ser marcado na meta.
+                                    </div>
+                                  )}
                                   <div style={{display:'grid',gridTemplateColumns:'180px 200px 1fr',gap:12,alignItems:'end'}}>
-                                    <div><label style={sp.labelSm}>Valor Considerado *</label>
-                                      <input type="number" step="0.01" value={ajusteForm.valor} onChange={e=>setAjusteForm(f=>({...f,valor:e.target.value}))} style={sp.inputInline} placeholder="Ex: 5000.00" />
+                                    <div><label style={sp.labelSm}>Valor {m.temRegistro?'Considerado':'Movimentado'} *</label>
+                                      <input type="number" step="0.01" value={ajusteForm.valor} onChange={e=>setAjusteForm(f=>({...f,valor:e.target.value}))} style={sp.inputInline} placeholder="Ex: 5339.50" autoFocus />
                                     </div>
                                     <div><label style={sp.labelSm}>Motivo *</label>
                                       <select value={ajusteForm.motivo} onChange={e=>setAjusteForm(f=>({...f,motivo:e.target.value}))} style={sp.selectInline}>
-                                        <option value="upsell">📈 Up-sell</option><option value="ajuste">✏️ Ajuste de valor</option>
-                                        <option value="negociacao">🤝 Negociação</option><option value="correcao">🔧 Correção</option><option value="outro">📌 Outro</option>
+                                        <option value="correcao">🔧 Correção</option>
+                                        <option value="upsell">📈 Up-sell</option>
+                                        <option value="ajuste">✏️ Ajuste de valor</option>
+                                        <option value="negociacao">🤝 Negociação</option>
+                                        <option value="outro">📌 Outro</option>
                                       </select>
                                     </div>
                                     <div><label style={sp.labelSm}>Observação</label>
-                                      <input value={ajusteForm.observacao} onChange={e=>setAjusteForm(f=>({...f,observacao:e.target.value}))} style={sp.inputInline} placeholder="Ex: Valor negociado em reunião" />
+                                      <input value={ajusteForm.observacao} onChange={e=>setAjusteForm(f=>({...f,observacao:e.target.value}))} style={sp.inputInline} placeholder="Ex: Crédito de 28/02 referente a Mar/2026" />
                                     </div>
                                   </div>
                                   <div style={{display:'flex',gap:10,marginTop:14,alignItems:'center'}}>
                                     <button onClick={()=>salvarAjuste(m.competencia,m.total_liberado)} disabled={salvandoAjuste||!ajusteForm.valor}
                                       style={{background:'#f0b429',color:'#000',border:'none',borderRadius:8,padding:'9px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!ajusteForm.valor?0.5:1}}>
-                                      {salvandoAjuste?'Salvando...':'💾 Salvar Ajuste'}
+                                      {salvandoAjuste?'Salvando...':'💾 Salvar'}
                                     </button>
-                                    <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>O valor bruto será mantido no histórico</span>
+                                    <button onClick={()=>setEditandoMes(null)} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'9px 16px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
+                                    {m.temRegistro && <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>O valor bruto será mantido no histórico</span>}
                                   </div>
                                 </div>
                               </td>
@@ -1230,14 +1173,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <label style={sp.labelSm}>Valor que entra na meta *</label>
                                       <input type="number" step="0.01" value={metaForm.valor} onChange={e=>setMetaForm(f=>({...f,valor:e.target.value}))}
                                         style={{...sp.inputInline,border:'1px solid rgba(52,211,153,0.4)',fontWeight:700}} placeholder="Ex: 3000.00" />
-                                      {/* Atalhos de cálculo */}
                                       <div style={{display:'flex',gap:5,marginTop:6,flexWrap:'wrap'}}>
                                         {[
-                                          // Só mostra atalho de peso se for Vegas Benefícios
                                           ...(_isVB ? [{label:`${fmtPct(peso*100)}% peso`, val: valorMetaCalc}] : []),
                                           {label:'Movimentação', val: valConsiderado},
                                           {label:'Bruto',        val: m.total_liberado},
-                                        ].filter((v,i,a)=>a.findIndex(x=>x.val===v.val)===i).map(opt=>(
+                                        ].filter((v,i,a)=>v.val>0&&a.findIndex(x=>x.val===v.val)===i).map(opt=>(
                                           <button key={opt.label} onClick={()=>setMetaForm(f=>({...f,valor:opt.val}))}
                                             style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'#16a34a',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
                                             {opt.label}: {fmt(opt.val)}
@@ -1277,68 +1218,60 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               </td>
                             </tr>
                           )}
-                        {/* Painel de Upsell */}
-                        {upsellMes === comp && (()=>{
-                          const metaBase    = valorMetas.find(v=>v.regra!=='upsell');
-                          const mesMetaComp = metaBase?.competencia_meta?.substring(0,7)||'';
-                          const valorBase   = metaBase?.valor_considerado||0;
-                          const excedente   = Math.max(0, m.total_liberado - valorBase);
-                          const _isVB       = (empresa?.produto_contratado||'').toLowerCase().includes('vegas benef');
-                          const _pesoUp     = _isVB ? peso : 1;
-                          const valorUpsell = Math.round(excedente*_pesoUp*(pctCons/100)*100)/100;
-                          const jaTemUpsell = valorMetas.find(v=>v.competencia_meta?.substring(0,7)===comp&&v.regra==='upsell');
-                          return (
-                            <tr key={comp+'-up'} style={{background:'rgba(8,145,178,0.04)',borderTop:'1px solid rgba(8,145,178,0.12)'}}>
-                              <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
-                                  <span style={{color:'#0891b2',fontWeight:700,fontSize:'0.88rem'}}>📈 Upsell — {fmtMes(comp+'-01')}</span>
-                                  {jaTemUpsell&&<span style={{background:'rgba(8,145,178,0.1)',color:'#0891b2',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
-                                </div>
-                                <div style={{display:'flex',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
-                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Movimentação</div><div style={{fontWeight:700}}>{fmt(m.total_liberado)}</div></div>
-                                  <span style={{color:'#9ca3af'}}>−</span>
-                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Base (meta {fmtMes(mesMetaComp+'-01')})</div><div style={{fontWeight:700,color:'#16a34a'}}>{fmt(valorBase)}</div></div>
-                                  <span style={{color:'#9ca3af'}}>=</span>
-                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Excedente</div><div style={{fontWeight:700,color:'#0891b2'}}>{fmt(excedente)}</div></div>
-                                  {_pesoUp<1&&<><span style={{color:'#9ca3af'}}>×</span><div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Peso VB</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoUp*100)}</div></div></>}
-                                  <span style={{color:'#9ca3af'}}>×</span>
-                                  <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
-                                  <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
-                                    <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
-                                    <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
+
+                          {/* Painel de Upsell */}
+                          {upsellMes === comp && (()=>{
+                            const metaBase    = valorMetas.find(v=>v.regra!=='upsell');
+                            const mesMetaComp = metaBase?.competencia_meta?.substring(0,7)||'';
+                            const valorBase   = metaBase?.valor_considerado||0;
+                            const excedente   = Math.max(0, m.total_liberado - valorBase);
+                            const _isVBUp     = (empresa?.produto_contratado||'').toLowerCase().includes('vegas benef');
+                            const _pesoUp     = _isVBUp ? peso : 1;
+                            const valorUpsell = Math.round(excedente*_pesoUp*(pctCons/100)*100)/100;
+                            const jaTemUpsell = valorMetas.find(v=>v.competencia_meta?.substring(0,7)===comp&&v.regra==='upsell');
+                            return (
+                              <tr key={comp+'-up'} style={{background:'rgba(8,145,178,0.04)',borderTop:'1px solid rgba(8,145,178,0.12)'}}>
+                                <td colSpan={5} style={{padding:'16px 20px'}}>
+                                  <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                                    <span style={{color:'#0891b2',fontWeight:700,fontSize:'0.88rem'}}>📈 Upsell — {fmtMes(comp+'-01')}</span>
+                                    {jaTemUpsell&&<span style={{background:'rgba(8,145,178,0.1)',color:'#0891b2',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
                                   </div>
-                                  <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
-                                    {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
-                                    <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
-                                      setSalvandoUpsell(true);
-                                      // Busca id existente do upsell para fazer update, senão insert
-                                      const {data:existUpsell} = await supabase.from('valor_meta_empresa')
-                                        .select('id').eq('empresa_id',empresa.id).eq('regra','upsell').maybeSingle();
-                                      let error;
-                                      if(existUpsell?.id){
-                                        ({error} = await supabase.from('valor_meta_empresa').update({
-                                          competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,
-                                          valor_meta:valorUpsell,pct_consultor:pctCons,mes_sequencia:0
-                                        }).eq('id',existUpsell.id));
-                                      } else {
-                                        ({error} = await supabase.from('valor_meta_empresa').insert({
-                                          empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:null,
-                                          competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,
-                                          valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0
-                                        }));
-                                      }
-                                      if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
-                                      setSalvandoUpsell(false);
-                                    }} style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                                      {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
-                                    </button>
+                                  <div style={{display:'flex',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
+                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Movimentação</div><div style={{fontWeight:700}}>{fmt(m.total_liberado)}</div></div>
+                                    <span style={{color:'#9ca3af'}}>−</span>
+                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Base (meta {fmtMes(mesMetaComp+'-01')})</div><div style={{fontWeight:700,color:'#16a34a'}}>{fmt(valorBase)}</div></div>
+                                    <span style={{color:'#9ca3af'}}>=</span>
+                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Excedente</div><div style={{fontWeight:700,color:'#0891b2'}}>{fmt(excedente)}</div></div>
+                                    {_pesoUp<1&&<><span style={{color:'#9ca3af'}}>×</span><div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Peso VB</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoUp*100)}</div></div></>}
+                                    <span style={{color:'#9ca3af'}}>×</span>
+                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
+                                    <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
+                                      <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
+                                    </div>
+                                    <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
+                                      {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
+                                      <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
+                                        setSalvandoUpsell(true);
+                                        const {data:existUpsell} = await supabase.from('valor_meta_empresa').select('id').eq('empresa_id',empresa.id).eq('regra','upsell').maybeSingle();
+                                        let error;
+                                        if(existUpsell?.id){
+                                          ({error} = await supabase.from('valor_meta_empresa').update({competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,mes_sequencia:0}).eq('id',existUpsell.id));
+                                        } else {
+                                          ({error} = await supabase.from('valor_meta_empresa').insert({empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:null,competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0}));
+                                        }
+                                        if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
+                                        setSalvandoUpsell(false);
+                                      }} style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                                        {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })()}
-                        </>
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
