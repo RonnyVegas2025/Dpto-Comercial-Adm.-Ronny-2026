@@ -1412,7 +1412,10 @@ export default function Evolucao() {
             {/* Filtro por mês da meta — select compacto */}
             {(() => {
               const mesesCalc = listaCompleta.filter(e => e._meta?.elegivel).map(e => e._meta.mesAlvo?.substring(0,7)).filter(Boolean);
-              const mesesGrav = Object.values(metasGravadas).map(v => v.competencia_meta?.substring(0,7)).filter(Boolean);
+              const mesesGrav = Object.entries(metasGravadas)
+                .filter(([k]) => k.startsWith('all__'))
+                .flatMap(([, arr]) => Array.isArray(arr) ? arr.map(v => v.competencia_meta?.substring(0,7)) : [])
+                .filter(Boolean);
               const mesesUnicos = [...new Set([...mesesCalc, ...mesesGrav])].sort();
               return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
