@@ -682,25 +682,29 @@ export default function GestaoEmpresaDetalhe({ params }) {
           {elegivel&&(
             <div style={{marginBottom:20,animation:'fadeIn 0.3s ease'}}>
               {metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
-                <div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-                  <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+                  <div style={{display:'flex',alignItems:'flex-start',gap:12,flex:1}}>
                     <span style={{fontSize:'1.4rem'}}>✅</span>
-                    <div>
-                      <div style={{fontWeight:700,color:'#16a34a',fontSize:'0.88rem'}}>
-                        Meta aplicada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'} · {metaAuto.mesLabel}
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,color:'#16a34a',fontSize:'0.88rem',marginBottom:6}}>
+                        Meta aplicada — {valorMetas.length} entrada{valorMetas.length!==1?'s':''} · Total: {fmt(totalMetaApurado)}
                       </div>
-                      <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:2}}>
-                        <strong style={{color:'#16a34a'}}>{fmt(metaAuto.valorMeta)}</strong>
-                        {' '}= {fmt(metaAuto.valorConsiderado)}
-                        {metaAuto.peso < 1 && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(metaAuto.peso*100)}% peso VB</span></>}
-                        {' '}× {fmtPct(pctCons)} consultor
-                        {metaAuto.temAjuste&&<span style={{color:'#f0b429'}}> (valor ajustado)</span>}
+                      {/* Lista todas as entradas: meta principal + upsells */}
+                      <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                        {valorMetas.sort((a,b)=>(a.competencia_meta||'').localeCompare(b.competencia_meta||'')).map((v,i) => (
+                          <div key={i} style={{background:v.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',border:`1px solid ${v.regra==='upsell'?'rgba(251,191,36,0.3)':'rgba(52,211,153,0.3)'}`,borderRadius:8,padding:'6px 12px'}}>
+                            <div style={{fontWeight:700,color:v.regra==='upsell'?'#f0b429':'#16a34a',fontSize:'0.78rem'}}>
+                              {v.regra==='upsell'?'📈 Upsell':v.regra==='beneficio'?'✅ 1ª recarga':v.regra==='convenio'?'✅ 3º mês':'✅ Manual'} · {fmtMes(v.competencia_meta)}
+                            </div>
+                            <div style={{color:v.regra==='upsell'?'#f0b429':'#16a34a',fontSize:'0.85rem',fontWeight:700}}>{fmt(v.valor_meta)}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
                   <button onClick={()=>removerMeta(metaAuto.comp)} disabled={removendoMeta}
                     style={{background:'rgba(220,38,38,0.07)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:8,padding:'7px 16px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',fontWeight:600}}>
-                    {removendoMeta?'Removendo...':'🗑 Desmarcar da meta'}
+                    {removendoMeta?'Removendo...':'🗑 Desmarcar meta principal'}
                   </button>
                 </div>
               )}
