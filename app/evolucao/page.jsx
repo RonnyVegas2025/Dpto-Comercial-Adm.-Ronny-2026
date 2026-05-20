@@ -1427,11 +1427,11 @@ export default function Evolucao() {
                     <option value="todos">Todos os meses</option>
                     {mesesUnicos.map(m => {
                       const totalMes = listaCompleta.reduce((s, e) => {
-                        const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-                        const gravado = chaveCalc ? metasGravadas[chaveCalc] : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
-                        const mesRef = gravado?.competencia_meta?.substring(0,7) || e._meta?.mesAlvo?.substring(0,7);
-                        if (mesRef !== m) return s;
-                        return s + ((gravado?.valor_meta ?? (e._meta?.elegivel ? e._meta.valorMeta : 0)) || 0);
+                        const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+                        const doMes = todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
+                        if (doMes.length > 0) return s + doMes.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
+                        if (e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === m) return s + (e._meta.valorMeta || 0);
+                        return s;
                       }, 0);
                       const qtd = listaCompleta.filter(e => {
                         const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
