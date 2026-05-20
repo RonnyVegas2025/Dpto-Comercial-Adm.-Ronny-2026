@@ -208,8 +208,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     const inicioCad = empresa?.data_cadastro?.substring(0,7);
-    const inicioMov = movimentos.length > 0 ? movimentos[0].competencia?.substring(0,7) : null;
-    const inicio = inicioCad || inicioMov || mesAtual;
+    // Primeiro mês com movimentação (pode ser anterior ao cadastro)
+    const movOrdenados = [...movimentos].sort((a,b) => a.competencia.localeCompare(b.competencia));
+    const inicioMov = movOrdenados.length > 0 ? movOrdenados[0].competencia?.substring(0,7) : null;
+    // Usa o menor entre data de cadastro e primeira movimentação
+    const candidatos = [inicioCad, inicioMov].filter(Boolean);
+    const inicio = candidatos.length > 0 ? candidatos.sort()[0] : mesAtual;
     const meses = [];
     let [y, mo] = inicio.split('-').map(Number);
     const [yFim, mFim] = mesAtual.split('-').map(Number);
