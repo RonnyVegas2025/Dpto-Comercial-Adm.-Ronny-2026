@@ -108,6 +108,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const [valorInserir,    setValorInserir]    = useState('');
   const [salvandoInserir, setSalvandoInserir] = useState(false);
   const [upsellMes,       setUpsellMes]       = useState(null);
+  const [valorUpsellManual, setValorUpsellManual] = useState('');
   const [salvandoUpsell,  setSalvandoUpsell]  = useState(false);
   const [removendoMeta,   setRemovendoMeta]   = useState(false);
 
@@ -1078,7 +1079,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                   const excedente   = m.total_liberado - valorBase;
                                   const jaTemUpsell = valorMetas.some(v => v.competencia_meta?.substring(0,7) === comp && v.regra === 'upsell');
                                   const eUpsellAberto = upsellMes === comp;
-                                  if (excedente <= 0 && !eUpsellAberto && !jaTemUpsell) return null;
+                                  // Sempre mostra o botão Upsell em meses posteriores à meta
                                   return (
                                     <button onClick={()=>setUpsellMes(eUpsellAberto?null:comp)}
                                       style={{background:eUpsellAberto?'rgba(8,145,178,0.15)':jaTemUpsell?'rgba(8,145,178,0.08)':'#f5f6fa',border:`1px solid ${eUpsellAberto?'rgba(8,145,178,0.4)':jaTemUpsell?'rgba(8,145,178,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eUpsellAberto?'#0891b2':jaTemUpsell?'#0891b2':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
@@ -1253,20 +1254,40 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
                                       <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
                                     </div>
+                                    {/* Campo valor manual — quando não há excedente ou quer sobrescrever */}
+                                    <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16,minWidth:180}}>
+                                      <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:4}}>Valor manual (opcional)</div>
+                                      <input
+                                        type="number" step="0.01" placeholder={excedente>0?`Calc: ${fmt(valorUpsell)}`:"Digite o valor"}
+                                        value={valorUpsellManual}
+                                        onChange={e=>setValorUpsellManual(e.target.value)}
+                                        style={{width:'100%',border:'1px solid rgba(8,145,178,0.3)',borderRadius:7,padding:'6px 10px',fontSize:'0.88rem',fontFamily:'inherit',color:'#0891b2',fontWeight:700,boxSizing:'border-box'}}
+                                      />
+                                      {excedente<=0&&<div style={{color:'#f87171',fontSize:'0.65rem',marginTop:3}}>Sem excedente automático — insira o valor</div>}
+                                    </div>
                                     <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
                                       {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
-                                      <button disabled={salvandoUpsell||excedente<=0} onClick={async()=>{
+                                      <button disabled={salvandoUpsell} onClick={async()=>{
+                                        // Usa valor manual se preenchido, senão usa excedente calculado
+                                        const valorFinal = valorUpsellManual ? parseFloat(valorUpsellManual) : valorUpsell;
+                                        if (!valorFinal || valorFinal <= 0) { alert('Informe um valor para o upsell'); return; }
                                         setSalvandoUpsell(true);
-                                        const {data:existUpsell} = await supabase.from('valor_meta_empresa').select('id').eq('empresa_id',empresa.id).eq('regra','upsell').maybeSingle();
-                                        let error;
-                                        if(existUpsell?.id){
-                                          ({error} = await supabase.from('valor_meta_empresa').update({competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,mes_sequencia:0}).eq('id',existUpsell.id));
-                                        } else {
-                                          ({error} = await supabase.from('valor_meta_empresa').insert({empresa_id:empresa.id,produto_id:empresa.produto_id,consultor_id:null,competencia_meta:comp,valor_bruto:m.total_liberado,valor_considerado:excedente,valor_meta:valorUpsell,pct_consultor:pctCons,regra:'upsell',mes_sequencia:0}));
-                                        }
-                                        if(!error){await carregar();setUpsellMes(null);}else alert('Erro: '+error.message);
+                                        // Delete + insert pelo novo constraint (empresa_id, competencia_meta, regra)
+                                        await supabase.from('valor_meta_empresa')
+                                          .delete()
+                                          .eq('empresa_id', empresa.id)
+                                          .eq('competencia_meta', comp)
+                                          .eq('regra', 'upsell');
+                                        const {error} = await supabase.from('valor_meta_empresa').insert({
+                                          empresa_id:empresa.id, produto_id:empresa.produto_id, consultor_id:null,
+                                          competencia_meta:comp, valor_bruto:m.total_liberado,
+                                          valor_considerado: valorUpsellManual ? valorFinal : excedente,
+                                          valor_meta:valorFinal, pct_consultor:pctCons, regra:'upsell', mes_sequencia:0
+                                        });
+                                        if(!error){await carregar();setUpsellMes(null);setValorUpsellManual('');}
+                                        else alert('Erro: '+error.message);
                                         setSalvandoUpsell(false);
-                                      }} style={{background:excedente>0?'#0891b2':'#e5e7eb',color:excedente>0?'white':'#9ca3af',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:excedente>0?'pointer':'default',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                                      }} style={{background:'#0891b2',color:'white',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
                                         {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
                                       </button>
                                     </div>
