@@ -751,7 +751,7 @@ export default function Evolucao() {
         supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
-          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
           consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
           .eq('ativo', true),
         supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
@@ -790,7 +790,7 @@ export default function Evolucao() {
           .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
             data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
             consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
-            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor),
+            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
             consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor)`)
           .eq('ativo', true),
         supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
