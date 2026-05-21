@@ -135,7 +135,7 @@ export default function DashboardVendedor() {
       if (user) {
         const [{ data: prof }, { data: vis }] = await Promise.all([
           supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
-          supabase.from('user_visibilidade').select('tipo,consultor_ids').eq('user_id', user.id).single(),
+          supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).single(),
         ]);
         perfil = prof;
         setPerfilUsuario(prof);
@@ -153,11 +153,10 @@ export default function DashboardVendedor() {
     } catch(_) { /* sem auth configurado — modo dev */ }
 
     // 2. Busca consultores
-    const [{ data: cons }, { data: libs }, { data: validades }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_valida_desde').eq('ativo',true).order('nome'),
-      supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
-      supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true),
-    ]);
+    const [{ data: cons }, { data: libs }] = await Promise.all([
+  supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_valida_desde').eq('ativo',true).order('nome'),
+  supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
+]);
     let consComValidade = (cons||[]).map(c => ({
   ...c,
   meta_valida_desde: c.meta_valida_desde || null,
