@@ -201,13 +201,16 @@ export default function DashboardVendedor() {
         .not('categoria','eq','Taxa Negativa')
         .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
 
-      if (consultorId) {
-        empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
-     } else if (gestorFiltro !== 'Geral') {
-  const ids = consultores.filter(c=>(c.gestorObj?.nome||c.gestor)===gestorFiltro).map(c=>c.id);
-        if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        empQuery = empQuery.in('consultor_principal_id', ids);
-      }
+     if (consultorId) {
+  empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
+} else {
+  // Sempre filtra pelos consultores visíveis (já restringidos pela visibilidade em carregarBase)
+  const ids = gestorFiltro !== 'Geral'
+    ? consultores.filter(c=>(c.gestorObj?.nome||c.gestor)===gestorFiltro).map(c=>c.id)
+    : consultores.map(c=>c.id);
+  if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
+  empQuery = empQuery.in('consultor_principal_id', ids);
+}
 
       const empresas = await fetchAll(empQuery);
 
