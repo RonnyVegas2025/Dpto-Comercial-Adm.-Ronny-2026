@@ -154,17 +154,15 @@ export default function DashboardVendedor() {
 
     // 2. Busca consultores
     const [{ data: cons }, { data: libs }, { data: validades }] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,gestor_id,equipe,gestorObj:gestor_id(id,nome)').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_valida_desde').eq('ativo',true).order('nome'),
       supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
       supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true),
     ]);
-    const validadeMap = Object.fromEntries((validades||[]).map(v=>[v.id, v.meta_valida_desde]));
     let consComValidade = (cons||[]).map(c => ({
-      ...c,
-      meta_valida_desde: validadeMap[c.id]||null,
-      // Usa nome do gestor via JOIN (gestor_id) — mais confiável que campo texto
-      gestor: c.gestorObj?.nome || c.gestor || null,
-    }));
+  ...c,
+  meta_valida_desde: c.meta_valida_desde || null,
+  gestor: c.gestor || null,
+}));
 
     // 3. Aplica filtro de visibilidade
     if (consultorIdsPermitidos && typeof consultorIdsPermitidos === 'object') {
