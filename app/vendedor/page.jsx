@@ -154,7 +154,7 @@ export default function DashboardVendedor() {
 
     // 2. Busca consultores
     const [{ data: cons }, { data: libs }] = await Promise.all([
-  supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_valida_desde').eq('ativo',true).order('nome'),
+  supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,meta_valida_desde').eq('ativo',true).order('nome'),
   supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
 ]);
     let consComValidade = (cons||[]).map(c => ({
