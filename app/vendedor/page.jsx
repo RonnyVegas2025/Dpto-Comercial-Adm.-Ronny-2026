@@ -34,16 +34,12 @@ async function fetchAll(query) {
   return all;
 }
 
-// ─── LÓGICA CENTRAL: calcula o valor que entra para a meta ───────────────────
-// CORRIGIDO: aplica peso_categoria para Vegas Benefícios (igual à evolucao/page.jsx)
 function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
   const isConv    = catLower.includes('conv') || catLower.includes('mobil');
-  // Benefícios = tudo que não é Convênio/Mobilidade (Alimentação, Bônus, Aux. Combustível, etc.)
   const isBenef   = !isConv;
 
-  // Pega todas as liberações da empresa ordenadas por competência
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
     .filter(l => {
       const _v = validaDesdeMes ? String(validaDesdeMes).substring(0,7) : '2026-01';
@@ -54,21 +50,16 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
 
   if (libsOrdenadas.length === 0) return null;
 
-  // ── CORREÇÃO: peso na meta aplica APENAS para Vegas Benefícios ──
-  // Mesma regra da evolucao/page.jsx: só Vegas Benefícios usa peso_categoria
-  // Demais produtos têm peso 1 na meta (peso afeta previsão, não a meta)
   const isVB  = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
   const peso  = isVB ? (empresa.peso_categoria ?? 1) : 1;
 
   let mesAlvo = null, mesSeq = 0, valorBruto = 0;
 
   if (isBenef) {
-    // Benefícios/Bônus: 1ª recarga com valor > 0
     mesAlvo    = libsOrdenadas[0].comp;
     mesSeq     = 1;
     valorBruto = libsOrdenadas[0].val;
   } else if (isConv) {
-    // Convênio/Mobilidade: 3º mês com valor > 0
     if (libsOrdenadas.length < 3) return null;
     mesAlvo    = libsOrdenadas[2].comp;
     mesSeq     = 3;
@@ -77,12 +68,9 @@ function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes
 
   if (!mesAlvo) return null;
 
-  // Verifica ajuste manual para esse mês
   const compKey  = `${empresa.id}__${mesAlvo}`;
   const ajuste   = ajusteMap[compKey];
   const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
-  // CORRIGIDO: valorBruto × peso (0.30 para Vegas Benefícios) × % consultor
-  // Ex: R$ 196,68 × 0.30 × 1.00 = R$ 59,00 ✅
   const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
 
   return {
@@ -103,7 +91,7 @@ export default function DashboardVendedor() {
   const [consultorId,    setConsultorId]    = useState('');
   const [gestorFiltro,   setGestorFiltro]   = useState('Geral');
   const [gestores,       setGestores]       = useState(['Geral']);
-  const [perfilUsuario,  setPerfilUsuario]  = useState(null); // perfil do usuário logado
+  const [perfilUsuario,  setPerfilUsuario]  = useState(null);
   const [dados,          setDados]          = useState(null);
   const [loading,        setLoading]        = useState(false);
   const [aba,            setAba]            = useState('resumo');
@@ -127,55 +115,46 @@ export default function DashboardVendedor() {
   useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
 
   async function carregarBase() {
-    // 1. Verifica usuário logado e busca perfil + visibilidade
-    let consultorIdsPermitidos = null; // null = sem restrição
-    let perfil = null;
+    let consultorIdsPermitidos = null;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const [{ data: prof }, { data: vis }] = await Promise.all([
           supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
-         supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
+          supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
         ]);
-        perfil = prof;
         setPerfilUsuario(prof);
-        // Aplica restrição de visibilidade para gestor_comercial, supervisor e vendedor
         const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
         if (prof && perfisRestritos.includes(prof.perfil)) {
           if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
             consultorIdsPermitidos = vis.consultor_ids;
           } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-            // Para equipes: filtra após buscar
             consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
           }
         }
       }
-    } catch(_) { /* sem auth configurado — modo dev */ }
+    } catch(_) {}
 
-    // 2. Busca consultores
     const [{ data: cons }, { data: libs }] = await Promise.all([
-  supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,meta_valida_desde').eq('ativo',true).order('nome'),
-  supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
-]);
-    let consComValidade = (cons||[]).map(c => ({
-  ...c,
-  meta_valida_desde: c.meta_valida_desde || null,
-  gestor: c.gestor || null,
-}));
+      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio').eq('ativo',true).order('nome'),
+      supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
+    ]);
 
-    // 3. Aplica filtro de visibilidade
+    let consComValidade = (cons||[]).map(c => ({
+      ...c,
+      meta_inicio: c.meta_inicio || null,
+      gestor: c.gestor || null,
+    }));
+
     if (consultorIdsPermitidos && typeof consultorIdsPermitidos === 'object') {
-      // visibilidade por IDs específicos
       const idSet = new Set(consultorIdsPermitidos);
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
-      // visibilidade por equipes
       const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
       consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) || equipes.includes(c.gestor));
     }
 
     setConsultores(consComValidade);
-    // Gestores visíveis: só os que têm consultores no filtro
     const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
     setGestores(gs);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
@@ -198,28 +177,24 @@ export default function DashboardVendedor() {
         .not('categoria','eq','Taxa Negativa')
         .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
 
-     if (consultorId) {
-  empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
-} else {
-  // Sempre filtra pelos consultores visíveis (já restringidos pela visibilidade em carregarBase)
-  const ids = gestorFiltro !== 'Geral'
-    ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
-    : consultores.map(c=>c.id);
- if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        empQuery = empQuery.or(
-          ids.map(id => `consultor_principal_id.eq.${id},consultor_agregado_id.eq.${id},consultor_agregado_2_id.eq.${id}`).join(',')
-        );
+      if (consultorId) {
+        empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
+      } else {
+        const ids = gestorFiltro !== 'Geral'
+          ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
+          : consultores.map(c=>c.id);
+        if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
+        empQuery = empQuery.in('consultor_principal_id', ids);
       }
 
       const empresas = await fetchAll(empQuery);
-
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
       const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
       const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
 
-      const [libsFiltradas, ajustes, libsTodas, validadeRows, vmetasRows] = await Promise.all([
+      const [libsFiltradas, ajustes, libsTodas, vmetasRows] = await Promise.all([
         prodIds.length ? fetchAll(
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).gte('competencia', mesInicio).lte('competencia', mesFim)
@@ -232,21 +207,11 @@ export default function DashboardVendedor() {
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
-        supabase.from('consultores').select('id,meta_valida_desde').eq('ativo',true).then(r => r.data||[]),
         empIds.length ? supabase.from('valor_meta_empresa')
           .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
           .in('empresa_id', empIds)
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
-
-      const validadeMap = Object.fromEntries((validadeRows||[]).map(v => [v.id, v.meta_valida_desde]));
-      const vmetaEmpMap = {};
-      for (const v of (vmetasRows||[])) {
-        if (!vmetaEmpMap[v.empresa_id]) {
-          vmetaEmpMap[v.empresa_id] = { ...v, valor_meta: 0 };
-        }
-        vmetaEmpMap[v.empresa_id].valor_meta += (v.valor_meta || 0);
-      }
 
       const libMap = {};
       for (const l of libsFiltradas) {
@@ -290,12 +255,10 @@ export default function DashboardVendedor() {
           if (consultorId && cons.id !== consultorId) continue;
           if (gestorFiltro !== 'Geral' && !consultorId) {
             const consCompleto = consultores.find(c=>c.id===cons.id);
-            const gestorConsultor = consCompleto?.gestorObj?.nome || consCompleto?.gestor;
-            if (!consCompleto || gestorConsultor !== gestorFiltro) continue;
+            if (!consCompleto || consCompleto.gestor !== gestorFiltro) continue;
           }
 
           const fator = pct / 100;
-
           const movPorMes = {};
           let totalMov = 0;
           for (const m of mesesDisp) {
@@ -318,7 +281,9 @@ export default function DashboardVendedor() {
           if (aderencia >= 50 && aderencia < 90) situacao = 'dentro do esperado';
           if (aderencia >= 90)                   situacao = 'acima do esperado';
 
-          const validadeConsultor = validadeMap[cons.id] || null;
+          const consCompleto = consultores.find(c=>c.id===cons.id);
+          const validadeConsultor = consCompleto?.meta_inicio || null;
+
           const entradaBanco = (vmetasRows||[]).find(v =>
             v.empresa_id === e.id &&
             v.regra !== 'upsell' &&
@@ -330,7 +295,6 @@ export default function DashboardVendedor() {
 
           let metaCalc;
           if (entradaBanco) {
-            // Usa EXATAMENTE os valores do banco — não recalcula
             const pctBanco = entradaBanco.pct_consultor || pct;
             metaCalc = {
               valor_meta:        (entradaBanco.valor_meta || 0) + (entradaUpsell?.valor_meta || 0),
@@ -341,7 +305,6 @@ export default function DashboardVendedor() {
               pct_consultor:     pctBanco,
             };
           } else {
-            // Sem entrada no banco → calcula inline com peso correto
             metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
           }
 
@@ -351,7 +314,7 @@ export default function DashboardVendedor() {
             _cons:       cons,
             _pct:        pct,
             vendedor:    cons.nome,
-            gestor:      cons.gestorObj?.nome || cons.gestor || '—',
+            gestor:      cons.gestor || '—',
             movPorMes,
             totalMov,
             mediaMovMes,
@@ -359,12 +322,12 @@ export default function DashboardVendedor() {
             esperadoMes,
             aderencia,
             situacao,
-            valorMeta:   metaCalc?.valor_meta        || 0,
-            metaComp:    metaCalc?.competencia_meta   || null,
-            metaRegra:   metaCalc?.regra              || null,
-            metaSeq:     metaCalc?.mes_sequencia      || null,
-            metaBruto:   metaCalc?.valor_bruto        || 0,
-            metaConsiderado: metaCalc?.valor_considerado || 0,
+            valorMeta:       metaCalc?.valor_meta        || 0,
+            metaComp:        metaCalc?.competencia_meta   || null,
+            metaRegra:       metaCalc?.regra              || null,
+            metaSeq:         metaCalc?.mes_sequencia      || null,
+            metaBruto:       metaCalc?.valor_bruto        || 0,
+            metaConsiderado: metaCalc?.valor_considerado  || 0,
           });
         }
       }
@@ -378,10 +341,11 @@ export default function DashboardVendedor() {
         }
         return s + (e.valorMeta || 0);
       }, 0);
+
       const meta = consultoresDaVisao.reduce((total, cons) => {
-        const metaMes  = cons.meta_mensal || 0;
+        const metaMes = cons.meta_mensal || 0;
         if (!metaMes) return total;
-        const validadeIndividual = (validadeMap[cons.id] || '').substring(0,7) || '2026-01';
+        const validadeIndividual = (cons.meta_inicio || '').substring(0,7) || '2026-01';
         const validaMes = validadeIndividual > '2026-01' ? validadeIndividual : '2026-01';
         if (mesSelecionado) {
           return total + (mesSelecionado >= validaMes ? metaMes : 0);
@@ -390,10 +354,11 @@ export default function DashboardVendedor() {
           return total + metaMes * qtd;
         }
       }, 0);
-      const metaTotal = meta;
-      const comMov         = listaProcessada.filter(e => e.totalMov > 0).length;
-      const semMov         = listaProcessada.filter(e => e.totalMov === 0).length;
-      const crescendo      = listaProcessada.filter(e => {
+
+      const metaTotal  = meta;
+      const comMov     = listaProcessada.filter(e => e.totalMov > 0).length;
+      const semMov     = listaProcessada.filter(e => e.totalMov === 0).length;
+      const crescendo  = listaProcessada.filter(e => {
         const vals = mesesDisp.map(m => e.movPorMes[m] || 0);
         if (vals.length < 2) return false;
         const ultimo = vals[vals.length - 1];
@@ -413,7 +378,7 @@ export default function DashboardVendedor() {
       const rankingMap = {};
       listaProcessada.forEach(e => {
         const cid = e._cons.id;
-        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e._cons?.gestorObj?.nome||e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
+        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
         rankingMap[cid].movReal      += e.mediaMovMes;
         rankingMap[cid].esperado     += e.esperadoMes;
         rankingMap[cid].empresas     += 1;
@@ -455,12 +420,7 @@ export default function DashboardVendedor() {
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
         lista: listaProcessada,
-        kpis: {
-          totalMovReal, totalEsperado, meta, metaTotal,
-          totalValorMeta,
-          comMov, semMov, crescendo,
-          empresas: listaProcessada.length,
-        },
+        kpis: { totalMovReal, totalEsperado, meta, metaTotal, totalValorMeta, comMov, semMov, crescendo, empresas: listaProcessada.length },
         porProduto: Object.entries(porProduto).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.movReal - a.movReal),
         ranking,
       });
@@ -489,7 +449,6 @@ export default function DashboardVendedor() {
     <div style={s.page}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} select option{background:#fff;color:#1a1d2e;}`}</style>
 
-      {/* Header */}
       <div style={s.header}>
         <div>
           <div style={s.tag}>♠ Vegas Card</div>
@@ -498,7 +457,6 @@ export default function DashboardVendedor() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div style={s.filtrosCard}>
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>GESTOR</label>
@@ -548,7 +506,6 @@ export default function DashboardVendedor() {
 
         return (
           <>
-            {/* Nome do vendedor */}
             <div style={{marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(240,180,41,0.15)',border:'2px solid rgba(240,180,41,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',fontWeight:700,color:'#f0b429'}}>
                 {consultorId ? consultor?.nome?.[0] : gestorFiltro==='Geral' ? '🌐' : '👔'}
@@ -565,25 +522,24 @@ export default function DashboardVendedor() {
               </div>
             </div>
 
-            {/* KPIs */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,marginBottom:16}}>
-              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
-                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
-                <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
-                <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
-              </div>
+              {[
+                {label:'Contratos Novos', val:kpis.empresas, sub1:{cor:'#34d399',txt:`${kpis.comMov} movimentando`}, sub2:{cor:'#f87171',txt:`${kpis.empresas-kpis.comMov} sem movimentação`}},
+              ].map((_,i)=>(
+                <div key={i} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                  <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
+                  <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
+                  <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
+                  <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
+                </div>
+              ))}
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Total Valor Esperado</div>
-                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#a78bfa'}}>
-                  {fmt(lista.reduce((s,e)=>s+e.esperadoMes,0))}
-                </div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#a78bfa'}}>{fmt(lista.reduce((s,e)=>s+e.esperadoMes,0))}</div>
                 <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>potencial × peso/mês</div>
               </div>
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
-                  {mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação'}
-                </div>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{mesSelecionado ? 'Movimentação do mês' : 'Última Movimentação'}</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#f0b429'}}>
                   {(() => {
                     if (mesSelecionado) return fmt(kpis.totalMovReal);
@@ -593,11 +549,9 @@ export default function DashboardVendedor() {
                   })()}
                 </div>
                 {!mesSelecionado && (() => {
-                    const ultimoMes2026 = [...mesesDisp].filter(m=>m>='2026-01').pop();
-                    return <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>
-                      {ultimoMes2026 ? fmtMes(ultimoMes2026+'-01') : ''} · total: {fmt(kpis.totalMovReal)}
-                    </div>;
-                  })()}
+                  const ultimoMes2026 = [...mesesDisp].filter(m=>m>='2026-01').pop();
+                  return <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{ultimoMes2026 ? fmtMes(ultimoMes2026+'-01') : ''} · total: {fmt(kpis.totalMovReal)}</div>;
+                })()}
                 {mesSelecionado && <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmtMes(mesSelecionado+'-01')}</div>}
               </div>
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
@@ -617,17 +571,14 @@ export default function DashboardVendedor() {
               </div>
             </div>
 
-            {/* Barras de progresso */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 {(() => {
-                  const esperMes   = lista.reduce((s,e)=>s+e.esperadoMes,0);
+                  const esperMes = lista.reduce((s,e)=>s+e.esperadoMes,0);
                   const ultimoMes2026b = [...mesesDisp].filter(m=>m>='2026-01').pop();
-                  const mediaMes = mesSelecionado
-                    ? kpis.totalMovReal
-                    : (ultimoMes2026b ? lista.reduce((s,e)=>s+(e.movPorMes[ultimoMes2026b]||0),0) : kpis.totalMovReal);
-                  const pctMov     = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
-                  const corMov     = corPct(pctMov);
+                  const mediaMes = mesSelecionado ? kpis.totalMovReal : (ultimoMes2026b ? lista.reduce((s,e)=>s+(e.movPorMes[ultimoMes2026b]||0),0) : kpis.totalMovReal);
+                  const pctMov = esperMes > 0 ? (mediaMes / esperMes) * 100 : 0;
+                  const corMov = corPct(pctMov);
                   return (
                     <>
                       <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
@@ -646,7 +597,6 @@ export default function DashboardVendedor() {
                   );
                 })()}
               </div>
-
               {kpis.metaTotal > 0 ? (
                 <div style={{background:'#ffffff',border:`1px solid ${corApurado}33`,borderRadius:12,padding:'16px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
@@ -654,17 +604,13 @@ export default function DashboardVendedor() {
                     <span style={{background:`${corApurado}15`,color:corApurado,border:`1px solid ${corApurado}30`,borderRadius:6,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>{badgeApurado}</span>
                   </div>
                   <div style={{background:'#f0f2f8',borderRadius:8,height:12,overflow:'hidden',marginBottom:6}}>
-                    <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',
-                      width:`${Math.min(pctApurado,100)}%`,
-                      background:`linear-gradient(90deg,${corApurado},${corApurado}cc)`}}></div>
+                    <div style={{height:'100%',borderRadius:8,transition:'width 0.8s',width:`${Math.min(pctApurado,100)}%`,background:`linear-gradient(90deg,${corApurado},${corApurado}cc)`}}></div>
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
                     <span style={{color:corApurado,fontWeight:700}}>{fmt(apurado)} apurado · {fmtPct(pctApurado)}</span>
                     <span>meta: {fmt(kpis.metaTotal)}/mês</span>
                   </div>
-                  <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>
-                    Vegas Benefícios: 1ª recarga × peso · Convênio/Mobilidade: 3º mês
-                  </div>
+                  <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>Vegas Benefícios: 1ª recarga × peso · Convênio/Mobilidade: 3º mês</div>
                 </div>
               ) : (
                 <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
@@ -673,14 +619,12 @@ export default function DashboardVendedor() {
               )}
             </div>
 
-            {/* Abas */}
             <div style={s.tabs}>
               {ABAS.map(a => (
                 <button key={a.key} style={{...s.tab,...(aba===a.key?s.tabAtiva:{})}} onClick={() => setAba(a.key)}>{a.label}</button>
               ))}
             </div>
 
-            {/* ── RESUMO ── */}
             {aba === 'resumo' && (
               <div style={s.card}>
                 <div style={s.cardTitle}>📊 Movimentação por Mês</div>
@@ -696,9 +640,7 @@ export default function DashboardVendedor() {
                       const corMes      = corPct(pctMes);
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
-                      const metaMes = mesSelecionado === m
-                        ? (kpis.totalValorMeta || 0)
-                        : (metaPorMes?.[m] || 0);
+                      const metaMes     = mesSelecionado === m ? (kpis.totalValorMeta || 0) : (metaPorMes?.[m] || 0);
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
                           <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
@@ -740,34 +682,14 @@ export default function DashboardVendedor() {
                             </>
                           )}
                           <div style={{borderTop:'1px solid #e4e7ef',paddingTop:7,display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
-                            {metaMes > 0 && (
-                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
-                                <span style={{color:'#6b7280'}}>📈 Movimentado</span>
-                                <span style={{color:'#f0b429',fontWeight:600}}>{fmt(totalMes)} · {empresasMes} emp.</span>
-                              </div>
-                            )}
-                            {novosMes > 0 && (
-                              <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
-                                <span style={{color:'#6b7280'}}>📋 Contratos novos</span>
-                                <span style={{color:'#60a5fa',fontWeight:700}}>{novosMes}</span>
-                              </div>
-                            )}
+                            {metaMes > 0 && <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}><span style={{color:'#6b7280'}}>📈 Movimentado</span><span style={{color:'#f0b429',fontWeight:600}}>{fmt(totalMes)} · {empresasMes} emp.</span></div>}
+                            {novosMes > 0 && <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}><span style={{color:'#6b7280'}}>📋 Contratos novos</span><span style={{color:'#60a5fa',fontWeight:700}}>{novosMes}</span></div>}
                             {novosMes > 0 && (() => {
-                              const fechadoNovo = lista
-                                .filter(e => e.data_cadastro?.substring(0,7) === m)
-                                .reduce((s,e) => s + e.esperadoMes, 0);
+                              const fechadoNovo = lista.filter(e=>e.data_cadastro?.substring(0,7)===m).reduce((s,e)=>s+e.esperadoMes,0);
                               if (fechadoNovo <= 0) return null;
-                              return (
-                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',background:'rgba(96,165,250,0.06)',borderRadius:5,padding:'3px 6px',margin:'0 -6px'}}>
-                                  <span style={{color:'#2563eb',fontWeight:600}}>💰 Fechado Novo</span>
-                                  <span style={{color:'#2563eb',fontWeight:700}}>{fmt(fechadoNovo)}</span>
-                                </div>
-                              );
+                              return <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',background:'rgba(96,165,250,0.06)',borderRadius:5,padding:'3px 6px',margin:'0 -6px'}}><span style={{color:'#2563eb',fontWeight:600}}>💰 Fechado Novo</span><span style={{color:'#2563eb',fontWeight:700}}>{fmt(fechadoNovo)}</span></div>;
                             })()}
-                            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}>
-                              <span style={{color:'#6b7280'}}>📊 Esperado</span>
-                              <span style={{color:'#8b92b0'}}>{fmt(esperMes)}</span>
-                            </div>
+                            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem'}}><span style={{color:'#6b7280'}}>📊 Esperado</span><span style={{color:'#8b92b0'}}>{fmt(esperMes)}</span></div>
                           </div>
                         </div>
                       );
@@ -777,13 +699,11 @@ export default function DashboardVendedor() {
               </div>
             )}
 
-            {/* ── EMPRESAS NA META ── */}
             {aba === 'resumo' && empresasNaMeta && empresasNaMeta.length > 0 && (
               <div style={{...s.card,marginBottom:16}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
                   <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
                     <div style={s.cardTitle}>🎯 Empresas na Meta</div>
-                    {/* Seletor por página */}
                     <div style={{display:'flex',alignItems:'center',gap:5}}>
                       <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>Por pág:</span>
                       {[15,50,100].map(n=>(
@@ -795,33 +715,20 @@ export default function DashboardVendedor() {
                     </div>
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                    <select value={filtroMetaMesLocal||''} onChange={ev=>{setFiltroMetaMesLocal(ev.target.value);setMetaPagina(1);}}
-                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                    <select value={filtroMetaMesLocal||''} onChange={ev=>{setFiltroMetaMesLocal(ev.target.value);setMetaPagina(1);}} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os meses</option>
-                      {[...new Set((vmetasRows||[]).filter(v=>empresasNaMeta.some(e=>e.id===v.empresa_id)).map(v=>v.competencia_meta?.substring(0,7)).filter(Boolean))].sort().map(m=>(
-                        <option key={m} value={m}>{fmtMes(m+'-01')}</option>
-                      ))}
+                      {[...new Set((vmetasRows||[]).filter(v=>empresasNaMeta.some(e=>e.id===v.empresa_id)).map(v=>v.competencia_meta?.substring(0,7)).filter(Boolean))].sort().map(m=>(<option key={m} value={m}>{fmtMes(m+'-01')}</option>))}
                     </select>
-                    <select value={filtroMetaProduto||''} onChange={ev=>{setFiltroMetaProduto(ev.target.value);setMetaPagina(1);}}
-                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                    <select value={filtroMetaProduto||''} onChange={ev=>{setFiltroMetaProduto(ev.target.value);setMetaPagina(1);}} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os produtos</option>
-                      {[...new Set(empresasNaMeta.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=>(
-                        <option key={p} value={p}>{p}</option>
-                      ))}
+                      {[...new Set(empresasNaMeta.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=>(<option key={p} value={p}>{p}</option>))}
                     </select>
-                    <select value={filtroMetaCadastro||''} onChange={ev=>{setFiltroMetaCadastro(ev.target.value);setMetaPagina(1);}}
-                      style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
+                    <select value={filtroMetaCadastro||''} onChange={ev=>{setFiltroMetaCadastro(ev.target.value);setMetaPagina(1);}} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'5px 10px',fontSize:'0.78rem',color:'#4a5068',fontFamily:'inherit',cursor:'pointer'}}>
                       <option value="">Todos os cadastros</option>
-                      {[...new Set(empresasNaMeta.map(e=>e.data_cadastro?.substring(0,7)).filter(Boolean))].sort().reverse().map(m=>(
-                        <option key={m} value={m}>{fmtMes(m+'-01')}</option>
-                      ))}
+                      {[...new Set(empresasNaMeta.map(e=>e.data_cadastro?.substring(0,7)).filter(Boolean))].sort().reverse().map(m=>(<option key={m} value={m}>{fmtMes(m+'-01')}</option>))}
                     </select>
                     <span style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>
-                      {empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)).length} empresas · {fmt(
-                        empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))
-                          .flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas)
-                          .reduce((s,v)=>s+(v.valor_meta||0),0)
-                      )} apurado
+                      {empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)).length} empresas · {fmt(empresasNaMeta.filter(e => !filtroMetaMesLocal || e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)).flatMap(e => filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas).reduce((s,v)=>s+(v.valor_meta||0),0))} apurado
                     </span>
                   </div>
                 </div>
@@ -836,130 +743,59 @@ export default function DashboardVendedor() {
                     </thead>
                     <tbody>
                       {(()=>{
-                          const baseEmpresas = filtroMetaCadastro
-                            ? lista
-                                .filter(e => e.data_cadastro?.substring(0,7) === filtroMetaCadastro)
-                                .filter(e => !filtroMetaProduto || e.produto_contratado === filtroMetaProduto)
-                                .map(e => {
-                                  const entradas = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                                  return {...e, _metaEntradas: entradas};
-                                })
-                            : empresasNaMeta.filter(e => {
-                                if (filtroMetaMesLocal && !e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                                if (filtroMetaProduto && e.produto_contratado !== filtroMetaProduto) return false;
-                                return true;
-                              });
-                          // Paginação
-                          const totalPgsM = Math.ceil(baseEmpresas.length / metaPorPag);
-                          const pgAtualM  = Math.min(metaPagina, totalPgsM || 1);
-                          const baseSlice = baseEmpresas.slice((pgAtualM-1)*metaPorPag, pgAtualM*metaPorPag);
-                          return baseSlice
-                        .flatMap((e,i) => {
-                          const entradas = filtroMetaCadastro
-                            ? (filtroMetaMesLocal
-                                ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
-                                : e._metaEntradas)
-                            : (filtroMetaMesLocal
-                                ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
-                                : e._metaEntradas);
+                        const baseEmpresas = filtroMetaCadastro
+                          ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).filter(e=>!filtroMetaProduto||e.produto_contratado===filtroMetaProduto).map(e=>({...e,_metaEntradas:(vmetasRows||[]).filter(v=>v.empresa_id===e.id)}))
+                          : empresasNaMeta.filter(e=>{
+                              if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
+                              if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
+                              return true;
+                            });
+                        const totalPgsM = Math.ceil(baseEmpresas.length / metaPorPag);
+                        const pgAtualM  = Math.min(metaPagina, totalPgsM || 1);
+                        const baseSlice = baseEmpresas.slice((pgAtualM-1)*metaPorPag, pgAtualM*metaPorPag);
+                        return baseSlice.flatMap((e,i) => {
+                          const entradas = filtroMetaMesLocal ? e._metaEntradas.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal) : e._metaEntradas;
                           if (entradas.length === 0) {
-                            return [(
-                              <tr key={`${i}-noMeta`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white',opacity:0.7}}>
-                                <td style={{padding:'10px 12px',fontWeight:600}}>
-                                  <span style={{color:'#1a1d2e',fontWeight:600}}>{e.nome}</span>
-                                  <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
-                                </td>
-                                <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem'}}>{e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}</td>
-                                <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
-                                <td style={{padding:'10px 12px'}}><span style={{color:'#9ca3af',fontSize:'0.72rem'}}>sem meta</span></td>
-                                <td style={{padding:'10px 12px',color:'#9ca3af',fontSize:'0.72rem'}}>—</td>
-                                <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
-                                <td style={{padding:'10px 12px',textAlign:'right',color:'#9ca3af'}}>—</td>
-                              </tr>
-                            )];
-                          }
-                          return entradas.map((entrada, j) => (
-                            <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
-                              <td style={{padding:'10px 12px',fontWeight:600}}>
-                                <span style={{fontWeight:600,color:'#1a1d2e'}}>{e.nome}</span>
-                                <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
-                              </td>
-                              <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem',whiteSpace:'nowrap'}}>
-                                {e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}
-                              </td>
+                            return [(<tr key={`${i}-noMeta`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white',opacity:0.7}}>
+                              <td style={{padding:'10px 12px',fontWeight:600}}><span style={{color:'#1a1d2e',fontWeight:600}}>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>
+                              <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem'}}>{e.data_cadastro?fmtMes(e.data_cadastro.substring(0,7)+'-01'):'—'}</td>
                               <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
-                              <td style={{padding:'10px 12px'}}>
-                                <span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>
-                                  {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
-                                </span>
-                              </td>
-                              <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>
-                                {entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}
-                              </td>
-                              <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>
-                                {fmt(e.esperadoMes||0)}
-                              </td>
-                              <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:entrada.regra==='upsell'?'#d97706':'#34d399'}}>
-                                {fmt(entrada.valor_meta)}
-                              </td>
+                              <td style={{padding:'10px 12px'}}><span style={{color:'#9ca3af',fontSize:'0.72rem'}}>sem meta</span></td>
+                              <td style={{padding:'10px 12px',color:'#9ca3af',fontSize:'0.72rem'}}>—</td>
+                              <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
+                              <td style={{padding:'10px 12px',textAlign:'right',color:'#9ca3af'}}>—</td>
+                            </tr>)];
+                          }
+                          return entradas.map((entrada,j) => (
+                            <tr key={`${i}-${j}`} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
+                              <td style={{padding:'10px 12px',fontWeight:600}}><span style={{fontWeight:600,color:'#1a1d2e'}}>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>
+                              <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem',whiteSpace:'nowrap'}}>{e.data_cadastro?fmtMes(e.data_cadastro.substring(0,7)+'-01'):'—'}</td>
+                              <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                              <td style={{padding:'10px 12px'}}><span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>{fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}</span></td>
+                              <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>{entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}</td>
+                              <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
+                              <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:entrada.regra==='upsell'?'#d97706':'#34d399'}}>{fmt(entrada.valor_meta)}</td>
                             </tr>
                           ));
-                        })
+                        });
                       })()}
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
                         <td colSpan={5} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
                           {(()=>{
-                            const base = filtroMetaCadastro
-                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
-                              : empresasNaMeta.filter(e=>{
-                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
-                                  return true;
-                                });
-                            const totalPgsM2 = Math.ceil(base.length / metaPorPag);
-                            const pgAtualM2  = Math.min(metaPagina, totalPgsM2 || 1);
+                            const base = filtroMetaCadastro ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)) : empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});
+                            const totalPgsM2=Math.ceil(base.length/metaPorPag);const pgAtualM2=Math.min(metaPagina,totalPgsM2||1);
                             return `TOTAL (${base.length} empresas) · pág. ${pgAtualM2}/${totalPgsM2||1}`;
                           })()}
                         </td>
                         <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',textAlign:'right',fontSize:'0.8rem'}}>
-                          {(()=>{
-                            const base = filtroMetaCadastro
-                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
-                              : empresasNaMeta.filter(e=>{
-                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
-                                  return true;
-                                });
-                            return fmt(base.reduce((s,e)=>s+(e.esperadoMes||0),0));
-                          })()}
+                          {(()=>{const base=filtroMetaCadastro?lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)):empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});return fmt(base.reduce((s,e)=>s+(e.esperadoMes||0),0));})()}
                         </td>
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
                           {(()=>{
-                            // CORRIGIDO: soma TODAS as entradas (não só da página visível)
-                            // Para cada empresa da lista completa (sem paginar), soma valor_meta do banco
-                            // Se não tem no banco, usa o valorMeta calculado inline
-                            const base = filtroMetaCadastro
-                              ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
-                              : empresasNaMeta.filter(e=>{
-                                  if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                                  if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
-                                  return true;
-                                });
-                            const total = base.reduce((s, e) => {
-                              const entradasBanco = (vmetasRows||[]).filter(v=>v.empresa_id===e.id);
-                              const filtradas = filtroMetaMesLocal
-                                ? entradasBanco.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)
-                                : entradasBanco;
-                              if (filtradas.length > 0) {
-                                return s + filtradas.reduce((sv,v)=>sv+(v.valor_meta||0),0);
-                              }
-                              // Sem entrada no banco → usa valorMeta calculado
-                              const metaComp = e.metaComp?.substring(0,7);
-                              if (filtroMetaMesLocal && metaComp !== filtroMetaMesLocal) return s;
-                              return s + (e.valorMeta || 0);
-                            }, 0);
+                            const base=filtroMetaCadastro?lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)):empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});
+                            const total=base.reduce((s,e)=>{const entradasBanco=(vmetasRows||[]).filter(v=>v.empresa_id===e.id);const filtradas=filtroMetaMesLocal?entradasBanco.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal):entradasBanco;if(filtradas.length>0)return s+filtradas.reduce((sv,v)=>sv+(v.valor_meta||0),0);const metaComp=e.metaComp?.substring(0,7);if(filtroMetaMesLocal&&metaComp!==filtroMetaMesLocal)return s;return s+(e.valorMeta||0);},0);
                             return fmt(total);
                           })()}
                         </td>
@@ -967,33 +803,14 @@ export default function DashboardVendedor() {
                     </tfoot>
                   </table>
                 </div>
-                {/* Paginação da tabela Empresas na Meta */}
                 {(()=>{
-                  const base = filtroMetaCadastro
-                    ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto))
-                    : empresasNaMeta.filter(e=>{
-                        if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
-                        if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
-                        return true;
-                      });
-                  const totalPgsM3 = Math.ceil(base.length / metaPorPag);
-                  if (totalPgsM3 <= 1) return null;
-                  const pgAtualM3 = Math.min(metaPagina, totalPgsM3);
+                  const base=filtroMetaCadastro?lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)):empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});
+                  const totalPgsM3=Math.ceil(base.length/metaPorPag);if(totalPgsM3<=1)return null;const pgAtualM3=Math.min(metaPagina,totalPgsM3);
                   return (
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:14,flexWrap:'wrap'}}>
-                      <button onClick={()=>setMetaPagina(p=>Math.max(1,p-1))} disabled={pgAtualM3===1}
-                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===1?'default':'pointer',color:pgAtualM3===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
-                      {Array.from({length:Math.min(totalPgsM3,7)},(_,i)=>{
-                        const pg = totalPgsM3<=7?i+1:pgAtualM3<=4?i+1:pgAtualM3>=totalPgsM3-3?totalPgsM3-6+i:pgAtualM3-3+i;
-                        return (
-                          <button key={pg} onClick={()=>setMetaPagina(pg)}
-                            style={{background:pgAtualM3===pg?'#f0b429':'#f5f6fa',color:pgAtualM3===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pgAtualM3===pg?700:400,fontSize:'0.82rem'}}>
-                            {pg}
-                          </button>
-                        );
-                      })}
-                      <button onClick={()=>setMetaPagina(p=>Math.min(totalPgsM3,p+1))} disabled={pgAtualM3===totalPgsM3}
-                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===totalPgsM3?'default':'pointer',color:pgAtualM3===totalPgsM3?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
+                      <button onClick={()=>setMetaPagina(p=>Math.max(1,p-1))} disabled={pgAtualM3===1} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===1?'default':'pointer',color:pgAtualM3===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
+                      {Array.from({length:Math.min(totalPgsM3,7)},(_,i)=>{const pg=totalPgsM3<=7?i+1:pgAtualM3<=4?i+1:pgAtualM3>=totalPgsM3-3?totalPgsM3-6+i:pgAtualM3-3+i;return(<button key={pg} onClick={()=>setMetaPagina(pg)} style={{background:pgAtualM3===pg?'#f0b429':'#f5f6fa',color:pgAtualM3===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pgAtualM3===pg?700:400,fontSize:'0.82rem'}}>{pg}</button>);})}
+                      <button onClick={()=>setMetaPagina(p=>Math.min(totalPgsM3,p+1))} disabled={pgAtualM3===totalPgsM3} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pgAtualM3===totalPgsM3?'default':'pointer',color:pgAtualM3===totalPgsM3?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
                       <span style={{color:'#8b92b0',fontSize:'0.72rem',marginLeft:4}}>Pág. {pgAtualM3} de {totalPgsM3} · {base.length} empresas</span>
                     </div>
                   );
@@ -1001,220 +818,78 @@ export default function DashboardVendedor() {
               </div>
             )}
 
-            {/* As abas Categorias, Equipes, Carteira, Produtos e Ranking permanecem idênticas ao arquivo original */}
             {aba === 'categorias' && (() => {
               try {
-              if (!lista || lista.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Nenhuma empresa carregada.</div>;
-              const meses2026Cat = (mesesDisp||[]).filter(m=>m>='2026-01');
-              const qtdMeses2026 = meses2026Cat.length || 1;
-              const catMap = {};
-              for (const e of lista) {
-                const cat = String(e.categoria||'Outros').trim()||'Outros';
-                if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperadoMes:0, esperadoAcum:0, naMeta:0, valorMeta:0, semMov:0 };
-                catMap[cat].empresas++;
-                const movE = (mesesDisp||[]).reduce((s,m)=>s+((e.movPorMes||{})[m]||0),0);
-                catMap[cat].movTotal    += movE;
-                catMap[cat].esperadoMes += (e.esperadoMes||0);
-                catMap[cat].esperadoAcum += (e.esperadoMes||0) * (mesesDisp||[]).length;
-                // CORRIGIDO: usa e.valorMeta (calculado por consultor, com peso correto)
-                if ((e.valorMeta||0) > 0) { catMap[cat].naMeta++; catMap[cat].valorMeta += (e.valorMeta||0); }
-                if (movE === 0) catMap[cat].semMov++;
-              }
-              const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
-              if (cats.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Sem categorias.</div>;
-              const maxMov  = cats.reduce((mx,c)=>Math.max(mx,c.movTotal),1);
-              return (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
-                    <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias Ativas</div>
-                      <div style={{fontSize:'1.4rem',fontWeight:700}}>{cats.length}</div>
+                if (!lista || lista.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Nenhuma empresa carregada.</div>;
+                const qtdMeses2026 = (mesesDisp||[]).filter(m=>m>='2026-01').length || 1;
+                const catMap = {};
+                for (const e of lista) {
+                  const cat = String(e.categoria||'Outros').trim()||'Outros';
+                  if (!catMap[cat]) catMap[cat] = { nome:cat, empresas:0, movTotal:0, esperadoMes:0, esperadoAcum:0, naMeta:0, valorMeta:0, semMov:0 };
+                  catMap[cat].empresas++;
+                  const movE = (mesesDisp||[]).reduce((s,m)=>s+((e.movPorMes||{})[m]||0),0);
+                  catMap[cat].movTotal    += movE;
+                  catMap[cat].esperadoMes += (e.esperadoMes||0);
+                  catMap[cat].esperadoAcum += (e.esperadoMes||0) * (mesesDisp||[]).length;
+                  if ((e.valorMeta||0) > 0) { catMap[cat].naMeta++; catMap[cat].valorMeta += (e.valorMeta||0); }
+                  if (movE === 0) catMap[cat].semMov++;
+                }
+                const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
+                if (cats.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'#8b92b0'}}>Sem categorias.</div>;
+                const PALETA = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
+                const COR_CATEGORIA = {};
+                [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).forEach((cat,i)=>{ COR_CATEGORIA[cat.nome]=PALETA[i%PALETA.length]; });
+                function pizzaPath(inicio,fim,r=80,ri=40){
+                  if(fim-inicio>=359.9) return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
+                  const xy=(d,rv)=>({x:100+rv*Math.cos(d*Math.PI/180),y:100+rv*Math.sin(d*Math.PI/180)});
+                  const s1=xy(inicio,r),e1=xy(fim,r),s2=xy(fim,ri),e2=xy(inicio,ri),lg=fim-inicio>180?1:0;
+                  return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
+                }
+                return (
+                  <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+                      <div style={{...s.card,padding:'14px 18px'}}><div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Categorias Ativas</div><div style={{fontSize:'1.4rem',fontWeight:700}}>{cats.length}</div></div>
+                      <div style={{...s.card,padding:'14px 18px'}}><div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Esperado Mensal</div><div style={{fontSize:'1.3rem',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</div></div>
                     </div>
-                    <div style={{...s.card,padding:'14px 18px'}}>
-                      <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Esperado Mensal</div>
-                      <div style={{fontSize:'1.3rem',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</div>
-                    </div>
-                  </div>
-                  <div style={s.card}>
-                    <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:14}}>📋 Detalhamento por Categoria</div>
-                    <div style={{overflowX:'auto'}}>
-                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
-                        <thead><tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                          {['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','% Realizado'].map(h=>(
-                            <th key={h} style={{padding:'8px 12px',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
-                          ))}
-                        </tr></thead>
-                        <tbody>
-                          {cats.map((cat,i)=>{
-                            const pctReal = cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;
-                            const cor = corPct(pctReal);
-                            return (
-                              <tr key={cat.nome} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
+                    <div style={s.card}>
+                      <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:14}}>📋 Detalhamento por Categoria</div>
+                      <div style={{overflowX:'auto'}}>
+                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
+                          <thead><tr style={{borderBottom:'2px solid #e4e7ef'}}>{['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','% Realizado'].map(h=>(<th key={h} style={{padding:'8px 12px',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>))}</tr></thead>
+                          <tbody>
+                            {cats.map((cat,i)=>{
+                              const pctReal=cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;const cor=corPct(pctReal);
+                              return(<tr key={cat.nome} style={{borderBottom:'1px solid #f0f2f8',background:i%2===0?'rgba(0,0,0,0.01)':'white'}}>
                                 <td style={{padding:'10px 12px',fontWeight:600}}>{cat.nome}</td>
                                 <td style={{padding:'10px 12px',textAlign:'center'}}>{cat.empresas}</td>
                                 <td style={{padding:'10px 12px',textAlign:'center',color:cat.semMov>0?'#f87171':'#8b92b0'}}>{cat.semMov}</td>
                                 <td style={{padding:'10px 12px',fontWeight:700,color:'#f0b429'}}>{fmt(cat.movTotal)}</td>
                                 <td style={{padding:'10px 12px',color:'#60a5fa',fontWeight:600}}>{fmt(Math.round(cat.movTotal/qtdMeses2026))}</td>
                                 <td style={{padding:'10px 12px',color:'#a78bfa'}}>{fmt(cat.esperadoMes)}</td>
-                                <td style={{padding:'10px 12px'}}>
-                                  <div style={{display:'flex',alignItems:'center',gap:6}}>
-                                    <div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}>
-                                      <div style={{height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor}}/>
-                                    </div>
-                                    <span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                <td style={{padding:'10px 12px'}}><div style={{display:'flex',alignItems:'center',gap:6}}><div style={{background:'#f0f2f8',borderRadius:3,height:6,width:50,overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(pctReal,100)}%`,background:cor}}/></div><span style={{color:cor,fontWeight:700,fontSize:'0.75rem'}}>{fmtPct(pctReal)}</span></div></td>
+                              </tr>);
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                      {(()=>{
+                        const totalEsp=cats.reduce((s,c)=>s+c.esperadoMes,0);if(totalEsp===0)return null;
+                        let angulo=-90;
+                        const fatias=[...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).map((cat,i)=>{const pct=cat.esperadoMes/totalEsp;const graus=pct*360;const inicio=angulo;angulo+=graus;return{...cat,pct,graus,inicio,cor:COR_CATEGORIA[cat.nome]||PALETA[i%PALETA.length]};});
+                        return(<div style={{...s.card,padding:'20px 24px'}}><div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>📊 Distribuição — Esperado/mês</div><div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}><svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>{fatias.map((f,i)=>(<path key={i} d={pizzaPath(f.inicio,f.inicio+f.graus)} fill={f.cor} stroke="white" strokeWidth="1.5"/>))}<circle cx="100" cy="100" r="36" fill="white"/><text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Total</text><text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#1a1d2e',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>{Number(totalEsp/1000).toFixed(0)}k</text></svg><div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>{fatias.map((f,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/><div style={{flex:1}}><div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div><div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.esperadoMes)}</div></div><div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div></div>))}<div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between'}}><span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total esperado/mês</span><span style={{fontSize:'0.82rem',fontWeight:800,color:'#a78bfa'}}>{fmt(totalEsp)}</span></div></div></div></div>);
+                      })()}
+                      {(()=>{
+                        const totalMeta=cats.reduce((s,c)=>s+c.valorMeta,0);if(totalMeta===0)return null;
+                        let angulo=-90;
+                        const fatias=[...cats].filter(c=>c.valorMeta>0).sort((a,b)=>b.valorMeta-a.valorMeta).map((cat,i)=>{const pct=cat.valorMeta/totalMeta;const graus=pct*360;const inicio=angulo;angulo+=graus;return{...cat,pct,graus,inicio,cor:COR_CATEGORIA[cat.nome]||PALETA[i%PALETA.length]};});
+                        if(fatias.length===0)return null;
+                        return(<div style={{...s.card,padding:'20px 24px'}}><div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>🎯 Distribuição — Meta Apurada</div><div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}><svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>{fatias.map((f,i)=>(<path key={i} d={pizzaPath(f.inicio,f.inicio+f.graus)} fill={f.cor} stroke="white" strokeWidth="1.5"/>))}<circle cx="100" cy="100" r="36" fill="white"/><text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Apurado</text><text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#16a34a',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>{Number(totalMeta/1000).toFixed(0)}k</text></svg><div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>{fatias.map((f,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/><div style={{flex:1}}><div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div><div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.valorMeta)} · {f.naMeta} emp.</div></div><div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div></div>))}<div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between'}}><span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total apurado</span><span style={{fontSize:'0.82rem',fontWeight:800,color:'#16a34a'}}>{fmt(totalMeta)}</span></div></div></div></div>);
+                      })()}
                     </div>
                   </div>
-
-                  {/* ── GRÁFICOS DE PIZZA ── */}
-                  {(()=>{
-                    const COR_CATEGORIA = {};
-                    const PALETA = ['#f0b429','#34d399','#60a5fa','#a78bfa','#fb923c','#f472b6','#4ade80','#38bdf8'];
-                    [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).forEach((cat,i)=>{ COR_CATEGORIA[cat.nome]=PALETA[i%PALETA.length]; });
-                    function pizzaPath(inicio,fim,r=80,ri=40){
-                      if(fim-inicio>=359.9) return `M ${100+r} 100 A ${r} ${r} 0 1 1 ${100+r-0.001} 100 Z`;
-                      const xy=(d,rv)=>({x:100+rv*Math.cos(d*Math.PI/180),y:100+rv*Math.sin(d*Math.PI/180)});
-                      const s1=xy(inicio,r),e1=xy(fim,r),s2=xy(fim,ri),e2=xy(inicio,ri),lg=fim-inicio>180?1:0;
-                      return `M ${s1.x} ${s1.y} A ${r} ${r} 0 ${lg} 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 ${lg} 0 ${e2.x} ${e2.y} Z`;
-                    }
-                    return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-
-                    {/* Pizza 1: % do Esperado/mês por categoria */}
-                    {(()=>{
-                      const totalEsp = cats.reduce((s,c)=>s+c.esperadoMes,0);
-                      if (totalEsp === 0) return null;
-
-                      // Ordena do maior para o menor + usa cores fixas
-                      let angulo = -90;
-                      const fatias = [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).map((cat, i) => {
-                        const pct   = cat.esperadoMes / totalEsp;
-                        const graus = pct * 360;
-                        const inicio = angulo;
-                        angulo += graus;
-                        return { ...cat, pct, graus, inicio, cor: COR_CATEGORIA[cat.nome] || PALETA[i % PALETA.length] };
-                      });
-
-                      return (
-                        <div style={{...s.card,padding:'20px 24px'}}>
-                          <div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>
-                            📊 Distribuição — Esperado/mês
-                          </div>
-                          <div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
-                            {/* SVG donut */}
-                            <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
-                              {fatias.map((f,i) => (
-                                <path key={i} d={pizzaPath(f.inicio, f.inicio+f.graus)}
-                                  fill={f.cor} stroke="white" strokeWidth="1.5"
-                                  style={{transition:'opacity 0.2s',cursor:'default'}}/>
-                              ))}
-                              {/* Centro */}
-                              <circle cx="100" cy="100" r="36" fill="white"/>
-                              <text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Total</text>
-                              <text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#1a1d2e',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>
-                                {Number(totalEsp/1000).toFixed(0)}k
-                              </text>
-                            </svg>
-                            {/* Legenda */}
-                            <div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>
-                              {fatias.map((f,i) => (
-                                <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
-                                  <div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div>
-                                    <div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.esperadoMes)}</div>
-                                  </div>
-                                  <div style={{textAlign:'right'}}>
-                                    <div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div>
-                                  </div>
-                                </div>
-                              ))}
-                              {/* Linha total */}
-                              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                <span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total esperado/mês</span>
-                                <span style={{fontSize:'0.82rem',fontWeight:800,color:'#a78bfa'}}>{fmt(totalEsp)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Pizza 2: % da Meta Apurada por categoria */}
-                    {(()=>{
-                      const totalMeta = cats.reduce((s,c)=>s+c.valorMeta,0);
-                      if (totalMeta === 0) return null;
-
-                      // Ordena do maior para o menor + usa MESMAS cores do pizza 1
-                      let angulo = -90;
-                      const fatias = [...cats].filter(c=>c.valorMeta>0)
-                        .sort((a,b)=>b.valorMeta-a.valorMeta)
-                        .map((cat, i) => {
-                          const pct   = cat.valorMeta / totalMeta;
-                          const graus = pct * 360;
-                          const inicio = angulo;
-                          angulo += graus;
-                          return { ...cat, pct, graus, inicio, cor: COR_CATEGORIA[cat.nome] || PALETA[i % PALETA.length] };
-                        });
-
-                      if (fatias.length === 0) return (
-                        <div style={{...s.card,padding:'20px 24px',display:'flex',alignItems:'center',justifyContent:'center',color:'#8b92b0',fontSize:'0.82rem'}}>
-                          Nenhuma meta apurada nesta categoria ainda
-                        </div>
-                      );
-
-                      return (
-                        <div style={{...s.card,padding:'20px 24px'}}>
-                          <div style={{fontWeight:700,fontSize:'0.88rem',color:'#4a5068',marginBottom:16}}>
-                            🎯 Distribuição — Meta Apurada
-                          </div>
-                          <div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
-                            {/* SVG donut */}
-                            <svg viewBox="0 0 200 200" style={{width:160,height:160,flexShrink:0}}>
-                              {fatias.map((f,i) => (
-                                <path key={i} d={pizzaPath(f.inicio, f.inicio+f.graus)}
-                                  fill={f.cor} stroke="white" strokeWidth="1.5"/>
-                              ))}
-                              <circle cx="100" cy="100" r="36" fill="white"/>
-                              <text x="100" y="96" textAnchor="middle" style={{fontSize:'8px',fill:'#8b92b0',fontFamily:'DM Sans,sans-serif'}}>Apurado</text>
-                              <text x="100" y="110" textAnchor="middle" style={{fontSize:'7.5px',fill:'#16a34a',fontWeight:700,fontFamily:'DM Sans,sans-serif'}}>
-                                {Number(totalMeta/1000).toFixed(0)}k
-                              </text>
-                            </svg>
-                            {/* Legenda */}
-                            <div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>
-                              {fatias.map((f,i) => (
-                                <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
-                                  <div style={{width:10,height:10,borderRadius:'50%',background:f.cor,flexShrink:0}}/>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontSize:'0.75rem',fontWeight:600,color:'#1a1d2e'}}>{f.nome}</div>
-                                    <div style={{fontSize:'0.68rem',color:'#8b92b0'}}>{fmt(f.valorMeta)} · {f.naMeta} emp.</div>
-                                  </div>
-                                  <div style={{textAlign:'right'}}>
-                                    <div style={{fontSize:'0.82rem',fontWeight:700,color:f.cor}}>{(f.pct*100).toFixed(1)}%</div>
-                                  </div>
-                                </div>
-                              ))}
-                              {/* Linha total */}
-                              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                <span style={{fontSize:'0.72rem',fontWeight:600,color:'#4a5068'}}>Total apurado</span>
-                                <span style={{fontSize:'0.82rem',fontWeight:800,color:'#16a34a'}}>{fmt(totalMeta)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                  </div>;
-                  })()}
-                </div>
-              );
+                );
               } catch(err) {
                 return <div style={{...s.card,padding:32,color:'#f87171'}}>Erro: {String(err?.message||err)}</div>;
               }
@@ -1229,19 +904,14 @@ export default function DashboardVendedor() {
                 const eq = equipeMap[equipe];
                 eq.empresas++;
                 const movE = mesesDisp.reduce((s,m)=>s+(e.movPorMes?.[m]||0),0);
-                eq.movTotal += movE;
-                eq.esperado += (e.esperadoMes||0);
-                eq.fechadoBruto += (e.potencial_movimentacao||0);
+                eq.movTotal += movE; eq.esperado += (e.esperadoMes||0); eq.fechadoBruto += (e.potencial_movimentacao||0);
                 if (movE===0) eq.semMov++;
-                // CORRIGIDO: usa e.valorMeta (já calculado por consultor, com peso correto)
-                // em vez de somar vmetasRows diretamente (evita duplicação e usa valor correto)
                 const temMeta = (e.valorMeta || 0) > 0;
                 if (temMeta) { eq.naMeta++; eq.valorMeta += (e.valorMeta || 0); }
                 const vNome = e.vendedor||'—';
                 if (!eq.vendedores[vNome]) eq.vendedores[vNome] = { nome:vNome, empresas:0, movTotal:0, esperado:0, naMeta:0, valorMeta:0, semMov:0, fechadoBruto:0 };
                 const vd = eq.vendedores[vNome];
-                vd.empresas++; vd.movTotal+=movE; vd.esperado+=(e.esperadoMes||0);
-                vd.fechadoBruto += (e.potencial_movimentacao||0); // valor bruto fechado
+                vd.empresas++; vd.movTotal+=movE; vd.esperado+=(e.esperadoMes||0); vd.fechadoBruto+=(e.potencial_movimentacao||0);
                 if(movE===0) vd.semMov++;
                 if(temMeta){vd.naMeta++;vd.valorMeta+=(e.valorMeta||0);}
               }
@@ -1261,88 +931,43 @@ export default function DashboardVendedor() {
                             <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.72rem',marginTop:2}}>Gestor: {eq.gestor} · {eq.empresas} empresas</div>
                           </div>
                           <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Novas Emp.</div>
-                              <div style={{color:'#60a5fa',fontWeight:700,fontSize:'1rem'}}>{eq.empresas}</div>
-                            </div>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
-                              <div style={{color:'#a78bfa',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.fechadoBruto||0)}</div>
-                            </div>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
-                              <div style={{color:'#e8eaf0',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.esperado)}</div>
-                            </div>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
-                              <div style={{color:'#f0b429',fontWeight:700,fontSize:'1rem'}}>{fmt(eq.movTotal)}</div>
-                            </div>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
-                              <div style={{color:'#34d399',fontWeight:700,fontSize:'1rem'}}>{eq.valorMeta>0?fmt(eq.valorMeta):'—'}</div>
-                            </div>
+                            {[['Novas Emp.','#60a5fa',eq.empresas],['Fechado Bruto','#a78bfa',fmt(eq.fechadoBruto||0)],['Esperado/mês','#e8eaf0',fmt(eq.esperado)],['Mov. Acum.','#f0b429',fmt(eq.movTotal)],['Meta Apurada','#34d399',eq.valorMeta>0?fmt(eq.valorMeta):'—']].map(([lbl,cor,val])=>(
+                              <div key={lbl} style={{textAlign:'right'}}><div style={{color:'rgba(255,255,255,0.5)',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>{lbl}</div><div style={{color:cor,fontWeight:700,fontSize:'1rem'}}>{val}</div></div>
+                            ))}
                           </div>
                         </div>
                         <div style={{padding:'8px 22px',background:'#f9fafb',borderBottom:'1px solid #e4e7ef',display:'flex',alignItems:'center',gap:12}}>
-                          <div style={{flex:1,background:'#e4e7ef',borderRadius:4,height:8,overflow:'hidden'}}>
-                            <div style={{height:'100%',width:`${Math.min(pctMov,100)}%`,background:cor,borderRadius:4}}/>
-                          </div>
+                          <div style={{flex:1,background:'#e4e7ef',borderRadius:4,height:8,overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(pctMov,100)}%`,background:cor,borderRadius:4}}/></div>
                           <span style={{color:cor,fontWeight:700,fontSize:'0.78rem',minWidth:40}}>{fmtPct(pctMov)}</span>
                         </div>
                         <div style={{padding:'12px 22px'}}>
                           <div style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Ranking de Vendedores</div>
                           <div style={{display:'flex',flexDirection:'column',gap:8}}>
                             {vendedores.map((vd,idx) => {
-                              const pctVd   = vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
-                              const corVd   = corPct(pctVd);
-                              const medalha = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
-                              // Meta do consultor — busca em consultores pelo nome
-                              const consData = consultores.find(cc=>cc.nome===vd.nome);
-                              const metaConsultor = consData?.meta_mensal || 0;
-                              const pctMeta = metaConsultor>0?(vd.valorMeta/metaConsultor)*100:0;
-                              const corMeta = corPct(pctMeta);
+                              const pctVd=vd.esperado*mesesDisp.length>0?(vd.movTotal/(vd.esperado*mesesDisp.length))*100:0;
+                              const corVd=corPct(pctVd);
+                              const medalha=idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
+                              const consData=consultores.find(cc=>cc.nome===vd.nome);
+                              const metaConsultor=consData?.meta_mensal||0;
+                              const pctMeta=metaConsultor>0?(vd.valorMeta/metaConsultor)*100:0;
+                              const corMeta=corPct(pctMeta);
                               return (
                                 <div key={vd.nome} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${idx===0?'rgba(240,180,41,0.2)':'#e4e7ef'}`,background:idx===0?'rgba(255,248,230,0.6)':'#fafafa',marginBottom:4}}>
-                                  {/* Linha principal */}
                                   <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap'}}>
                                     <span style={{fontSize:'1rem',minWidth:28,textAlign:'center'}}>{medalha}</span>
                                     <div style={{flex:1,minWidth:120}}>
                                       <div style={{fontWeight:700,fontSize:'0.85rem',color:'#1a1d2e'}}>{vd.nome}</div>
-                                      <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>
-                                        {vd.empresas} emp. · {vd.semMov} sem mov. · {vd.naMeta} na meta
+                                      <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>{vd.empresas} emp. · {vd.semMov} sem mov. · {vd.naMeta} na meta</div>
+                                    </div>
+                                    {[['Mov. Acum.','#f0b429',fmt(vd.movTotal),`média: ${fmt(Math.round(vd.movTotal/qtdM))}/mês`],['Fechado Bruto','#60a5fa',fmt(vd.fechadoBruto||0),`${vd.empresas} contratos`],['Esperado/mês','#a78bfa',fmt(vd.esperado),`${fmtPct(pctVd)} realizado`],['Meta Apurada','#34d399',vd.valorMeta>0?fmt(vd.valorMeta):'—',metaConsultor>0?`${fmtPct(pctMeta)} da meta`:'']].map(([lbl,cor,val,sub])=>(
+                                      <div key={lbl} style={{textAlign:'right',minWidth:90}}>
+                                        <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>{lbl}</div>
+                                        <div style={{color:lbl==='Meta Apurada'?'#34d399':cor,fontWeight:700,fontSize:'0.88rem'}}>{val}</div>
+                                        {sub&&<div style={{color:lbl==='Esperado/mês'?corVd:lbl==='Meta Apurada'?corMeta:'#8b92b0',fontSize:'0.62rem',fontWeight:600}}>{sub}</div>}
                                       </div>
-                                    </div>
-                                    {/* Bloco: Mov. Acum. */}
-                                    <div style={{textAlign:'right',minWidth:90}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Mov. Acum.</div>
-                                      <div style={{color:'#f0b429',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.movTotal)}</div>
-                                      <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>média: {fmt(Math.round(vd.movTotal/qtdM))}/mês</div>
-                                    </div>
-                                    {/* Bloco: Fechado Bruto */}
-                                    <div style={{textAlign:'right',minWidth:90}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
-                                      <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.fechadoBruto||0)}</div>
-                                      <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{vd.empresas} contratos</div>
-                                    </div>
-                                    {/* Bloco: Valor Esperado */}
-                                    <div style={{textAlign:'right',minWidth:90}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
-                                      <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.88rem'}}>{fmt(vd.esperado)}</div>
-                                      <div style={{color:corVd,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctVd)} realizado</div>
-                                    </div>
-                                    {/* Bloco: Meta Apurada */}
-                                    <div style={{textAlign:'right',minWidth:90}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
-                                      <div style={{color:'#34d399',fontWeight:700,fontSize:'0.88rem'}}>{vd.valorMeta>0?fmt(vd.valorMeta):'—'}</div>
-                                      {metaConsultor>0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
-                                    </div>
+                                    ))}
                                   </div>
-                                  {/* Barra de progresso da meta */}
-                                  {metaConsultor > 0 && (
-                                    <div style={{height:3,background:'#f0f2f8'}}>
-                                      <div style={{height:'100%',width:`${Math.min(pctMeta,100)}%`,background:corMeta,transition:'width 0.6s'}}/>
-                                    </div>
-                                  )}
+                                  {metaConsultor > 0 && <div style={{height:3,background:'#f0f2f8'}}><div style={{height:'100%',width:`${Math.min(pctMeta,100)}%`,background:corMeta,transition:'width 0.6s'}}/></div>}
                                 </div>
                               );
                             })}
@@ -1365,142 +990,72 @@ export default function DashboardVendedor() {
               const mesesFiltrados = mesesDisp.filter(m => mesesMostar.has(m));
               const colV = (k) => colsVisiveis.has(k);
               const toggleCol = (k) => setColsVisiveis(prev => { const n=new Set(prev); n.has(k)?n.delete(k):n.add(k); return n; });
-              const toggleMes = (m) => setMesesVisiveis(prev => {
-                const base = prev || new Set(mesesDisp);
-                const n = new Set(base);
-                n.has(m) ? n.delete(m) : n.add(m);
-                return n;
-              });
+              const toggleMes = (m) => setMesesVisiveis(prev => { const base=prev||new Set(mesesDisp);const n=new Set(base);n.has(m)?n.delete(m):n.add(m);return n; });
               return (
                 <div style={s.card}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}}>
                     <div style={s.cardTitle}>📋 Carteira — {listaCart.length} empresas</div>
                     <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
                       <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>Por página:</span>
-                      {[12,50,100].map(n=>(
-                        <button key={n} onClick={()=>{setCarteiraPorPag(n);setCarteiraPagina(1);}}
-                          style={{background:carteiraPorPag===n?'#f0b429':'#f5f6fa',color:carteiraPorPag===n?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'3px 10px',fontSize:'0.75rem',cursor:'pointer',fontFamily:'inherit',fontWeight:carteiraPorPag===n?700:400}}>
-                          {n}
-                        </button>
-                      ))}
+                      {[12,50,100].map(n=>(<button key={n} onClick={()=>{setCarteiraPorPag(n);setCarteiraPagina(1);}} style={{background:carteiraPorPag===n?'#f0b429':'#f5f6fa',color:carteiraPorPag===n?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'3px 10px',fontSize:'0.75rem',cursor:'pointer',fontFamily:'inherit',fontWeight:carteiraPorPag===n?700:400}}>{n}</button>))}
                     </div>
                   </div>
                   <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
                     <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e=>setBusca(e.target.value)} />
-                    <select style={s.sel} value={filtroCategoria} onChange={e=>{setFiltroCategoria(e.target.value);setCarteiraPagina(1);}}>
-                      <option value="">Todas as categorias</option>
-                      {categoriasCart.map(c=><option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
-                      <option value="">Todos os produtos</option>
-                      {[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-                      <option value="">Todos os status</option>
-                      <option value="acima do esperado">✅ Acima</option>
-                      <option value="abaixo do esperado">⚠️ Abaixo</option>
-                      <option value="sem movimentação">❌ Sem mov.</option>
-                    </select>
+                    <select style={s.sel} value={filtroCategoria} onChange={e=>{setFiltroCategoria(e.target.value);setCarteiraPagina(1);}}><option value="">Todas as categorias</option>{categoriasCart.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                    <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}><option value="">Todos os produtos</option>{[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}</select>
+                    <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}><option value="">Todos os status</option><option value="acima do esperado">✅ Acima</option><option value="abaixo do esperado">⚠️ Abaixo</option><option value="sem movimentação">❌ Sem mov.</option></select>
                   </div>
                   <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap',alignItems:'center',background:'#f9fafb',borderRadius:8,padding:'8px 12px',border:'1px solid #e4e7ef'}}>
                     <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginRight:4}}>Colunas:</span>
-                    {[['empresa','Empresa'],['produto','Produto'],['esperado','Esperado'],['media','Média'],['meta','Meta'],['status','Status']].map(([k,l])=>(
-                      <button key={k} onClick={()=>toggleCol(k)}
-                        style={{background:colV(k)?'rgba(240,180,41,0.12)':'#f0f2f8',color:colV(k)?'#b45309':'#6b7280',border:`1px solid ${colV(k)?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:colV(k)?700:400}}>
-                        {l}
-                      </button>
-                    ))}
+                    {[['empresa','Empresa'],['produto','Produto'],['esperado','Esperado'],['media','Média'],['meta','Meta'],['status','Status']].map(([k,l])=>(<button key={k} onClick={()=>toggleCol(k)} style={{background:colV(k)?'rgba(240,180,41,0.12)':'#f0f2f8',color:colV(k)?'#b45309':'#6b7280',border:`1px solid ${colV(k)?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:colV(k)?700:400}}>{l}</button>))}
                     <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginLeft:8,marginRight:4}}>Meses:</span>
-                    {mesesDisp.map(m=>{
-                      const vis = !mesesVisiveis || mesesVisiveis.has(m);
-                      return (
-                        <button key={m} onClick={()=>toggleMes(m)}
-                          style={{background:vis?'rgba(96,165,250,0.1)':'#f0f2f8',color:vis?'#2563eb':'#6b7280',border:`1px solid ${vis?'rgba(96,165,250,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:vis?700:400}}>
-                          {fmtMes(m+'-01')}
-                        </button>
-                      );
-                    })}
+                    {mesesDisp.map(m=>{const vis=!mesesVisiveis||mesesVisiveis.has(m);return(<button key={m} onClick={()=>toggleMes(m)} style={{background:vis?'rgba(96,165,250,0.1)':'#f0f2f8',color:vis?'#2563eb':'#6b7280',border:`1px solid ${vis?'rgba(96,165,250,0.3)':'#e4e7ef'}`,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit',fontWeight:vis?700:400}}>{fmtMes(m+'-01')}</button>);})}
                     {mesesVisiveis && <button onClick={()=>setMesesVisiveis(null)} style={{background:'rgba(220,38,38,0.06)',color:'#dc2626',border:'1px solid rgba(220,38,38,0.15)',borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',cursor:'pointer',fontFamily:'inherit'}}>Mostrar todos</button>}
                   </div>
                   <div style={{overflowX:'auto',borderRadius:8,border:'1px solid #f0f2f8'}}>
                     <table style={s.table}>
                       <thead>
                         <tr style={{background:'#f9fafb'}}>
-                          {colV('empresa') && <th style={s.th}>Empresa</th>}
-                          {colV('produto') && <th style={s.th}>Produto</th>}
+                          {colV('empresa')&&<th style={s.th}>Empresa</th>}
+                          {colV('produto')&&<th style={s.th}>Produto</th>}
                           <th style={s.th}>Vendedor</th>
-                          {colV('esperado') && <th style={s.th}>Esperado/mês</th>}
+                          {colV('esperado')&&<th style={s.th}>Esperado/mês</th>}
                           {mesesFiltrados.map(m=><th key={m} style={{...s.th,textAlign:'right'}}>{fmtMes(m+'-01')}</th>)}
-                          {colV('media') && <th style={{...s.th,textAlign:'right'}}>Média</th>}
-                          {colV('meta') && <th style={{...s.th,textAlign:'right'}}>Meta</th>}
-                          {colV('status') && <th style={s.th}>Status</th>}
+                          {colV('media')&&<th style={{...s.th,textAlign:'right'}}>Média</th>}
+                          {colV('meta')&&<th style={{...s.th,textAlign:'right'}}>Meta</th>}
+                          {colV('status')&&<th style={s.th}>Status</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {listaPage.map((e,i) => {
-                          const corSit = e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
+                          const corSit=e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
                           return (
                             <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
-                              {colV('empresa') && <td style={s.td}>
-                                <span>{e.nome}</span>
-                                <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div>
-                              </td>}
-                              {colV('produto') && <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
+                              {colV('empresa')&&<td style={s.td}><span>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>}
+                              {colV('produto')&&<td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
                               <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.vendedor}</span></td>
-                              {colV('esperado') && <td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>}
-                              {mesesFiltrados.map(m => {
-                                const v = e.movPorMes[m]||0;
-                                const pctV = e.esperadoMes>0?(v/e.esperadoMes)*100:0;
-                                const c2 = pctV>=90?'#34d399':pctV>=50?'#f0b429':v>0?'#f87171':'#9ca3af';
-                                return <td key={m} style={{...s.td,textAlign:'right',color:c2,fontWeight:v>0?600:400}}>{v>0?fmt(v):'—'}</td>;
-                              })}
-                              {colV('media') && <td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>}
-                              {colV('meta') && <td style={{...s.td,textAlign:'right'}}>
-                                {e.valorMeta>0 ? (
-                                  <div>
-                                    <div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div>
-                                    <div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec. × peso':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div>
-                                  </div>
-                                ) : <span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>}
-                              </td>}
-                              {colV('status') && <td style={s.td}>
-                                <span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span>
-                              </td>}
+                              {colV('esperado')&&<td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>}
+                              {mesesFiltrados.map(m=>{const v=e.movPorMes[m]||0;const pctV=e.esperadoMes>0?(v/e.esperadoMes)*100:0;const c2=pctV>=90?'#34d399':pctV>=50?'#f0b429':v>0?'#f87171':'#9ca3af';return<td key={m} style={{...s.td,textAlign:'right',color:c2,fontWeight:v>0?600:400}}>{v>0?fmt(v):'—'}</td>;})}
+                              {colV('media')&&<td style={{...s.td,textAlign:'right',color:'#f0b429',fontWeight:700}}>{e.mediaMovMes>0?fmt(e.mediaMovMes):'—'}</td>}
+                              {colV('meta')&&<td style={{...s.td,textAlign:'right'}}>{e.valorMeta>0?(<div><div style={{color:'#34d399',fontWeight:700,fontSize:'0.82rem'}}>{fmt(e.valorMeta)}</div><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>{e.metaRegra==='beneficio'?'1ª rec. × peso':e.metaRegra==='convenio'?'3º mês':'—'} · {fmtMes(e.metaComp)}</div></div>):<span style={{color:'#d1d5e8',fontSize:'0.75rem'}}>—</span>}</td>}
+                              {colV('status')&&<td style={s.td}><span style={{background:`${corSit}18`,color:corSit,borderRadius:5,padding:'2px 8px',fontSize:'0.68rem',fontWeight:600,whiteSpace:'nowrap'}}>{e.situacao}</span></td>}
                             </tr>
                           );
                         })}
-                        {listaPage.length===0 && <tr><td colSpan={20} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>}
+                        {listaPage.length===0&&<tr><td colSpan={20} style={{...s.td,textAlign:'center',color:'#8b92b0',padding:32}}>Nenhuma empresa encontrada</td></tr>}
                       </tbody>
-                      {/* ── RODAPÉ COM TOTAIS (lista completa filtrada, não só a página) ── */}
                       {listaCart.length > 0 && (
                         <tfoot>
                           <tr style={{borderTop:'2px solid #1a1d2e',background:'#1a1d2e'}}>
-                            {colV('empresa') && <td style={{...s.td,fontWeight:700,color:'#ffffff',fontSize:'0.8rem',whiteSpace:'nowrap'}}>
-                              TOTAL ({listaCart.length} empresas)
-                            </td>}
-                            {colV('produto') && <td style={{...s.td,background:'#1a1d2e'}}/>}
-                            <td style={{...s.td,background:'#1a1d2e'}}/>{/* vendedor */}
-                            {colV('esperado') && <td style={{...s.td,fontWeight:700,color:'#c4b5fd',textAlign:'right'}}>
-                              {fmt(listaCart.reduce((s,e)=>s+(e.esperadoMes||0),0))}
-                            </td>}
-                            {mesesFiltrados.map(m => (
-                              <td key={m} style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>
-                                {(()=>{
-                                  const t = listaCart.reduce((s,e)=>s+(e.movPorMes?.[m]||0),0);
-                                  return t > 0 ? fmt(t) : <span style={{color:'#4b5563'}}>—</span>;
-                                })()}
-                              </td>
-                            ))}
-                            {colV('media') && <td style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>
-                              {fmt(listaCart.reduce((s,e)=>s+(e.mediaMovMes||0),0))}
-                            </td>}
-                            {colV('meta') && <td style={{...s.td,textAlign:'right',fontWeight:800,color:'#6ee7b7'}}>
-                              {(()=>{
-                                const t = listaCart.reduce((s,e)=>s+(e.valorMeta||0),0);
-                                return t > 0 ? fmt(t) : <span style={{color:'#4b5563'}}>—</span>;
-                              })()}
-                            </td>}
-                            {colV('status') && <td style={{...s.td,background:'#1a1d2e'}}/>}
+                            {colV('empresa')&&<td style={{...s.td,fontWeight:700,color:'#ffffff',fontSize:'0.8rem',whiteSpace:'nowrap'}}>TOTAL ({listaCart.length} empresas)</td>}
+                            {colV('produto')&&<td style={{...s.td,background:'#1a1d2e'}}/>}
+                            <td style={{...s.td,background:'#1a1d2e'}}/>
+                            {colV('esperado')&&<td style={{...s.td,fontWeight:700,color:'#c4b5fd',textAlign:'right'}}>{fmt(listaCart.reduce((s,e)=>s+(e.esperadoMes||0),0))}</td>}
+                            {mesesFiltrados.map(m=>(<td key={m} style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>{(()=>{const t=listaCart.reduce((s,e)=>s+(e.movPorMes?.[m]||0),0);return t>0?fmt(t):<span style={{color:'#4b5563'}}>—</span>;})()}</td>))}
+                            {colV('media')&&<td style={{...s.td,textAlign:'right',fontWeight:700,color:'#fde68a'}}>{fmt(listaCart.reduce((s,e)=>s+(e.mediaMovMes||0),0))}</td>}
+                            {colV('meta')&&<td style={{...s.td,textAlign:'right',fontWeight:800,color:'#6ee7b7'}}>{(()=>{const t=listaCart.reduce((s,e)=>s+(e.valorMeta||0),0);return t>0?fmt(t):<span style={{color:'#4b5563'}}>—</span>;})()}</td>}
+                            {colV('status')&&<td style={{...s.td,background:'#1a1d2e'}}/>}
                           </tr>
                         </tfoot>
                       )}
@@ -1508,19 +1063,9 @@ export default function DashboardVendedor() {
                   </div>
                   {totalPags > 1 && (
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:16,flexWrap:'wrap'}}>
-                      <button onClick={()=>setCarteiraPagina(p=>Math.max(1,p-1))} disabled={pagAtual===1}
-                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===1?'default':'pointer',color:pagAtual===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
-                      {Array.from({length:Math.min(totalPags,7)},(_,i)=>{
-                        const pg = totalPags<=7?i+1:pagAtual<=4?i+1:pagAtual>=totalPags-3?totalPags-6+i:pagAtual-3+i;
-                        return (
-                          <button key={pg} onClick={()=>setCarteiraPagina(pg)}
-                            style={{background:pagAtual===pg?'#f0b429':'#f5f6fa',color:pagAtual===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pagAtual===pg?700:400,fontSize:'0.82rem'}}>
-                            {pg}
-                          </button>
-                        );
-                      })}
-                      <button onClick={()=>setCarteiraPagina(p=>Math.min(totalPags,p+1))} disabled={pagAtual===totalPags}
-                        style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===totalPags?'default':'pointer',color:pagAtual===totalPags?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
+                      <button onClick={()=>setCarteiraPagina(p=>Math.max(1,p-1))} disabled={pagAtual===1} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===1?'default':'pointer',color:pagAtual===1?'#ccc':'#4a5068',fontFamily:'inherit'}}>←</button>
+                      {Array.from({length:Math.min(totalPags,7)},(_,i)=>{const pg=totalPags<=7?i+1:pagAtual<=4?i+1:pagAtual>=totalPags-3?totalPags-6+i:pagAtual-3+i;return(<button key={pg} onClick={()=>setCarteiraPagina(pg)} style={{background:pagAtual===pg?'#f0b429':'#f5f6fa',color:pagAtual===pg?'#000':'#4a5068',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',fontWeight:pagAtual===pg?700:400,fontSize:'0.82rem'}}>{pg}</button>);})}
+                      <button onClick={()=>setCarteiraPagina(p=>Math.min(totalPags,p+1))} disabled={pagAtual===totalPags} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:6,padding:'4px 12px',cursor:pagAtual===totalPags?'default':'pointer',color:pagAtual===totalPags?'#ccc':'#4a5068',fontFamily:'inherit'}}>→</button>
                       <span style={{color:'#8b92b0',fontSize:'0.72rem',marginLeft:4}}>Página {pagAtual} de {totalPags} · {listaCart.length} empresas</span>
                     </div>
                   )}
@@ -1533,8 +1078,8 @@ export default function DashboardVendedor() {
                 <div style={s.cardTitle}>🎯 Resultado por Produto</div>
                 <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:12}}>
                   {porProduto.map((p) => {
-                    const pctAdere = p.esperado > 0 ? (p.movReal / p.esperado) * 100 : 0;
-                    const cor = pctAdere >= 90 ? '#34d399' : pctAdere >= 50 ? '#f0b429' : '#f87171';
+                    const pctAdere=p.esperado>0?(p.movReal/p.esperado)*100:0;
+                    const cor=pctAdere>=90?'#34d399':pctAdere>=50?'#f0b429':'#f87171';
                     return (
                       <div key={p.nome} style={{background:'#f9fafb',borderRadius:12,padding:'16px 20px',border:'1px solid #e4e7ef'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
@@ -1542,24 +1087,13 @@ export default function DashboardVendedor() {
                           <span style={{color:'#8b92b0',fontSize:'0.78rem'}}>{p.contratos} empresa{p.contratos>1?'s':''}</span>
                         </div>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
-                          {[
-                            {label:'Mov. Esperada/mês', val:fmt(p.esperado), cor:'#a78bfa'},
-                            {label:'Mov. Real Média',   val:p.movReal>0?fmt(p.movReal):'—', cor:'#f0b429'},
-                            {label:'% Aderência',       val:fmtPct(pctAdere), cor},
-                          ].map(k => (
-                            <div key={k.label}>
-                              <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',marginBottom:4}}>{k.label}</div>
-                              <div style={{fontWeight:700,color:k.cor}}>{k.val}</div>
-                            </div>
-                          ))}
+                          {[{label:'Mov. Esperada/mês',val:fmt(p.esperado),cor:'#a78bfa'},{label:'Mov. Real Média',val:p.movReal>0?fmt(p.movReal):'—',cor:'#f0b429'},{label:'% Aderência',val:fmtPct(pctAdere),cor}].map(k=>(<div key={k.label}><div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',marginBottom:4}}>{k.label}</div><div style={{fontWeight:700,color:k.cor}}>{k.val}</div></div>))}
                         </div>
-                        <div style={{background:'#e4e7ef',borderRadius:4,height:6,overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${Math.min(pctAdere,100)}%`,background:cor,borderRadius:4}}></div>
-                        </div>
+                        <div style={{background:'#e4e7ef',borderRadius:4,height:6,overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(pctAdere,100)}%`,background:cor,borderRadius:4}}></div></div>
                       </div>
                     );
                   })}
-                  {porProduto.length === 0 && <div style={s.semDados}>Nenhum produto encontrado</div>}
+                  {porProduto.length===0&&<div style={s.semDados}>Nenhum produto encontrado</div>}
                 </div>
               </div>
             )}
@@ -1568,98 +1102,45 @@ export default function DashboardVendedor() {
               <div style={s.card}>
                 <div style={s.cardTitle}>🏆 Ranking — Vol. Meta Apurada por Vendedor</div>
                 <div style={{marginTop:16,display:'flex',flexDirection:'column',gap:8}}>
-                  {[...ranking].sort((a,b) => b.valorMeta - a.valorMeta).map((c,i) => {
-                    const medal    = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
-                    const corM     = i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
-                    const isAtu    = c.id === consultorId;
-                    const maxMeta  = Math.max(...ranking.map(x=>x.valorMeta), 1);
-                    const qtdM     = mesesDisp.filter(m=>m>='2026-01').length || 1;
-
-                    // Meta do consultor — mensal e ACUMULADA (meses válidos no período)
-                    const consData     = consultores.find(cc=>cc.id===c.id);
-                    const metaMensal   = consData?.meta_mensal || 0;
-                    // Meta acumulada: meta_mensal × nº de meses válidos (>= 2026-01 e >= meta_valida_desde)
-                    const validaMes    = (consData?.meta_valida_desde ? String(consData.meta_valida_desde).substring(0,7) : '2026-01');
-                    const mesesValidos = mesesDisp.filter(m => m >= '2026-01' && m >= validaMes);
-                    const metaAcum     = metaMensal * (mesesValidos.length || 1);
-                    // % correta: valorMeta ÷ metaAcumulada (não ÷ metaMensal)
-                    const pctMeta      = metaAcum > 0 ? (c.valorMeta / metaAcum) * 100 : 0;
-                    const corMeta      = corPct(pctMeta);
-
-                    // Aderência mov vs esperado
-                    const pctAdere = c.esperado > 0 ? (c.movReal / c.esperado) * 100 : 0;
-                    const corAdere = corPct(pctAdere);
-
+                  {[...ranking].sort((a,b)=>b.valorMeta-a.valorMeta).map((c,i) => {
+                    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
+                    const corM=i===0?'#f0b429':i===1?'#9ca3af':i===2?'#cd7c2f':'#4b5563';
+                    const isAtu=c.id===consultorId;
+                    const maxMeta=Math.max(...ranking.map(x=>x.valorMeta),1);
+                    const consData=consultores.find(cc=>cc.id===c.id);
+                    const metaMensal=consData?.meta_mensal||0;
+                    const validaMes=(consData?.meta_inicio?String(consData.meta_inicio).substring(0,7):'2026-01');
+                    const mesesValidos=mesesDisp.filter(m=>m>='2026-01'&&m>=validaMes);
+                    const metaAcum=metaMensal*(mesesValidos.length||1);
+                    const pctMeta=metaAcum>0?(c.valorMeta/metaAcum)*100:0;
+                    const corMeta=corPct(pctMeta);
+                    const pctAdere=c.esperado>0?(c.movReal/c.esperado)*100:0;
+                    const corAdere=corPct(pctAdere);
                     return (
                       <div key={c.id} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${isAtu?'#f0b429':'#e4e7ef'}`,background:isAtu?'rgba(255,248,230,0.6)':'#fafafa'}}>
                         <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap'}}>
                           <span style={{fontWeight:700,fontSize:'1rem',minWidth:28,textAlign:'center',color:corM}}>{medal}</span>
-
-                          {/* Nome + info */}
                           <div style={{flex:1,minWidth:120}}>
                             <div style={{fontWeight:700,fontSize:'0.88rem',color:isAtu?'#b45309':'#1a1d2e'}}>{c.nome}</div>
-                            <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>
-                              {c.empresas} emp. · {c.naMeta||0} na meta · gestor: {c.gestor}
-                            </div>
+                            <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>{c.empresas} emp. · {c.naMeta||0} na meta · gestor: {c.gestor}</div>
                           </div>
-
-                          {/* ── GRUPO 1: Meta Mensal + Meta Acumulada ── */}
                           <div style={{display:'flex',gap:10,padding:'6px 12px',background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8}}>
-                            {metaMensal > 0 && (
-                              <div style={{textAlign:'right',minWidth:80}}>
-                                <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Mensal</div>
-                                <div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaMensal)}</div>
-                                <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>/mês</div>
-                              </div>
-                            )}
-                            {metaMensal > 0 && (
-                              <div style={{textAlign:'right',minWidth:80}}>
-                                <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Acum.</div>
-                                <div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaAcum)}</div>
-                                <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{mesesValidos.length} meses</div>
-                              </div>
-                            )}
-                            {!metaMensal && (
-                              <div style={{color:'#8b92b0',fontSize:'0.72rem',padding:'4px 8px'}}>Meta não cadastrada</div>
-                            )}
+                            {metaMensal>0?(<>
+                              <div style={{textAlign:'right',minWidth:80}}><div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Mensal</div><div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaMensal)}</div><div style={{color:'#8b92b0',fontSize:'0.62rem'}}>/mês</div></div>
+                              <div style={{textAlign:'right',minWidth:80}}><div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Acum.</div><div style={{color:'#1a1d2e',fontWeight:700,fontSize:'0.85rem'}}>{fmt(metaAcum)}</div><div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{mesesValidos.length} meses</div></div>
+                            </>):<div style={{color:'#8b92b0',fontSize:'0.72rem',padding:'4px 8px'}}>Meta não cadastrada</div>}
                           </div>
-
-                          {/* ── SEPARADOR ── */}
                           <div style={{width:1,height:36,background:'#e4e7ef',flexShrink:0}}/>
-
-                          {/* ── GRUPO 2: Fechado Bruto · Esperado/mês · Meta Apurada ── */}
-                          {/* Bloco: Fechado Bruto */}
-                          <div style={{textAlign:'right',minWidth:85}}>
-                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div>
-                            <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.fechadoBruto||0)}</div>
-                            <div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{c.empresas} contratos</div>
-                          </div>
-                          {/* Bloco: Esperado/mês */}
-                          <div style={{textAlign:'right',minWidth:85}}>
-                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div>
-                            <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.esperado)}</div>
-                            <div style={{color:corAdere,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctAdere)} realiz.</div>
-                          </div>
-                          {/* Bloco: Meta Apurada */}
-                          <div style={{textAlign:'right',minWidth:85}}>
-                            <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div>
-                            <div style={{color:'#34d399',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.valorMeta)}</div>
-                            {metaAcum > 0 && <div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}
-                          </div>
-
-                          {isAtu && <span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
+                          <div style={{textAlign:'right',minWidth:85}}><div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Fechado Bruto</div><div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.fechadoBruto||0)}</div><div style={{color:'#8b92b0',fontSize:'0.62rem'}}>{c.empresas} contratos</div></div>
+                          <div style={{textAlign:'right',minWidth:85}}><div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Esperado/mês</div><div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.esperado)}</div><div style={{color:corAdere,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctAdere)} realiz.</div></div>
+                          <div style={{textAlign:'right',minWidth:85}}><div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>Meta Apurada</div><div style={{color:'#34d399',fontWeight:700,fontSize:'0.85rem'}}>{fmt(c.valorMeta)}</div>{metaAcum>0&&<div style={{color:corMeta,fontSize:'0.62rem',fontWeight:600}}>{fmtPct(pctMeta)} da meta</div>}</div>
+                          {isAtu&&<span style={{background:'rgba(240,180,41,0.2)',color:'#f0b429',borderRadius:6,padding:'2px 8px',fontSize:'0.68rem',fontWeight:700}}>você</span>}
                         </div>
-                        {/* Barra: apurado vs meta acumulada */}
-                        <div style={{height:3,background:'#f0f2f8'}}>
-                          <div style={{height:'100%',
-                            width:`${Math.min(metaAcum>0?pctMeta:(c.valorMeta/maxMeta)*100, 100)}%`,
-                            background:isAtu?'#f0b429':metaAcum>0?corMeta:i<3?'#34d399':'#d1d5e8',
-                            transition:'width 0.6s'}}/>
-                        </div>
+                        <div style={{height:3,background:'#f0f2f8'}}><div style={{height:'100%',width:`${Math.min(metaAcum>0?pctMeta:(c.valorMeta/maxMeta)*100,100)}%`,background:isAtu?'#f0b429':metaAcum>0?corMeta:i<3?'#34d399':'#d1d5e8',transition:'width 0.6s'}}/></div>
                       </div>
                     );
                   })}
-                  {ranking.length === 0 && <div style={s.semDados}>Nenhum dado disponível</div>}
+                  {ranking.length===0&&<div style={s.semDados}>Nenhum dado disponível</div>}
                 </div>
               </div>
             )}
