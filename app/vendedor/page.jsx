@@ -151,7 +151,7 @@ export default function DashboardVendedor() {
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
       const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
-      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) || equipes.includes(c.gestor));
+      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === (prof?.nome || ''));
     }
 
     setConsultores(consComValidade);
