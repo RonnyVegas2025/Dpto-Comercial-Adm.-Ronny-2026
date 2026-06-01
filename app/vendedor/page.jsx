@@ -155,8 +155,11 @@ export default function DashboardVendedor() {
     }
 
     setConsultores(consComValidade);
-    const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
-    setGestores(gs);
+    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+const gs = (perfil && perfisRestritos.includes(perfil.perfil))
+  ? ['Geral']
+  : ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
+setGestores(gs);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
     setMeses(ms);
   }
@@ -464,7 +467,7 @@ export default function DashboardVendedor() {
             {gestores.map(g => (
               <button key={g} style={{...s.gestorBtn,...(gestorFiltro===g?s.gestorBtnAtivo:{})}}
                 onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
-                {g==='Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
+                {g==='Geral' ? '🌐 Geral' : `👔 ${g}`}
               </button>
             ))}
           </div>
