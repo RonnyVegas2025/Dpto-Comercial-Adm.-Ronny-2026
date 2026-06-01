@@ -203,11 +203,13 @@ export default function DashboardVendedor() {
 } else {
   // Sempre filtra pelos consultores visíveis (já restringidos pela visibilidade em carregarBase)
   const ids = gestorFiltro !== 'Geral'
-    ? consultores.filter(c=>(c.gestorObj?.nome||c.gestor)===gestorFiltro).map(c=>c.id)
+    ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
     : consultores.map(c=>c.id);
-  if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-  empQuery = empQuery.in('consultor_principal_id', ids);
-}
+ if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
+        empQuery = empQuery.or(
+          ids.map(id => `consultor_principal_id.eq.${id},consultor_agregado_id.eq.${id},consultor_agregado_2_id.eq.${id}`).join(',')
+        );
+      }
 
       const empresas = await fetchAll(empQuery);
 
