@@ -116,24 +116,26 @@ export default function DashboardVendedor() {
 
   async function carregarBase() {
     let consultorIdsPermitidos = null;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const [{ data: prof }, { data: vis }] = await Promise.all([
-          supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
-          supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
-        ]);
-        setPerfilUsuario(prof);
-        const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-        if (prof && perfisRestritos.includes(prof.perfil)) {
-          if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
-            consultorIdsPermitidos = vis.consultor_ids;
-          } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-            consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
-          }
-        }
+let prof = null;
+try {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const [{ data: profData }, { data: vis }] = await Promise.all([
+      supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
+      supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
+    ]);
+    prof = profData;
+    setPerfilUsuario(profData);
+    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+    if (prof && perfisRestritos.includes(prof.perfil)) {
+      if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
+        consultorIdsPermitidos = vis.consultor_ids;
+      } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
+        consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
       }
-    } catch(_) {}
+    }
+  }
+} catch(_) {}
 
     const [{ data: cons }, { data: libs }] = await Promise.all([
       supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio').eq('ativo',true).order('nome'),
@@ -151,7 +153,7 @@ export default function DashboardVendedor() {
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
       const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
-      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === (prof?.nome || ''));
+      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
     }
 
     setConsultores(consComValidade);
@@ -160,8 +162,8 @@ const gs = (perfil && perfisRestritos.includes(perfil.perfil))
   ? ['Geral']
   : ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
 setGestores(gs);
-    const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
-    setMeses(ms);
+    const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort().slice(-6);
+setMeses(ms);
   }
 
   async function carregarDados() {
