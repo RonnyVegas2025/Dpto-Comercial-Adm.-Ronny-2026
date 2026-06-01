@@ -153,7 +153,11 @@ try {
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
       const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
+      console.log('equipes permitidas:', equipes);
+      console.log('prof.nome:', prof?.nome);
+      console.log('consultores antes filtro:', consComValidade.map(c=>({nome:c.nome,equipe:c.equipe,gestor:c.gestor})));
       consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
+      console.log('consultores após filtro:', consComValidade.map(c=>c.nome));
     }
 
     setConsultores(consComValidade);
