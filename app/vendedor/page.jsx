@@ -135,7 +135,7 @@ export default function DashboardVendedor() {
       if (user) {
         const [{ data: prof }, { data: vis }] = await Promise.all([
           supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
-          supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).single(),
+         supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
         ]);
         perfil = prof;
         setPerfilUsuario(prof);
@@ -189,7 +189,7 @@ export default function DashboardVendedor() {
         id, produto_id, nome, cnpj, categoria, produto_contratado,
         potencial_movimentacao, peso_categoria, cartoes_emitidos, data_cadastro,
         taxa_positiva, taxa_negativa, pct_principal, pct_agregado_1, pct_agregado_2,
-        consultor_principal:consultor_principal_id (id, nome, gestor, gestor_id, equipe, meta_mensal, gestorObj:gestor_id(id,nome)),
+        consultor_principal:consultor_principal_id (id, nome, gestor, equipe, meta_mensal),
         consultor_agregado:consultor_agregado_id (id, nome),
         consultor_agregado_2:consultor_agregado_2_id (id, nome),
         parceiro:parceiro_id (nome)
