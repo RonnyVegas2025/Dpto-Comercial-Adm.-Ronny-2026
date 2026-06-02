@@ -12,23 +12,22 @@ export default function AppShell({ children }) {
 
   const isLoginPage = pathname === '/login';
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user && !isLoginPage) {
-      router.replace('/login');
-      return;
-    }
-   if (user && isLoginPage) {
-  const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-  if (profile && perfisRestritos.includes(profile.perfil)) {
-    router.replace('/inicio');
-  } else {
-    router.replace('/');
+ useEffect(() => {
+  if (loading) return;
+  if (!user && !isLoginPage) {
+    router.replace('/login');
+    return;
   }
-  return;
-}
+  if (user && isLoginPage) {
+    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+    if (profile && perfisRestritos.includes(profile.perfil)) {
+      router.replace('/inicio');
+    } else {
+      router.replace('/');
     }
-  }, [user, loading, isLoginPage, router]);
+    return;
+  }
+}, [user, loading, isLoginPage, router]);
 
   // Verifica permissão para a rota atual
   useEffect(() => {
