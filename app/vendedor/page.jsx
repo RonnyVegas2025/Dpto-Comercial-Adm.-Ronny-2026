@@ -336,9 +336,13 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      const totalValorMeta = mesSelecionado
-        ? (vmetasRows||[]).filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado && empIds.includes(v.empresa_id)).reduce((s,v) => s + (v.valor_meta||0), 0)
-        : listaProcessada.reduce((s,e) => s + (e.valorMeta||0), 0);
+      const totalValorMeta = listaProcessada.reduce((s,e) => {
+  if (mesSelecionado) {
+    const metaMes = e.metaComp?.substring(0,7);
+    if (metaMes !== mesSelecionado) return s;
+  }
+  return s + (e.valorMeta || 0);
+}, 0);
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
