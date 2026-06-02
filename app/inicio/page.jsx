@@ -42,9 +42,13 @@ export default function HomePage() {
       const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
       if (profData && perfisRestritos.includes(profData.perfil)) {
         if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-          consultores = consultores.filter(c =>
-            vis.equipes.includes(c.equipe) && c.gestor === profData.nome
-          );
+  console.log('vis.equipes:', vis.equipes);
+  console.log('profData.nome:', profData?.nome);
+  console.log('antes filtro:', consultores.map(c=>({nome:c.nome,equipe:c.equipe,gestor:c.gestor})));
+  consultores = consultores.filter(c =>
+    vis.equipes.includes(c.equipe) && c.gestor === profData.nome
+  );
+  console.log('após filtro:', consultores.map(c=>c.nome));
         } else if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
           const idSet = new Set(vis.consultor_ids);
           consultores = consultores.filter(c => idSet.has(c.id));
