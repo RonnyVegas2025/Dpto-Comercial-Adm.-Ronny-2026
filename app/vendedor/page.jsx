@@ -162,7 +162,7 @@ try {
 
     setConsultores(consComValidade);
     const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-const gs = (perfil && perfisRestritos.includes(perfil.perfil))
+const gs = (prof && perfisRestritos.includes(prof.perfil))
   ? ['Geral']
   : ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
 setGestores(gs);
