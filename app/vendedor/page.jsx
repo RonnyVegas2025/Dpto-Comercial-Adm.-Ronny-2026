@@ -150,9 +150,9 @@ export default function DashboardVendedor() {
       const idSet = new Set(consultorIdsPermitidos);
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
-      const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
-      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) || equipes.includes(c.gestor));
-    }
+  const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
+  consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
+}
 
     setConsultores(consComValidade);
     const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
