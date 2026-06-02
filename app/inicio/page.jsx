@@ -42,13 +42,9 @@ export default function HomePage() {
       const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
       if (profData && perfisRestritos.includes(profData.perfil)) {
         if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-  console.log('vis.equipes:', vis.equipes);
-  console.log('profData.nome:', profData?.nome);
-  console.log('antes filtro:', consultores.map(c=>({nome:c.nome,equipe:c.equipe,gestor:c.gestor})));
-  consultores = consultores.filter(c =>
-    vis.equipes.includes(c.equipe) && c.gestor === profData.nome
-  );
-  console.log('após filtro:', consultores.map(c=>c.nome));
+          consultores = consultores.filter(c =>
+            vis.equipes.includes(c.equipe) && c.gestor === profData.nome
+          );
         } else if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
           const idSet = new Set(vis.consultor_ids);
           consultores = consultores.filter(c => idSet.has(c.id));
@@ -71,35 +67,45 @@ export default function HomePage() {
       const empIds  = (empresas||[]).map(e => e.id);
       const prodIds = (empresas||[]).map(e => e.produto_id);
 
-      // Liberações dos últimos 2 meses
-      const hoje = new Date();
-      const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-      const mesAnterior = (() => {
-        const d = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      })();
-
-      const [{ data: libs }, { data: vmetas }] = await Promise.all([
-        prodIds.length ? supabase.from('liberacoes')
-          .select('produto_id,competencia,total_liberado')
-          .in('produto_id', prodIds)
-          .gte('competencia', mesAnterior+'-01') : Promise.resolve({ data: [] }),
-        empIds.length ? supabase.from('valor_meta_empresa')
-          .select('empresa_id,competencia_meta,valor_meta,regra')
-          .in('empresa_id', empIds) : Promise.resolve({ data: [] }),
+      // ✅ CORREÇÃO: Busca TODAS as liberações (sem filtro de data)
+      // para descobrir qual é o mês mais recente com dados
+      const [{ data: todasLibs }, { data: vmetas }] = await Promise.all([
+        prodIds.length
+          ? supabase.from('liberacoes')
+              .select('produto_id,competencia,total_liberado')
+              .in('produto_id', prodIds)
+              .order('competencia', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        empIds.length
+          ? supabase.from('valor_meta_empresa')
+              .select('empresa_id,competencia_meta,valor_meta,regra')
+              .in('empresa_id', empIds)
+          : Promise.resolve({ data: [] }),
       ]);
 
-      // Calcula movimentação por empresa no mês atual e anterior
+      // ✅ CORREÇÃO: Descobre o mês mais recente COM DADOS (igual à lógica do vendedor)
+      // Em vez de usar new Date() que retorna Jun/2026 (sem dados), usamos o último mês do banco
+      const mesesComDados = [
+        ...new Set((todasLibs||[]).map(l => l.competencia?.substring(0,7)).filter(Boolean))
+      ].sort();
+      const ultimoMes    = mesesComDados[mesesComDados.length - 1] || null; // ex: "2026-03"
+      const penultimoMes = mesesComDados[mesesComDados.length - 2] || null; // ex: "2026-02"
+
+      // Mês "atual" para exibição no header — usa o último mês com dados
+      const mesExibicao = ultimoMes;
+
+      // Monta libMap com TODAS as liberações (chave: produto_id__YYYY-MM)
       const libMap = {};
-      for (const l of (libs||[])) {
+      for (const l of (todasLibs||[])) {
         const k = `${l.produto_id}__${l.competencia?.substring(0,7)}`;
-        libMap[k] = (libMap[k]||0) + l.total_liberado;
+        libMap[k] = (libMap[k]||0) + (l.total_liberado||0);
       }
 
+      // ✅ CORREÇÃO: movAtual e movAnterior usam o último e penúltimo mês com dados
       let movAtual = 0, movAnterior = 0, comMovAtual = 0, semMovAtual = 0;
       for (const e of (empresas||[])) {
-        const va = libMap[`${e.produto_id}__${mesAtual}`]||0;
-        const vb = libMap[`${e.produto_id}__${mesAnterior}`]||0;
+        const va = libMap[`${e.produto_id}__${ultimoMes}`]   || 0;
+        const vb = libMap[`${e.produto_id}__${penultimoMes}`]|| 0;
         movAtual    += va;
         movAnterior += vb;
         if (va > 0) comMovAtual++; else semMovAtual++;
@@ -108,14 +114,15 @@ export default function HomePage() {
       // Meta total
       const metaTotal = consultores.reduce((s,c) => s + (c.meta_mensal||0), 0);
 
-      // Meta apurada total (vmetasRows)
+      // Meta apurada total
       const metaApurada = (vmetas||[]).reduce((s,v) => s + (v.valor_meta||0), 0);
 
-      // % aderência: mov atual vs esperado
+      // Esperado/mês
       const esperadoTotal = (empresas||[]).reduce((s,e) => {
         const fator = (e.pct_principal??100)/100;
         return s + (e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
       }, 0);
+
       const pctAderencia = esperadoTotal > 0 ? (movAtual/esperadoTotal)*100 : 0;
       const pctMeta      = metaTotal > 0 ? (metaApurada/metaTotal)*100 : 0;
 
@@ -141,16 +148,17 @@ export default function HomePage() {
         .sort((a,b) => b.metaApurada - a.metaApurada)
         .slice(0,3);
 
-      // Empresas sem movimentação > 2 meses (sem mov no mês atual e anterior)
+      // ✅ CORREÇÃO: "sem movimentação há 2+ meses" verifica nos 2 últimos meses COM DADOS
+      // (não no mês atual do calendário que pode não ter dados ainda)
       const semMovCritico = (empresas||[]).filter(e => {
-        const va = libMap[`${e.produto_id}__${mesAtual}`]||0;
-        const vb = libMap[`${e.produto_id}__${mesAnterior}`]||0;
+        const va = libMap[`${e.produto_id}__${ultimoMes}`]    || 0;
+        const vb = libMap[`${e.produto_id}__${penultimoMes}`] || 0;
         return va === 0 && vb === 0;
       }).length;
 
-      // Novas empresas este mês
+      // Novas empresas no último mês com dados
       const novasEsteMes = (empresas||[]).filter(e =>
-        e.data_cadastro?.substring(0,7) === mesAtual
+        e.data_cadastro?.substring(0,7) === ultimoMes
       ).length;
 
       // Meta por mês (últimos meses com meta apurada)
@@ -169,7 +177,10 @@ export default function HomePage() {
         metaTotal, metaApurada, esperadoTotal,
         pctAderencia, pctMeta, perf, perfMsg,
         top3, semMovCritico, novasEsteMes,
-        mesesComMeta, mesAtual, mesAnterior,
+        mesesComMeta,
+        // ✅ mesAtual agora é o último mês com dados, não new Date()
+        mesAtual: ultimoMes,
+        mesAnterior: penultimoMes,
       });
     } catch(err) {
       console.error(err);
@@ -215,7 +226,7 @@ export default function HomePage() {
           Olá, {dados.prof?.nome?.split(' ')[0]} 👋
         </h1>
         <p style={{color:'#8b92b0',fontSize:'0.9rem',margin:0}}>
-          Aqui está o resumo da sua equipe — {fmtMes(mesAtual+'-01')}
+          Aqui está o resumo da sua equipe — {fmtMes(mesAtual ? mesAtual+'-01' : null)}
         </p>
       </div>
 
@@ -236,11 +247,11 @@ export default function HomePage() {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
         {[
           { label:'Empresas Ativas', val: empresas.length, sub: `${comMovAtual} movimentando`, subCor:'#16a34a' },
-          { label:'Mov. Mês Atual', val: fmt(movAtual), sub: movAnterior>0?`${variacao>=0?'▲':'▼'} ${fmtPct(Math.abs(variacao))} vs mês ant.`:'—', subCor: variacao>=0?'#16a34a':'#dc2626' },
+          { label:`Mov. ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`, val: fmt(movAtual), sub: movAnterior>0?`${variacao>=0?'▲':'▼'} ${fmtPct(Math.abs(variacao))} vs ${fmtMes(mesAnterior ? mesAnterior+'-01' : null)}`:'—', subCor: variacao>=0?'#16a34a':'#dc2626' },
           { label:'Esperado/mês', val: fmt(esperadoTotal), sub: `${fmtPct(pctAderencia)} realizado`, subCor: corPct(pctAderencia) },
           { label:'Meta Apurada', val: fmt(metaApurada), sub: `meta: ${fmt(metaTotal)}/mês`, subCor:'#8b92b0' },
           { label:'Sem Movimentação', val: semMovAtual, sub: `${semMovCritico} há 2+ meses`, subCor: semMovCritico>0?'#dc2626':'#8b92b0' },
-          { label:'Novos Contratos', val: novasEsteMes, sub: `em ${fmtMes(mesAtual+'-01')}`, subCor:'#60a5fa' },
+          { label:'Novos Contratos', val: novasEsteMes, sub: `em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`, subCor:'#60a5fa' },
         ].map((k,i)=>(
           <div key={i} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'18px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',animation:`fadeIn 0.4s ease ${i*0.05}s both`}}>
             <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{k.label}</div>
@@ -291,7 +302,7 @@ export default function HomePage() {
                 return (
                   <div key={mes}>
                     <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                      <span style={{fontSize:'0.78rem',fontWeight:isCurrent?700:400,color:isCurrent?'#b45309':'#4a5068'}}>{fmtMes(mes+'-01')}{isCurrent?' ← atual':''}</span>
+                      <span style={{fontSize:'0.78rem',fontWeight:isCurrent?700:400,color:isCurrent?'#b45309':'#4a5068'}}>{fmtMes(mes+'-01')}{isCurrent?' ← último mês':''}</span>
                       <span style={{fontSize:'0.78rem',fontWeight:700,color:isCurrent?'#b45309':'#16a34a'}}>{fmt(val)}</span>
                     </div>
                     <div style={{background:'#f0f2f8',borderRadius:4,height:8,overflow:'hidden'}}>
@@ -378,4 +389,3 @@ export default function HomePage() {
     </div>
   );
 }
-
