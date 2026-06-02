@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth, PERFIS } from './context/AuthContext';
 
 const nav = [
-  { href: '/',                  icon: '◈',  label: 'Início',        pagina: 'inicio'            },
+  { href: '/inicio',            icon: '◈',  label: 'Início',        pagina: 'inicio'            },
   { href: '/vendedor',          icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
   { href: '/movimentacoes',     icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
   { href: '/importar-base',     icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
