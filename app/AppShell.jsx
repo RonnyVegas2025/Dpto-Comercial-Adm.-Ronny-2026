@@ -12,22 +12,25 @@ export default function AppShell({ children }) {
 
   const isLoginPage = pathname === '/login';
 
- useEffect(() => {
-  if (loading) return;
-  if (!user && !isLoginPage) {
-    router.replace('/login');
-    return;
-  }
-  if (user && isLoginPage) {
-    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-    if (profile && perfisRestritos.includes(profile.perfil)) {
-      router.replace('/inicio');
-    } else {
-      router.replace('/');
+  useEffect(() => {
+    if (loading) return;
+    if (!user && !isLoginPage) {
+      router.replace('/login');
+      return;
     }
-    return;
-  }
-}, [user, loading, isLoginPage, router]);
+    if (user && isLoginPage) {
+      const perfil = profile?.perfil;
+      // Gestores comerciais, supervisores e vendedores → dashboard da equipe
+      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor'];
+      if (perfil && perfisRestritos.includes(perfil)) {
+        router.replace('/inicio');
+      } else {
+        // Diretoria e gestor_master → painel de controle admin
+        router.replace('/painel');
+      }
+      return;
+    }
+  }, [user, loading, isLoginPage, router]);
 
   // Verifica permissão para a rota atual
   useEffect(() => {
@@ -63,4 +66,3 @@ export default function AppShell({ children }) {
     </div>
   );
 }
-
