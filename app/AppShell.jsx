@@ -18,9 +18,15 @@ export default function AppShell({ children }) {
       router.replace('/login');
       return;
     }
-    if (user && isLoginPage) {
-      router.replace('/');
-      return;
+   if (user && isLoginPage) {
+  const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+  if (profile && perfisRestritos.includes(profile.perfil)) {
+    router.replace('/inicio');
+  } else {
+    router.replace('/');
+  }
+  return;
+}
     }
   }, [user, loading, isLoginPage, router]);
 
