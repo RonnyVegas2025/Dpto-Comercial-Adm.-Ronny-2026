@@ -116,26 +116,24 @@ export default function DashboardVendedor() {
 
   async function carregarBase() {
     let consultorIdsPermitidos = null;
-let prof = null;
-try {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const [{ data: profData }, { data: vis }] = await Promise.all([
-      supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
-      supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
-    ]);
-    prof = profData;
-    setPerfilUsuario(profData);
-    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-    if (prof && perfisRestritos.includes(prof.perfil)) {
-      if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
-        consultorIdsPermitidos = vis.consultor_ids;
-      } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-        consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const [{ data: prof }, { data: vis }] = await Promise.all([
+          supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
+          supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
+        ]);
+        setPerfilUsuario(prof);
+        const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+        if (prof && perfisRestritos.includes(prof.perfil)) {
+          if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
+            consultorIdsPermitidos = vis.consultor_ids;
+          } else if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
+            consultorIdsPermitidos = 'por_equipe:' + vis.equipes.join(',');
+          }
+        }
       }
-    }
-  }
-} catch(_) {}
+    } catch(_) {}
 
     const [{ data: cons }, { data: libs }] = await Promise.all([
       supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio').eq('ativo',true).order('nome'),
@@ -153,21 +151,14 @@ try {
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
       const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
-      console.log('equipes permitidas:', equipes);
-      console.log('prof.nome:', prof?.nome);
-      console.log('consultores antes filtro:', consComValidade.map(c=>({nome:c.nome,equipe:c.equipe,gestor:c.gestor})));
-      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
-      console.log('consultores após filtro:', consComValidade.map(c=>c.nome));
+      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) || equipes.includes(c.gestor));
     }
 
     setConsultores(consComValidade);
-    const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
-const gs = (prof && perfisRestritos.includes(prof.perfil))
-  ? ['Geral']
-  : ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
-setGestores(gs);
-    const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort().slice(-6);
-setMeses(ms);
+    const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
+    setGestores(gs);
+    const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
+    setMeses(ms);
   }
 
   async function carregarDados() {
@@ -343,13 +334,9 @@ setMeses(ms);
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      const totalValorMeta = listaProcessada.reduce((s,e) => {
-        if (mesSelecionado) {
-          const metaMes = e.metaComp?.substring(0,7);
-          if (metaMes !== mesSelecionado) return s;
-        }
-        return s + (e.valorMeta || 0);
-      }, 0);
+      const totalValorMeta = mesSelecionado
+        ? (vmetasRows||[]).filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado && empIds.includes(v.empresa_id)).reduce((s,v) => s + (v.valor_meta||0), 0)
+        : listaProcessada.reduce((s,e) => s + (e.valorMeta||0), 0);
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -473,7 +460,7 @@ setMeses(ms);
             {gestores.map(g => (
               <button key={g} style={{...s.gestorBtn,...(gestorFiltro===g?s.gestorBtnAtivo:{})}}
                 onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
-                {g==='Geral' ? '🌐 Geral' : `👔 ${g}`}
+                {g==='Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
               </button>
             ))}
           </div>
@@ -509,9 +496,9 @@ setMeses(ms);
         const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
-        const corPct = (p) => p >= 100 ? '#34d399' : p >= 50 ? '#f0b429' : '#f87171';
+        const corPct = (p) => p >= 80 ? '#34d399' : p >= 60 ? '#f0b429' : '#f87171';
         const corApurado = corPct(pctApurado);
-        const badgeApurado = pctApurado >= 100 ? '✅ Meta atingida' : pctApurado >= 50 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
+        const badgeApurado = pctApurado >= 80 ? '✅ Meta atingida' : pctApurado >= 60 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
 
         return (
           <>
@@ -864,7 +851,7 @@ setMeses(ms);
                       <div style={{fontWeight:700,fontSize:'0.9rem',color:'#4a5068',marginBottom:14}}>📋 Detalhamento por Categoria</div>
                       <div style={{overflowX:'auto'}}>
                         <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
-                          <thead><tr style={{borderBottom:'2px solid #e4e7ef'}}>{['Categoria','Empresas','Sem Mov.','Movimentação Total','Média/mês','Esperado/mês','% Realizado'].map(h=>(<th key={h} style={{padding:'8px 12px',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>))}</tr></thead>
+                          <thead><tr style={{borderBottom:'2px solid #e4e7ef'}}>{['Categoria','Empresas','Sem Mov.','Movimentação Total Anual','Média/mês','Esperado/mês','% Realizado'].map(h=>(<th key={h} style={{padding:'8px 12px',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>))}</tr></thead>
                           <tbody>
                             {cats.map((cat,i)=>{
                               const pctReal=cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;const cor=corPct(pctReal);
@@ -879,6 +866,19 @@ setMeses(ms);
                               </tr>);
                             })}
                           </tbody>
+                          <tfoot>
+                            <tr style={{borderTop:'2px solid #e4e7ef',background:'#f0f2f8'}}>
+                              <td style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.78rem'}}>TOTAL</td>
+                              <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#4a5068'}}>{cats.reduce((s,c)=>s+c.empresas,0)}</td>
+                              <td style={{padding:'10px 12px',textAlign:'center',fontWeight:700,color:'#f87171'}}>{cats.reduce((s,c)=>s+c.semMov,0)}</td>
+                              <td style={{padding:'10px 12px',fontWeight:800,color:'#f0b429'}}>{fmt(cats.reduce((s,c)=>s+c.movTotal,0))}</td>
+                              <td style={{padding:'10px 12px',fontWeight:700,color:'#60a5fa'}}>{fmt(Math.round(cats.reduce((s,c)=>s+c.movTotal,0)/qtdMeses2026))}</td>
+                              <td style={{padding:'10px 12px',fontWeight:700,color:'#a78bfa'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</td>
+                              <td style={{padding:'10px 12px'}}>
+                                {(()=>{const totMov=cats.reduce((s,c)=>s+c.movTotal,0);const totEsp=cats.reduce((s,c)=>s+c.esperadoAcum,0);const pctT=totEsp>0?(totMov/totEsp)*100:0;const corT=corPct(pctT);return <span style={{color:corT,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctT)}</span>;})()}
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
