@@ -114,16 +114,18 @@ export default function DashboardVendedor() {
   useEffect(() => { carregarBase(); }, []);
   useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
 
-  async function carregarBase() {
+ async function carregarBase() {
     let consultorIdsPermitidos = null;
+    let prof = null;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const [{ data: prof }, { data: vis }] = await Promise.all([
+        const [{ data: profData }, { data: vis }] = await Promise.all([
           supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
           supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
         ]);
-        setPerfilUsuario(prof);
+        prof = profData;
+        setPerfilUsuario(profData);
         const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
         if (prof && perfisRestritos.includes(prof.perfil)) {
           if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
