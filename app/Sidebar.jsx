@@ -4,27 +4,44 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, PERFIS } from './context/AuthContext';
 
+// Itens base do menu — o href do Início é resolvido dinamicamente abaixo
 const nav = [
-  { href: '/inicio',            icon: '◈',  label: 'Início',        pagina: 'inicio'            },
-  { href: '/vendedor',          icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
-  { href: '/movimentacoes',     icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
-  { href: '/importar-base',     icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
-  { href: '/gestao',            icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
-  { href: '/relatorios',        icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
-  { href: '/relatorio-empresas',icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio-empresas' },
-  { href: '/agregados',         icon: '📦', label: 'Agregados',     pagina: 'agregados'          },
-  { href: '/adm-comercial',     icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
+  { href: '/inicio',             icon: '◈',  label: 'Início',        pagina: 'inicio'             },
+  { href: '/painel',             icon: '🎛️', label: 'Painel',        pagina: 'painel'             },
+  { href: '/vendedor',           icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
+  { href: '/movimentacoes',      icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
+  { href: '/importar-base',      icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
+  { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
+  { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
+  { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio-empresas' },
+  { href: '/agregados',          icon: '📦', label: 'Agregados',     pagina: 'agregados'          },
+  { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile, podeVer, logout } = useAuth();
-  const navFiltrado = nav.filter(item => podeVer(item.pagina));
+
+  const perfisAdmin = ['diretoria', 'gestor_master'];
+  const isAdmin = perfisAdmin.includes(profile?.perfil);
+
+  // Filtra o menu por permissão e por perfil:
+  // - Admin (diretoria/gestor_master): vê /painel mas NÃO vê /inicio
+  // - Demais: vêm /inicio mas NÃO vêm /painel
+  const navFiltrado = nav.filter(item => {
+    if (item.href === '/inicio' && isAdmin)  return false; // admin não precisa do dashboard gestor
+    if (item.href === '/painel' && !isAdmin) return false; // gestor_comercial não vê o painel admin
+    return podeVer(item.pagina);
+  });
 
   const corPerfil = {
-    gestor_master: '#f0b429', diretoria: '#2563eb', gestor_comercial: '#16a34a',
-    supervisor_comercial: '#7c3aed', supervisor_adm: '#ea580c',
-    administrativo: '#0891b2', vendedor: '#6b7280',
+    gestor_master:        '#f0b429',
+    diretoria:            '#2563eb',
+    gestor_comercial:     '#16a34a',
+    supervisor_comercial: '#7c3aed',
+    supervisor_adm:       '#ea580c',
+    administrativo:       '#0891b2',
+    vendedor:             '#6b7280',
   };
   const cor = corPerfil[profile?.perfil] || '#6b7280';
 
