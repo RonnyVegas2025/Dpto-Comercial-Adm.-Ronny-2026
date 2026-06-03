@@ -200,9 +200,10 @@ export default function DashboardVendedor() {
       const empIds   = empresas.map(e => e.id);
 
       // Suporte a múltiplos meses selecionados
-      const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados] : (mesSelecionado ? [mesSelecionado] : []);
-      const mesInicio = mesesAtivos.length > 0 ? Math.min(...mesesAtivos.map(m=>m+'-01')).toString() : '2000-01-01';
-      const mesFim    = mesesAtivos.length > 0 ? Math.max(...mesesAtivos.map(m=>m+'-28')).toString() : '2099-12-31';
+      const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados].sort() : (mesSelecionado ? [mesSelecionado] : []);
+      // mesInicio e mesFim: pega menor e maior mês da seleção (ordenação lexicográfica funciona para YYYY-MM)
+      const mesInicio = mesesAtivos.length > 0 ? mesesAtivos[0] + '-01' : '2000-01-01';
+      const mesFim    = mesesAtivos.length > 0 ? mesesAtivos[mesesAtivos.length-1] + '-28' : '2099-12-31';
       // Para filtro de equipe no topo
       const equipeTopoFiltro = filtroEquipeTopo;
 
