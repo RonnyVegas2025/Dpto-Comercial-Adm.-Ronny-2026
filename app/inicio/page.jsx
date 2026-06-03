@@ -403,8 +403,8 @@ export default function HomePage() {
             subCor:'#8b92b0',
           },
           {
-            label: 'Meta Total/mês',
-            val:   fmt(metaTotal / (mesesDisp.length || 1)),
+            label: 'Meta Mensal',
+            val:   fmt(consultores.reduce((s,c) => s+(c.meta_mensal||0), 0)),
             sub:   `acumulado: ${fmt(metaTotal)}`,
             subCor: '#8b92b0',
           },
@@ -520,75 +520,100 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Card de Atenção — equipes/vendedores abaixo da meta */}
+      {/* Card de Atenção — vendedores abaixo da meta */}
       {(() => {
-        const alertas = [];
-        // Agrupa meta por consultor para detectar quem está abaixo
-        // Usa metaPorConsultor (todos os consultores, não só o top3)
-        const consultoresAbaixo = consultores
+        if (!metaPorConsultor) return null;
+        const todos = consultores
           .map(c => {
-            const metaApur = (metaPorConsultor && metaPorConsultor[c.id]) || 0;
-            const metaMens = c.meta_mensal || 0;
-            const pct = metaMens > 0 ? (metaApur / metaMens) * 100 : null;
-            return { ...c, metaApurada: metaApur, pctMeta: pct };
+            const apurado = metaPorConsultor[c.id] || 0;
+            const meta    = c.meta_mensal || 0;
+            const pct     = meta > 0 ? (apurado / meta) * 100 : null;
+            return { ...c, apurado, pct };
           })
-          .filter(c => c.pctMeta !== null && c.pctMeta < 80 && c.meta_mensal > 0)
-          .sort((a,b) => a.pctMeta - b.pctMeta);
+          .filter(c => c.pct !== null);
 
-        // Agrupa por equipe
-        const equipeMap = {};
-        consultoresAbaixo.forEach(c => {
-          const eq = c.equipe || '—';
-          if (!equipeMap[eq]) equipeMap[eq] = [];
-          equipeMap[eq].push(c);
+        const abaixo   = todos.filter(c => c.pct < 80).sort((a,b) => a.pct - b.pct);
+        const ok       = todos.filter(c => c.pct >= 80).length;
+        const criticos = abaixo.filter(c => c.pct < 50).length;
+
+        if (abaixo.length === 0) return null;
+
+        // Agrupa por equipe para dar visão rápida
+        const porEquipe = {};
+        abaixo.forEach(c => {
+          const eq = c.equipe || 'Sem equipe';
+          if (!porEquipe[eq]) porEquipe[eq] = { count:0, piorPct:100 };
+          porEquipe[eq].count++;
+          if (c.pct < porEquipe[eq].piorPct) porEquipe[eq].piorPct = c.pct;
         });
 
-        if (consultoresAbaixo.length === 0) return null;
-
         return (
-          <div style={{background:'rgba(251,191,36,0.04)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:12,padding:'20px 24px',marginBottom:16}}>
-            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-              <span style={{fontSize:'1.5rem'}}>⚠️</span>
-              <div>
-                <div style={{fontWeight:700,color:'#d97706',fontSize:'0.95rem'}}>
-                  Atenção — {consultoresAbaixo.length} vendedor{consultoresAbaixo.length>1?'es':''} abaixo da meta
-                </div>
-                <div style={{color:'#6b7280',fontSize:'0.78rem',marginTop:2}}>
-                  Mesmo com a meta geral em {fmtPct(pctMeta)}, alguns vendedores precisam de atenção
+          <div style={{background:'#ffffff',border:'1px solid rgba(220,38,38,0.2)',borderRadius:12,marginBottom:16,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+            {/* Header do card */}
+            <div style={{background:'rgba(220,38,38,0.04)',borderBottom:'1px solid rgba(220,38,38,0.12)',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontSize:'1.3rem'}}>🔍</span>
+                <div>
+                  <div style={{fontWeight:700,color:'#dc2626',fontSize:'0.9rem'}}>
+                    Atenção — {abaixo.length} vendedor{abaixo.length>1?'es':''} abaixo de 80% da meta
+                  </div>
+                  <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:1}}>
+                    {criticos > 0 && <span style={{color:'#dc2626',fontWeight:600}}>{criticos} crítico{criticos>1?'s':''} abaixo de 50%</span>}
+                    {criticos > 0 && ' · '}
+                    {ok} vendedor{ok>1?'es':''} no verde · Meta geral: {fmtPct(pctMeta)}
+                  </div>
                 </div>
               </div>
+              <Link href="/vendedor" style={{color:'#dc2626',fontSize:'0.75rem',fontWeight:600,textDecoration:'none',background:'rgba(220,38,38,0.08)',padding:'5px 12px',borderRadius:6,border:'1px solid rgba(220,38,38,0.2)'}}>
+                Ver detalhes →
+              </Link>
             </div>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {consultoresAbaixo.slice(0,5).map((c,i) => {
-                const cor = c.pctMeta >= 60 ? '#d97706' : '#dc2626';
-                const bg  = c.pctMeta >= 60 ? 'rgba(217,119,6,0.06)' : 'rgba(220,38,38,0.06)';
+            {/* Lista de vendedores */}
+            <div style={{padding:'12px 20px',display:'flex',flexDirection:'column',gap:6}}>
+              {abaixo.slice(0,6).map((c,i) => {
+                const cor = c.pct < 50 ? '#dc2626' : c.pct < 65 ? '#ea580c' : '#d97706';
+                const bgBar = c.pct < 50 ? 'rgba(220,38,38,0.08)' : c.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
                 return (
-                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:bg,borderRadius:8,border:`1px solid ${cor}22`}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:600,fontSize:'0.85rem',color:'#1a1d2e'}}>{c.nome}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.7rem'}}>{c.equipe||'—'}</div>
+                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:bgBar,borderRadius:8}}>
+                    <div style={{width:28,height:28,borderRadius:'50%',background:cor+'20',border:`1.5px solid ${cor}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.7rem',fontWeight:800,color:cor,flexShrink:0}}>
+                      {i+1}
                     </div>
-                    <div style={{textAlign:'right',minWidth:80}}>
-                      <div style={{fontWeight:700,color:cor,fontSize:'0.85rem'}}>{fmtPct(c.pctMeta)}</div>
-                      <div style={{color:'#9ca3af',fontSize:'0.65rem'}}>da meta</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:600,fontSize:'0.82rem',color:'#1a1d2e',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.nome}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{c.equipe||'—'}</div>
                     </div>
-                    <div style={{width:70}}>
-                      <div style={{background:'#f0f2f8',borderRadius:4,height:6,overflow:'hidden'}}>
-                        <div style={{height:'100%',width:`${Math.min(c.pctMeta,100)}%`,background:cor,borderRadius:4}}></div>
+                    <div style={{minWidth:120}}>
+                      <div style={{background:'#f0f2f8',borderRadius:3,height:5,overflow:'hidden',marginBottom:2}}>
+                        <div style={{height:'100%',width:`${Math.min(c.pct,100)}%`,background:cor,borderRadius:3}}></div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.65rem'}}>
+                        <span style={{color:cor,fontWeight:700}}>{fmtPct(c.pct)}</span>
+                        <span style={{color:'#9ca3af'}}>{fmt(c.apurado)}</span>
                       </div>
                     </div>
                   </div>
                 );
               })}
-              {consultoresAbaixo.length > 5 && (
-                <div style={{textAlign:'center',color:'#9ca3af',fontSize:'0.75rem',paddingTop:4}}>
-                  + {consultoresAbaixo.length - 5} outros vendedores abaixo da meta
+              {abaixo.length > 6 && (
+                <div style={{textAlign:'center',padding:'6px 0',color:'#9ca3af',fontSize:'0.73rem',borderTop:'1px solid #f0f2f8',marginTop:2}}>
+                  + {abaixo.length - 6} outros vendedores abaixo da meta
                 </div>
               )}
             </div>
-            <Link href="/vendedor" style={{display:'inline-block',marginTop:14,color:'#d97706',fontSize:'0.78rem',fontWeight:600,textDecoration:'none'}}>
-              Ver ranking completo →
-            </Link>
+            {/* Rodapé com resumo por equipe */}
+            {Object.keys(porEquipe).length > 0 && (
+              <div style={{borderTop:'1px solid #f0f2f8',padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap',background:'#fafafa'}}>
+                <span style={{color:'#9ca3af',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,alignSelf:'center'}}>Por equipe:</span>
+                {Object.entries(porEquipe).map(([eq, data]) => {
+                  const cor = data.piorPct < 50 ? '#dc2626' : data.piorPct < 65 ? '#ea580c' : '#d97706';
+                  return (
+                    <span key={eq} style={{background:cor+'12',border:`1px solid ${cor}25`,borderRadius:5,padding:'2px 8px',fontSize:'0.7rem',color:cor,fontWeight:600}}>
+                      {eq}: {data.count} vendedor{data.count>1?'es':''}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })()}
