@@ -508,9 +508,9 @@ export default function HomePage() {
                   </div>
                   <div style={{textAlign:'right',minWidth:100}}>
                     <div style={{fontWeight:700,color:'#34d399',fontSize:'0.9rem'}}>{fmt(c.metaApurada)}</div>
-                    {metaMens > 0 && <div style={{fontSize:'0.68rem',color:cor,fontWeight:600}}>{fmtPct(pct)} da meta</div>}
+                    {metaAcum > 0 && <div style={{fontSize:'0.68rem',color:cor,fontWeight:600}}>{fmtPct(pct)} da meta</div>}
                   </div>
-                  {metaMens > 0 && (
+                  {metaAcum > 0 && (
                     <div style={{width:60}}>
                       <div style={{background:'#f0f2f8',borderRadius:4,height:6,overflow:'hidden'}}>
                         <div style={{height:'100%',width:`${Math.min(pct,100)}%`,background:cor,borderRadius:4}}></div>
