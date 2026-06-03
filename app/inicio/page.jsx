@@ -403,9 +403,9 @@ export default function HomePage() {
             subCor:'#8b92b0',
           },
           {
-            label: 'Meta Mensal',
-            val:   fmt(consultores.reduce((s,c) => s+(c.meta_mensal||0), 0)),
-            sub:   `acumulado: ${fmt(metaTotal)}`,
+            label: 'Meta Acumulada',
+            val:   fmt(metaTotal),
+            sub:   `${fmt(consultores.reduce((s,c) => s+(c.meta_mensal||0), 0))}/mês`,
             subCor: '#8b92b0',
           },
           {
