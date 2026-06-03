@@ -57,94 +57,103 @@ export default function HomePage() {
       const consIds = consultores.map(c => c.id);
       if (!consIds.length) { setDados({ vazio: true }); setLoading(false); return; }
 
-      // ── 3. Empresas — mesma query da página Evolução ─────────────────────
-      // Filtra só as categorias que entram na meta (igual ao vendedor/evolução)
-      const { data: empresas } = await supabase
-        .from('empresas')
-        .select(`id, produto_id, nome, categoria, produto_contratado,
-          potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
-          consultor_principal_id`)
-        .eq('ativo', true)
-        .in('consultor_principal_id', consIds)
-        .not('produto_contratado','ilike','%desconto condicional%')
-        .not('categoria','eq','Taxa Negativa')
-        .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
+      // ── 3. DUAS queries de empresas ──────────────────────────────────────
+      //
+      // A) empresasMeta: TODAS as empresas (sem filtro de categoria)
+      //    → meta apurada, total ativo, novos contratos
+      //    → igual ao Vendedor que mostra R$ 993k
+      //
+      // B) empresasMov: só categorias com liberações (Benefícios, Convênio, Mobilidade)
+      //    → movimentação real e esperado
 
-      const empIds  = (empresas||[]).map(e => e.id);
-      const prodIds = (empresas||[]).map(e => e.produto_id);
-
-      if (!prodIds.length) { setDados({ vazio: true }); setLoading(false); return; }
-
-      // ── 4. Liberações TODAS — igual à página Evolução ────────────────────
-      // SEM filtro de data — busca tudo e descobre o mês mais recente com dados
-      const [{ data: todasLibs }, { data: vmetas }] = await Promise.all([
+      const [{ data: empMetaRaw }, { data: empMovRaw }] = await Promise.all([
         supabase
-          .from('liberacoes')
-          .select('produto_id, competencia, total_liberado')
-          .in('produto_id', prodIds)
-          .order('competencia', { ascending: false }),
+          .from('empresas')
+          .select(`id, produto_id, nome, categoria, produto_contratado,
+            potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
+            consultor_principal_id`)
+          .eq('ativo', true)
+          .in('consultor_principal_id', consIds),
+
+        supabase
+          .from('empresas')
+          .select(`id, produto_id, nome, categoria, produto_contratado,
+            potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
+            consultor_principal_id`)
+          .eq('ativo', true)
+          .in('consultor_principal_id', consIds)
+          .not('produto_contratado','ilike','%desconto condicional%')
+          .not('categoria','eq','Taxa Negativa')
+          .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']),
+      ]);
+
+      const empresasMeta = empMetaRaw || [];
+      const empresasMov  = empMovRaw  || [];
+
+      const empIdsParaMeta = empresasMeta.map(e => e.id);
+      const prodIdsParaMov = empresasMov.map(e => e.produto_id);
+
+      if (!empIdsParaMeta.length) { setDados({ vazio: true }); setLoading(false); return; }
+
+      // ── 4. Liberações + Metas em paralelo ───────────────────────────────
+      const [{ data: todasLibs }, { data: vmetas }] = await Promise.all([
+        prodIdsParaMov.length
+          ? supabase
+              .from('liberacoes')
+              .select('produto_id, competencia, total_liberado')
+              .in('produto_id', prodIdsParaMov)
+              .order('competencia', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        // Meta busca de TODAS as empresas — sem filtro de categoria
         supabase
           .from('valor_meta_empresa')
           .select('empresa_id, competencia_meta, valor_meta, regra')
-          .in('empresa_id', empIds),
+          .in('empresa_id', empIdsParaMeta),
       ]);
 
-      // ── 5. libMap — mesma lógica da Evolução ─────────────────────────────
-      // chave: produto_id__YYYY-MM-DD (competencia completa)
+      // ── 5. libMap ────────────────────────────────────────────────────────
       const libMap = {};
       for (const l of (todasLibs||[])) {
         const k = `${l.produto_id}__${l.competencia}`;
         libMap[k] = (libMap[k]||0) + (l.total_liberado||0);
       }
 
-      // ── 6. Meses disponíveis — igual à Evolução ──────────────────────────
-      const meses = [...new Set((todasLibs||[]).map(l => l.competencia))].sort();
-      // Último e penúltimo mês COM DADOS no banco
-      const ultimoMes    = meses[meses.length - 1] || null;  // ex: "2026-03-01" ou "2026-03"
+      // ── 6. Meses com dados ───────────────────────────────────────────────
+      const meses        = [...new Set((todasLibs||[]).map(l => l.competencia))].sort();
+      const ultimoMes    = meses[meses.length - 1] || null;
       const penultimoMes = meses[meses.length - 2] || null;
-
-      // Normaliza para YYYY-MM (os primeiros 7 chars)
       const ultimoMesYM    = ultimoMes?.substring(0,7)    || null;
       const penultimoMesYM = penultimoMes?.substring(0,7) || null;
 
-      // ── 7. Movimentação por empresa — igual à Evolução ───────────────────
-      // A Evolução usa libMap[produto_id__competencia] onde competencia é o valor completo do banco
-      // Precisamos somar todos os meses para totalCreditado, e separar o último mês para o KPI
-      let movUltimoMes   = 0;
+      // ── 7. Movimentação — sobre empresasMov (categorias filtradas) ────────
+      let movUltimoMes    = 0;
       let movPenultimoMes = 0;
       let comMovUltimoMes = 0;
       let semMovUltimoMes = 0;
-
-      // Para semMovCritico: empresas sem mov nos 2 últimos meses com dados
       let semMovDoisMeses = 0;
 
-      for (const e of (empresas||[])) {
-        // Soma todos os meses que batem com ultimoMesYM
+      for (const e of empresasMov) {
         const vUlt = meses
           .filter(m => m.substring(0,7) === ultimoMesYM)
           .reduce((s, m) => s + (libMap[`${e.produto_id}__${m}`]||0), 0);
-
         const vPen = meses
           .filter(m => m.substring(0,7) === penultimoMesYM)
           .reduce((s, m) => s + (libMap[`${e.produto_id}__${m}`]||0), 0);
-
         movUltimoMes    += vUlt;
         movPenultimoMes += vPen;
-
         if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
         if (vUlt === 0 && vPen === 0) semMovDoisMeses++;
       }
 
-      // ── 8. Meta apurada — mesma lógica da Evolução ───────────────────────
+      // ── 8. Meta — sobre empresasMeta (TODAS, igual ao Vendedor R$ 993k) ──
       const metaTotal   = consultores.reduce((s,c) => s+(c.meta_mensal||0), 0);
       const metaApurada = (vmetas||[]).reduce((s,v) => s+(v.valor_meta||0), 0);
 
-      // Empresas na meta (com entrada gravada em valor_meta_empresa)
       const empIdsComMeta = new Set((vmetas||[]).map(v => v.empresa_id));
-      const naMeta = (empresas||[]).filter(e => empIdsComMeta.has(e.id)).length;
+      const naMeta = empresasMeta.filter(e => empIdsComMeta.has(e.id)).length;
 
-      // ── 9. Esperado/mês ──────────────────────────────────────────────────
-      const esperadoTotal = (empresas||[]).reduce((s,e) => {
+      // ── 9. Esperado/mês — sobre empresasMov ──────────────────────────────
+      const esperadoTotal = empresasMov.reduce((s,e) => {
         const fator = (e.pct_principal??100)/100;
         return s + (e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
       }, 0);
@@ -163,7 +172,7 @@ export default function HomePage() {
       // ── 11. Top 3 consultores por meta apurada ───────────────────────────
       const metaPorConsultor = {};
       for (const v of (vmetas||[])) {
-        const emp = (empresas||[]).find(e => e.id === v.empresa_id);
+        const emp = empresasMeta.find(e => e.id === v.empresa_id);
         if (!emp) continue;
         const cid = emp.consultor_principal_id;
         metaPorConsultor[cid] = (metaPorConsultor[cid]||0) + (v.valor_meta||0);
@@ -184,33 +193,28 @@ export default function HomePage() {
         .slice(-5);
 
       // ── 13. Novos contratos no último mês com dados ───────────────────────
-      const novasEsteMes = (empresas||[]).filter(e =>
+      const novasEsteMes = empresasMeta.filter(e =>
         e.data_cadastro?.substring(0,7) === ultimoMesYM
       ).length;
 
-      // ── 14. Variação vs mês anterior ─────────────────────────────────────
       const variacao = movPenultimoMes > 0
         ? ((movUltimoMes - movPenultimoMes) / movPenultimoMes) * 100
         : 0;
 
       setDados({
-        prof:            profData,
+        prof:          profData,
         consultores,
-        empresas:        empresas||[],
-        // Movimentação — baseada no último mês COM DADOS (igual à Evolução)
-        movAtual:        movUltimoMes,
-        movAnterior:     movPenultimoMes,
-        comMovAtual:     comMovUltimoMes,
-        semMovAtual:     semMovUltimoMes,
-        semMovCritico:   semMovDoisMeses,
+        totalEmpresas: empresasMeta.length,   // ← todas as empresas (igual ao Vendedor: 212)
+        movAtual:      movUltimoMes,
+        movAnterior:   movPenultimoMes,
+        comMovAtual:   comMovUltimoMes,
+        semMovAtual:   semMovUltimoMes,
+        semMovCritico: semMovDoisMeses,
         variacao,
-        // Meta
         metaTotal, metaApurada, naMeta,
         esperadoTotal, pctAderencia, pctMeta,
         perf, perfMsg, top3,
-        // Aux
         mesesComMeta, novasEsteMes,
-        // Mês de referência = último mês com dados no banco (não new Date())
         mesAtual:    ultimoMesYM,
         mesAnterior: penultimoMesYM,
       });
@@ -241,7 +245,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, empresas, mesAtual, mesAnterior,
+    consultores, totalEmpresas, mesAtual, mesAnterior,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -285,7 +289,7 @@ export default function HomePage() {
         {[
           {
             label: 'Empresas Ativas',
-            val:   empresas.length,
+            val:   totalEmpresas,
             sub:   `${comMovAtual} movimentando em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
             subCor:'#16a34a',
           },
