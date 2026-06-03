@@ -269,8 +269,23 @@ export default function HomePage() {
         ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMeta)} da meta — foco para fechar forte o mês.` }
         : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMeta)} da meta atingida — revise as prioridades.` };
 
+      // metaAcum por consultor = meta_mensal × qtd meses válidos (igual ao Vendedor)
+      const metaAcumPorConsultor = {};
+      consultores.forEach(cons => {
+        const metaMes   = cons.meta_mensal || 0;
+        if (!metaMes) return;
+        const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
+        const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
+        const qtd       = mesesDisp.filter(m => m >= valida).length || 1;
+        metaAcumPorConsultor[cons.id] = metaMes * qtd;
+      });
+
       const top3 = consultores
-        .map(c => ({ ...c, metaApurada: metaPorConsultor[c.id]||0 }))
+        .map(c => ({
+          ...c,
+          metaApurada: metaPorConsultor[c.id]||0,
+          metaAcum:    metaAcumPorConsultor[c.id]||0,
+        }))
         .sort((a,b) => b.metaApurada - a.metaApurada)
         .slice(0,3);
 
@@ -299,6 +314,7 @@ export default function HomePage() {
         metaTotal,
         metaApurada:   metaApuradaTotal,
         metaPorConsultor,
+        metaAcumPorConsultor,
         mesesDisp,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
@@ -334,7 +350,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp,
+    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, metaAcumPorConsultor, mesesDisp,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -492,8 +508,9 @@ export default function HomePage() {
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {top3.map((c,i) => {
               const medal    = i===0?'🥇':i===1?'🥈':'🥉';
-              const metaMens = c.meta_mensal || 0;
-              const pct      = metaMens > 0 ? (c.metaApurada/metaMens)*100 : 0;
+              // % correto: metaApurada vs meta ACUMULADA (meta_mensal × meses), igual ao Vendedor
+              const metaAcum = c.metaAcum || 0;
+              const pct      = metaAcum > 0 ? (c.metaApurada/metaAcum)*100 : 0;
               const cor      = corPct(pct);
               return (
                 <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:i===0?'rgba(240,180,41,0.05)':'#f9fafb',borderRadius:10,border:`1px solid ${i===0?'rgba(240,180,41,0.2)':'#f0f2f8'}`}}>
@@ -523,22 +540,30 @@ export default function HomePage() {
       {/* Card de Atenção — vendedores abaixo da meta */}
       {(() => {
         if (!metaPorConsultor) return null;
-        const todos = consultores
-          .map(c => {
-            const apurado = metaPorConsultor[c.id] || 0;
-            const meta    = c.meta_mensal || 0;
-            const pct     = meta > 0 ? (apurado / meta) * 100 : null;
-            return { ...c, apurado, pct };
-          })
-          .filter(c => c.pct !== null);
+
+        // Só considera consultores COM meta_mensal cadastrada
+        const comMeta = consultores.filter(c => (c.meta_mensal||0) > 0);
+        if (!comMeta.length) return null;
+
+        const todos = comMeta.map(c => {
+          const apurado  = metaPorConsultor[c.id] || 0;
+          // % correto: vs meta ACUMULADA (meta_mensal × meses), não só 1 mês
+          const metaAcum = (metaAcumPorConsultor && metaAcumPorConsultor[c.id]) || (c.meta_mensal * (mesesDisp.length||1));
+          const pct      = metaAcum > 0 ? (apurado / metaAcum) * 100 : 0;
+          return { ...c, apurado, metaAcum, pct };
+        });
 
         const abaixo   = todos.filter(c => c.pct < 80).sort((a,b) => a.pct - b.pct);
         const ok       = todos.filter(c => c.pct >= 80).length;
         const criticos = abaixo.filter(c => c.pct < 50).length;
 
-        if (abaixo.length === 0) return null;
+        // Vendedores SEM meta mas que existem na equipe (para informar ao gestor)
+        const semMeta  = consultores.filter(c => !(c.meta_mensal > 0));
 
-        // Agrupa por equipe para dar visão rápida
+        // Só mostra o card se tiver alguém abaixo OU sem meta
+        if (abaixo.length === 0 && semMeta.length === 0) return null;
+
+        // Agrupa por equipe apenas quem está abaixo
         const porEquipe = {};
         abaixo.forEach(c => {
           const eq = c.equipe || 'Sem equipe';
@@ -554,13 +579,13 @@ export default function HomePage() {
               <div style={{display:'flex',alignItems:'center',gap:10}}>
                 <span style={{fontSize:'1.3rem'}}>🔍</span>
                 <div>
-                  <div style={{fontWeight:700,color:'#dc2626',fontSize:'0.9rem'}}>
-                    Atenção — {abaixo.length} vendedor{abaixo.length>1?'es':''} abaixo de 80% da meta
+                  <div style={{fontWeight:700,color:'#d97706',fontSize:'0.9rem'}}>
+                    🔍 Análise da Equipe — Vendedores com Meta
                   </div>
-                  <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:1}}>
-                    {criticos > 0 && <span style={{color:'#dc2626',fontWeight:600}}>{criticos} crítico{criticos>1?'s':''} abaixo de 50%</span>}
-                    {criticos > 0 && ' · '}
-                    {ok} vendedor{ok>1?'es':''} no verde · Meta geral: {fmtPct(pctMeta)}
+                  <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:1,display:'flex',gap:10,flexWrap:'wrap'}}>
+                    {ok > 0 && <span style={{color:'#16a34a',fontWeight:600}}>✅ {ok} no verde</span>}
+                    {abaixo.length > 0 && <span style={{color: criticos > 0 ? '#dc2626' : '#d97706',fontWeight:600}}>⚠️ {abaixo.length} abaixo de 80%{criticos > 0 ? ` (${criticos} crítico${criticos>1?'s':''})` : ''}</span>}
+                    {semMeta.length > 0 && <span style={{color:'#6b7280',fontWeight:500}}>— {semMeta.length} sem meta cadastrada</span>}
                   </div>
                 </div>
               </div>
@@ -570,6 +595,11 @@ export default function HomePage() {
             </div>
             {/* Lista de vendedores */}
             <div style={{padding:'12px 20px',display:'flex',flexDirection:'column',gap:6}}>
+              {abaixo.length === 0 && (
+                <div style={{textAlign:'center',padding:'16px 0',color:'#16a34a',fontWeight:600,fontSize:'0.85rem'}}>
+                  ✅ Todos os vendedores com meta estão acima de 80%
+                </div>
+              )}
               {abaixo.slice(0,6).map((c,i) => {
                 const cor = c.pct < 50 ? '#dc2626' : c.pct < 65 ? '#ea580c' : '#d97706';
                 const bgBar = c.pct < 50 ? 'rgba(220,38,38,0.08)' : c.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
@@ -600,6 +630,20 @@ export default function HomePage() {
                 </div>
               )}
             </div>
+            {/* Vendedores sem meta */}
+            {semMeta.length > 0 && (
+              <div style={{borderTop:'1px solid #f0f2f8',padding:'10px 20px',background:'#fafafa'}}>
+                <div style={{fontSize:'0.7rem',color:'#9ca3af',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}}>Sem meta cadastrada:</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {semMeta.map(c => (
+                    <span key={c.id} style={{background:'#f0f2f8',border:'1px solid #e4e7ef',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',color:'#6b7280'}}>
+                      {c.nome} <span style={{color:'#b0b7cc',fontSize:'0.65rem'}}>({c.equipe||'—'})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Rodapé com resumo por equipe */}
             {Object.keys(porEquipe).length > 0 && (
               <div style={{borderTop:'1px solid #f0f2f8',padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap',background:'#fafafa'}}>
