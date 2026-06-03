@@ -272,7 +272,7 @@ export default function HomePage() {
       // metaAcum por consultor = meta_mensal × qtd meses válidos (igual ao Vendedor)
       const metaAcumPorConsultor = {};
       consultores.forEach(cons => {
-        const metaMes   = cons.meta_mensal || 0;
+        const metaMes = cons.meta_mensal || 0;
         if (!metaMes) return;
         const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
         const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
@@ -542,34 +542,34 @@ export default function HomePage() {
         if (!metaPorConsultor) return null;
 
         // Só considera consultores COM meta_mensal cadastrada
-        const comMeta = consultores.filter(c => (c.meta_mensal||0) > 0);
+        const comMeta = consultores.filter(cons => (cons.meta_mensal||0) > 0);
         if (!comMeta.length) return null;
 
-        const todos = comMeta.map(c => {
-          const apurado  = metaPorConsultor[c.id] || 0;
+        const todos = comMeta.map(cons => {
+          const apurado  = metaPorConsultor[cons.id] || 0;
           // % correto: vs meta ACUMULADA (meta_mensal × meses), não só 1 mês
-          const metaAcum = (metaAcumPorConsultor && metaAcumPorConsultor[c.id]) || (c.meta_mensal * (mesesDisp.length||1));
-          const pct      = metaAcum > 0 ? (apurado / metaAcum) * 100 : 0;
-          return { ...c, apurado, metaAcum, pct };
+          const mAcum = (metaAcumPorConsultor && metaAcumPorConsultor[cons.id]) || (cons.meta_mensal * (mesesDisp.length||1));
+          const pct   = mAcum > 0 ? (apurado / mAcum) * 100 : 0;
+          return { ...cons, apurado, metaAcum: mAcum, pct };
         });
 
-        const abaixo   = todos.filter(c => c.pct < 80).sort((a,b) => a.pct - b.pct);
-        const ok       = todos.filter(c => c.pct >= 80).length;
-        const criticos = abaixo.filter(c => c.pct < 50).length;
+        const abaixo   = todos.filter(cons => cons.pct < 80).sort((a,b) => a.pct - b.pct);
+        const ok       = todos.filter(cons => cons.pct >= 80).length;
+        const criticos = abaixo.filter(cons => cons.pct < 50).length;
 
-        // Vendedores SEM meta mas que existem na equipe (para informar ao gestor)
-        const semMeta  = consultores.filter(c => !(c.meta_mensal > 0));
+        // Vendedores SEM meta mas que existem na equipe
+        const semMeta  = consultores.filter(cons => !(cons.meta_mensal > 0));
 
         // Só mostra o card se tiver alguém abaixo OU sem meta
         if (abaixo.length === 0 && semMeta.length === 0) return null;
 
         // Agrupa por equipe apenas quem está abaixo
         const porEquipe = {};
-        abaixo.forEach(c => {
-          const eq = c.equipe || 'Sem equipe';
+        abaixo.forEach(cons => {
+          const eq = cons.equipe || 'Sem equipe';
           if (!porEquipe[eq]) porEquipe[eq] = { count:0, piorPct:100 };
           porEquipe[eq].count++;
-          if (c.pct < porEquipe[eq].piorPct) porEquipe[eq].piorPct = c.pct;
+          if (cons.pct < porEquipe[eq].piorPct) porEquipe[eq].piorPct = cons.pct;
         });
 
         return (
@@ -600,17 +600,17 @@ export default function HomePage() {
                   ✅ Todos os vendedores com meta estão acima de 80%
                 </div>
               )}
-              {abaixo.slice(0,6).map((c,i) => {
-                const cor = c.pct < 50 ? '#dc2626' : c.pct < 65 ? '#ea580c' : '#d97706';
-                const bgBar = c.pct < 50 ? 'rgba(220,38,38,0.08)' : c.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
+              {abaixo.slice(0,6).map((cons,i) => {
+                const cor = cons.pct < 50 ? '#dc2626' : cons.pct < 65 ? '#ea580c' : '#d97706';
+                const bgBar = cons.pct < 50 ? 'rgba(220,38,38,0.08)' : cons.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
                 return (
-                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:bgBar,borderRadius:8}}>
+                  <div key={cons.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:bgBar,borderRadius:8}}>
                     <div style={{width:28,height:28,borderRadius:'50%',background:cor+'20',border:`1.5px solid ${cor}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.7rem',fontWeight:800,color:cor,flexShrink:0}}>
                       {i+1}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:600,fontSize:'0.82rem',color:'#1a1d2e',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.nome}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{c.equipe||'—'}</div>
+                      <div style={{fontWeight:600,fontSize:'0.82rem',color:'#1a1d2e',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cons.nome}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{cons.equipe||'—'}</div>
                     </div>
                     <div style={{minWidth:120}}>
                       <div style={{background:'#f0f2f8',borderRadius:3,height:5,overflow:'hidden',marginBottom:2}}>
@@ -635,9 +635,9 @@ export default function HomePage() {
               <div style={{borderTop:'1px solid #f0f2f8',padding:'10px 20px',background:'#fafafa'}}>
                 <div style={{fontSize:'0.7rem',color:'#9ca3af',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}}>Sem meta cadastrada:</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {semMeta.map(c => (
-                    <span key={c.id} style={{background:'#f0f2f8',border:'1px solid #e4e7ef',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',color:'#6b7280'}}>
-                      {c.nome} <span style={{color:'#b0b7cc',fontSize:'0.65rem'}}>({c.equipe||'—'})</span>
+                  {semMeta.map(cons => (
+                    <span key={cons.id} style={{background:'#f0f2f8',border:'1px solid #e4e7ef',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',color:'#6b7280'}}>
+                      {cons.nome} <span style={{color:'#b0b7cc',fontSize:'0.65rem'}}>({cons.equipe||'—'})</span>
                     </span>
                   ))}
                 </div>
