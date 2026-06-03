@@ -105,6 +105,8 @@ export default function DashboardVendedor() {
   const [carteiraPagina,     setCarteiraPagina]     = useState(1);
   const [carteiraPorPag,     setCarteiraPorPag]     = useState(12);
   const [filtroCategoria,    setFiltroCategoria]    = useState('');
+  // ✅ NOVO: filtro por equipe na carteira (separado do filtro de categoria)
+  const [filtroEquipe,       setFiltroEquipe]       = useState('');
   const [colsVisiveis,       setColsVisiveis]       = useState(new Set(['empresa','produto','esperado','media','meta','status']));
   const [mesesVisiveis,      setMesesVisiveis]      = useState(null);
   const [busca,          setBusca]          = useState('');
@@ -152,9 +154,9 @@ export default function DashboardVendedor() {
       const idSet = new Set(consultorIdsPermitidos);
       consComValidade = consComValidade.filter(c => idSet.has(c.id));
     } else if (typeof consultorIdsPermitidos === 'string' && consultorIdsPermitidos.startsWith('por_equipe:')) {
-  const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
-  consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
-}
+      const equipes = consultorIdsPermitidos.replace('por_equipe:','').split(',');
+      consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
+    }
 
     setConsultores(consComValidade);
     const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
@@ -310,11 +312,15 @@ export default function DashboardVendedor() {
             metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
           }
 
+          // ✅ Guarda equipe do consultor para filtro na carteira
+          const equipeConsultor = consCompleto?.equipe || cons?.equipe || '—';
+
           listaProcessada.push({
             ...e,
             _key:        `${e.id}__${cons.id}`,
             _cons:       cons,
             _pct:        pct,
+            _equipe:     equipeConsultor,
             vendedor:    cons.nome,
             gestor:      cons.gestor || '—',
             movPorMes,
@@ -337,12 +343,12 @@ export default function DashboardVendedor() {
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
       const totalValorMeta = listaProcessada.reduce((s,e) => {
-  if (mesSelecionado) {
-    const metaMes = e.metaComp?.substring(0,7);
-    if (metaMes !== mesSelecionado) return s;
-  }
-  return s + (e.valorMeta || 0);
-}, 0);
+        if (mesSelecionado) {
+          const metaMes = e.metaComp?.substring(0,7);
+          if (metaMes !== mesSelecionado) return s;
+        }
+        return s + (e.valorMeta || 0);
+      }, 0);
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -442,10 +448,12 @@ export default function DashboardVendedor() {
     if (!dados) return [];
     let arr = [...dados.lista];
     if (busca.trim()) { const b=norm(busca); arr=arr.filter(e=>norm(e.nome).includes(b)||String(e.produto_id).includes(b)); }
-    if (filtroProduto) arr = arr.filter(e => e.produto_contratado === filtroProduto);
-    if (filtroStatus)  arr = arr.filter(e => e.situacao === filtroStatus);
+    if (filtroProduto)  arr = arr.filter(e => e.produto_contratado === filtroProduto);
+    if (filtroStatus)   arr = arr.filter(e => e.situacao === filtroStatus);
+    // ✅ NOVO: filtro por equipe
+    if (filtroEquipe)   arr = arr.filter(e => e._equipe === filtroEquipe);
     return arr.sort((a,b) => b.mediaMovMes - a.mediaMovMes);
-  }, [dados, busca, filtroProduto, filtroStatus]);
+  }, [dados, busca, filtroProduto, filtroStatus, filtroEquipe]);
 
   return (
     <div style={s.page}>
@@ -506,6 +514,9 @@ export default function DashboardVendedor() {
         const corApurado = corPct(pctApurado);
         const badgeApurado = pctApurado >= 80 ? '✅ Meta atingida' : pctApurado >= 60 ? '⚡ Quase lá' : '⚠️ Abaixo da meta';
 
+        // ✅ Equipes disponíveis para filtro na carteira
+        const equipesDisponiveis = [...new Set(lista.map(e=>e._equipe||'—').filter(v=>v!=='—'))].sort();
+
         return (
           <>
             <div style={{marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
@@ -525,16 +536,12 @@ export default function DashboardVendedor() {
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,marginBottom:16}}>
-              {[
-                {label:'Contratos Novos', val:kpis.empresas, sub1:{cor:'#34d399',txt:`${kpis.comMov} movimentando`}, sub2:{cor:'#f87171',txt:`${kpis.empresas-kpis.comMov} sem movimentação`}},
-              ].map((_,i)=>(
-                <div key={i} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-                  <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
-                  <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
-                  <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
-                  <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
-                </div>
-              ))}
+              <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+                <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Contratos Novos</div>
+                <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.empresas}</div>
+                <div style={{color:'#34d399',fontSize:'0.68rem',marginTop:4}}>{kpis.comMov} movimentando</div>
+                <div style={{color:'#f87171',fontSize:'0.68rem'}}>{kpis.empresas - kpis.comMov} sem movimentação</div>
+              </div>
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Total Valor Esperado</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#a78bfa'}}>{fmt(lista.reduce((s,e)=>s+e.esperadoMes,0))}</div>
@@ -964,7 +971,11 @@ export default function DashboardVendedor() {
                               const medalha=idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}º`;
                               const consData=consultores.find(cc=>cc.nome===vd.nome);
                               const metaConsultor=consData?.meta_mensal||0;
-                              const pctMeta=metaConsultor>0?(vd.valorMeta/metaConsultor)*100:0;
+                              // ✅ CORREÇÃO: % da meta vs meta ACUMULADA (meta_mensal × meses válidos)
+                              const validaMesVd=(consData?.meta_inicio?String(consData.meta_inicio).substring(0,7):'2026-01');
+                              const validaVd=validaMesVd>'2026-01'?validaMesVd:'2026-01';
+                              const metaAcumVd=metaConsultor*(mesesDisp.filter(m=>m>=validaVd).length||1);
+                              const pctMeta=metaAcumVd>0?(vd.valorMeta/metaAcumVd)*100:0;
                               const corMeta=corPct(pctMeta);
                               return (
                                 <div key={vd.nome} style={{borderRadius:10,overflow:'hidden',border:`1px solid ${idx===0?'rgba(240,180,41,0.2)':'#e4e7ef'}`,background:idx===0?'rgba(255,248,230,0.6)':'#fafafa',marginBottom:4}}>
@@ -974,7 +985,7 @@ export default function DashboardVendedor() {
                                       <div style={{fontWeight:700,fontSize:'0.85rem',color:'#1a1d2e'}}>{vd.nome}</div>
                                       <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:1}}>{vd.empresas} emp. · {vd.semMov} sem mov. · {vd.naMeta} na meta</div>
                                     </div>
-                                    {[['Mov. Acum.','#f0b429',fmt(vd.movTotal),`média: ${fmt(Math.round(vd.movTotal/qtdM))}/mês`],['Fechado Bruto','#60a5fa',fmt(vd.fechadoBruto||0),`${vd.empresas} contratos`],['Esperado/mês','#a78bfa',fmt(vd.esperado),`${fmtPct(pctVd)} realizado`],['Meta Apurada','#34d399',vd.valorMeta>0?fmt(vd.valorMeta):'—',metaConsultor>0?`${fmtPct(pctMeta)} da meta`:'']].map(([lbl,cor,val,sub])=>(
+                                    {[['Mov. Acum.','#f0b429',fmt(vd.movTotal),`média: ${fmt(Math.round(vd.movTotal/qtdM))}/mês`],['Fechado Bruto','#60a5fa',fmt(vd.fechadoBruto||0),`${vd.empresas} contratos`],['Esperado/mês','#a78bfa',fmt(vd.esperado),`${fmtPct(pctVd)} realizado`],['Meta Apurada','#34d399',vd.valorMeta>0?fmt(vd.valorMeta):'—',metaAcumVd>0?`${fmtPct(pctMeta)} da meta`:'']].map(([lbl,cor,val,sub])=>(
                                       <div key={lbl} style={{textAlign:'right',minWidth:90}}>
                                         <div style={{color:'#6b7280',fontSize:'0.62rem',textTransform:'uppercase',letterSpacing:0.5}}>{lbl}</div>
                                         <div style={{color:lbl==='Meta Apurada'?'#34d399':cor,fontWeight:700,fontSize:'0.88rem'}}>{val}</div>
@@ -1020,6 +1031,11 @@ export default function DashboardVendedor() {
                     <select style={s.sel} value={filtroCategoria} onChange={e=>{setFiltroCategoria(e.target.value);setCarteiraPagina(1);}}><option value="">Todas as categorias</option>{categoriasCart.map(c=><option key={c} value={c}>{c}</option>)}</select>
                     <select style={s.sel} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}><option value="">Todos os produtos</option>{[...new Set(lista.map(e=>e.produto_contratado).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}</select>
                     <select style={s.sel} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}><option value="">Todos os status</option><option value="acima do esperado">✅ Acima</option><option value="abaixo do esperado">⚠️ Abaixo</option><option value="sem movimentação">❌ Sem mov.</option></select>
+                    {/* ✅ NOVO: Filtro por equipe */}
+                    <select style={{...s.sel,borderColor:filtroEquipe?'rgba(96,165,250,0.5)':'#e4e7ef',color:filtroEquipe?'#2563eb':'#1a1d2e'}} value={filtroEquipe} onChange={e=>{setFiltroEquipe(e.target.value);setCarteiraPagina(1);}}>
+                      <option value="">Todas as equipes</option>
+                      {equipesDisponiveis.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+                    </select>
                   </div>
                   <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap',alignItems:'center',background:'#f9fafb',borderRadius:8,padding:'8px 12px',border:'1px solid #e4e7ef'}}>
                     <span style={{color:'#8b92b0',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginRight:4}}>Colunas:</span>
