@@ -162,7 +162,9 @@ export default function HomePage() {
         movUltimoMes    += vUlt;
         movPenultimoMes += vPen;
         if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
-        if (vUlt === 0 && vPen === 0) semMovDoisMeses++;
+        // "Nunca movimentou" = zero em TODOS os meses disponíveis (igual ao filtro Carteira do Vendedor)
+        const nuncaMovimentou = meses.every(m => (libMap[`${e.produto_id}__${m}`]||0) === 0);
+        if (nuncaMovimentou) semMovDoisMeses++;
       }
 
       // ── 9. calcularValorMeta — CÓPIA EXATA do Vendedor ───────────────────
@@ -296,6 +298,7 @@ export default function HomePage() {
         variacao,
         metaTotal,
         metaApurada:   metaApuradaTotal,
+        metaPorConsultor,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
         perf, perfMsg, top3,
@@ -330,7 +333,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, totalEmpresas, mesAtual, mesAnterior,
+    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -516,6 +519,78 @@ export default function HomePage() {
         )}
       </div>
 
+      {/* Card de Atenção — equipes/vendedores abaixo da meta */}
+      {(() => {
+        const alertas = [];
+        // Agrupa meta por consultor para detectar quem está abaixo
+        const consultoresAbaixo = consultores
+          .map(c => {
+            const metaApur = top3.find(t => t.id === c.id)?.metaApurada || metaPorConsultor?.[c.id] || 0;
+            const metaMens = c.meta_mensal || 0;
+            const pct = metaMens > 0 ? (metaApur / metaMens) * 100 : null;
+            return { ...c, metaApurada: metaApur, pctMeta: pct };
+          })
+          .filter(c => c.pctMeta !== null && c.pctMeta < 80 && c.meta_mensal > 0)
+          .sort((a,b) => a.pctMeta - b.pctMeta);
+
+        // Agrupa por equipe
+        const equipeMap = {};
+        consultoresAbaixo.forEach(c => {
+          const eq = c.equipe || '—';
+          if (!equipeMap[eq]) equipeMap[eq] = [];
+          equipeMap[eq].push(c);
+        });
+
+        if (consultoresAbaixo.length === 0) return null;
+
+        return (
+          <div style={{background:'rgba(251,191,36,0.04)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:12,padding:'20px 24px',marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+              <span style={{fontSize:'1.5rem'}}>⚠️</span>
+              <div>
+                <div style={{fontWeight:700,color:'#d97706',fontSize:'0.95rem'}}>
+                  Atenção — {consultoresAbaixo.length} vendedor{consultoresAbaixo.length>1?'es':''} abaixo da meta
+                </div>
+                <div style={{color:'#6b7280',fontSize:'0.78rem',marginTop:2}}>
+                  Mesmo com a meta geral em {fmtPct(pctMeta)}, alguns vendedores precisam de atenção
+                </div>
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {consultoresAbaixo.slice(0,5).map((c,i) => {
+                const cor = c.pctMeta >= 60 ? '#d97706' : '#dc2626';
+                const bg  = c.pctMeta >= 60 ? 'rgba(217,119,6,0.06)' : 'rgba(220,38,38,0.06)';
+                return (
+                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:bg,borderRadius:8,border:`1px solid ${cor}22`}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:600,fontSize:'0.85rem',color:'#1a1d2e'}}>{c.nome}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.7rem'}}>{c.equipe||'—'}</div>
+                    </div>
+                    <div style={{textAlign:'right',minWidth:80}}>
+                      <div style={{fontWeight:700,color:cor,fontSize:'0.85rem'}}>{fmtPct(c.pctMeta)}</div>
+                      <div style={{color:'#9ca3af',fontSize:'0.65rem'}}>da meta</div>
+                    </div>
+                    <div style={{width:70}}>
+                      <div style={{background:'#f0f2f8',borderRadius:4,height:6,overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${Math.min(c.pctMeta,100)}%`,background:cor,borderRadius:4}}></div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {consultoresAbaixo.length > 5 && (
+                <div style={{textAlign:'center',color:'#9ca3af',fontSize:'0.75rem',paddingTop:4}}>
+                  + {consultoresAbaixo.length - 5} outros vendedores abaixo da meta
+                </div>
+              )}
+            </div>
+            <Link href="/vendedor" style={{display:'inline-block',marginTop:14,color:'#d97706',fontSize:'0.78rem',fontWeight:600,textDecoration:'none'}}>
+              Ver ranking completo →
+            </Link>
+          </div>
+        );
+      })()}
+
       {/* Alerta empresas sem movimentação */}
       {semMovCritico > 0 && (
         <div style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:12,padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14}}>
@@ -532,22 +607,14 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Ações rápidas */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12}}>
-        {[
-          { href:'/vendedor', emoji:'📊', label:'Dashboard Vendedor', desc:'Análise detalhada por equipe'    },
-          { href:'/gestao',   emoji:'⚙️', label:'Gestão',             desc:'Gerenciar metas e ajustes'      },
-          { href:'/evolucao', emoji:'📈', label:'Evolução',           desc:'Movimentação de todas as empresas' },
-        ].map(a => (
-          <Link key={a.href} href={a.href} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'18px 20px',textDecoration:'none',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',display:'flex',alignItems:'center',gap:14}}>
-            <div style={{fontSize:'1.6rem'}}>{a.emoji}</div>
-            <div>
-              <div style={{fontWeight:700,color:'#1a1d2e',fontSize:'0.88rem'}}>{a.label}</div>
-              <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:2}}>{a.desc}</div>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {/* Ação rápida — só Dashboard Vendedor */}
+      <Link href="/vendedor" style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'18px 20px',textDecoration:'none',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',display:'inline-flex',alignItems:'center',gap:14}}>
+        <div style={{fontSize:'1.6rem'}}>📊</div>
+        <div>
+          <div style={{fontWeight:700,color:'#1a1d2e',fontSize:'0.88rem'}}>Dashboard Vendedor</div>
+          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:2}}>Análise detalhada por equipe</div>
+        </div>
+      </Link>
     </div>
   );
 }
