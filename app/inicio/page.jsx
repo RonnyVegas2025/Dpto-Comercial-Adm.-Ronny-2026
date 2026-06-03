@@ -269,23 +269,8 @@ export default function HomePage() {
         ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMeta)} da meta — foco para fechar forte o mês.` }
         : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMeta)} da meta atingida — revise as prioridades.` };
 
-      // metaAcum por consultor = meta_mensal × qtd meses válidos (igual ao Vendedor)
-      const metaAcumPorConsultor = {};
-      consultores.forEach(cons => {
-        const metaMes = cons.meta_mensal || 0;
-        if (!metaMes) return;
-        const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
-        const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
-        const qtd       = mesesDisp.filter(m => m >= valida).length || 1;
-        metaAcumPorConsultor[cons.id] = metaMes * qtd;
-      });
-
       const top3 = consultores
-        .map(c => ({
-          ...c,
-          metaApurada: metaPorConsultor[c.id]||0,
-          metaAcum:    metaAcumPorConsultor[c.id]||0,
-        }))
+        .map(c => ({ ...c, metaApurada: metaPorConsultor[c.id]||0 }))
         .sort((a,b) => b.metaApurada - a.metaApurada)
         .slice(0,3);
 
@@ -314,7 +299,6 @@ export default function HomePage() {
         metaTotal,
         metaApurada:   metaApuradaTotal,
         metaPorConsultor,
-        metaAcumPorConsultor,
         mesesDisp,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
@@ -350,7 +334,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, metaAcumPorConsultor, mesesDisp,
+    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -508,9 +492,12 @@ export default function HomePage() {
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {top3.map((c,i) => {
               const medal    = i===0?'🥇':i===1?'🥈':'🥉';
-              // % correto: metaApurada vs meta ACUMULADA (meta_mensal × meses), igual ao Vendedor
-              const metaAcum = c.metaAcum || 0;
-              const pct      = metaAcum > 0 ? (c.metaApurada/metaAcum)*100 : 0;
+              // % correto: metaApurada vs meta ACUMULADA (meta_mensal × meses válidos)
+              const validaMesC = (c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01');
+              const validaC    = validaMesC > '2026-01' ? validaMesC : '2026-01';
+              const qtdC       = (mesesDisp||[]).filter(m => m >= validaC).length || 1;
+              const metaAcum   = (c.meta_mensal||0) * qtdC;
+              const pct        = metaAcum > 0 ? (c.metaApurada/metaAcum)*100 : 0;
               const cor      = corPct(pct);
               return (
                 <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:i===0?'rgba(240,180,41,0.05)':'#f9fafb',borderRadius:10,border:`1px solid ${i===0?'rgba(240,180,41,0.2)':'#f0f2f8'}`}}>
@@ -548,7 +535,10 @@ export default function HomePage() {
         const todos = comMeta.map(cons => {
           const apurado  = metaPorConsultor[cons.id] || 0;
           // % correto: vs meta ACUMULADA (meta_mensal × meses), não só 1 mês
-          const mAcum = (metaAcumPorConsultor && metaAcumPorConsultor[cons.id]) || (cons.meta_mensal * (mesesDisp.length||1));
+          const validaM = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
+          const validaR = validaM > '2026-01' ? validaM : '2026-01';
+          const qtdM    = (mesesDisp||[]).filter(m => m >= validaR).length || 1;
+          const mAcum   = (cons.meta_mensal||0) * qtdM;
           const pct   = mAcum > 0 ? (apurado / mAcum) * 100 : 0;
           return { ...cons, apurado, metaAcum: mAcum, pct };
         });
