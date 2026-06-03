@@ -363,13 +363,33 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      const totalValorMeta = listaProcessada.reduce((s,e) => {
-        if (mesSelecionado) {
-          const metaMes = e.metaComp?.substring(0,7);
-          if (metaMes !== mesSelecionado) return s;
-        }
-        return s + (e.valorMeta || 0);
-      }, 0);
+      // totalValorMeta: meta principal filtrada por mês + upsells pelo seu próprio mês
+      const totalValorMeta = (() => {
+        // Meta principal
+        const principal = listaProcessada.reduce((s,e) => {
+          if (mesesAtivos.length > 0) {
+            const metaMes = e.metaComp?.substring(0,7);
+            if (!mesesAtivos.includes(metaMes)) return s;
+          }
+          // Valor sem upsell (upsell contado separado)
+          const entradaPrincipal = (vmetasRows||[]).find(v =>
+            v.empresa_id === e.id && v.regra !== 'upsell' &&
+            (v.consultor_id === e._cons?.id || v.consultor_id === null)
+          );
+          const valorPrincipal = entradaPrincipal ? (entradaPrincipal.valor_meta||0) : (e.valorMeta||0);
+          return s + valorPrincipal;
+        }, 0);
+
+        // Upsells pelo próprio mês
+        const upsell = (vmetasRows||[]).reduce((s,v) => {
+          if (v.regra !== 'upsell') return s;
+          if (mesesAtivos.length > 0 && !mesesAtivos.includes(v.competencia_meta?.substring(0,7))) return s;
+          const empNaLista = listaProcessada.some(e => e.id === v.empresa_id);
+          return empNaLista ? s + (v.valor_meta||0) : s;
+        }, 0);
+
+        return principal + upsell;
+      })();
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -437,13 +457,31 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
+      // metaPorMes: soma meta principal pelo metaComp + upsells pelo próprio mês
       const metaPorMes = {};
       for (const m of mesesDisp) {
-        metaPorMes[m] = listaProcessada.reduce((s,e) => {
+        // Meta principal (beneficio/convenio) — pelo mês da competencia_meta
+        const metaPrincipal = listaProcessada.reduce((s,e) => {
           const metaMes = e.metaComp?.substring(0,7);
-          if (metaMes === m) return s + (e.valorMeta||0);
-          return s;
+          if (metaMes !== m) return s;
+          // Soma só a meta principal (sem upsell — upsell será somado pelo seu próprio mês)
+          const entradaPrincipal = (vmetasRows||[]).find(v =>
+            v.empresa_id === e.id && v.regra !== 'upsell' &&
+            (v.consultor_id === e._cons?.id || v.consultor_id === null)
+          );
+          return s + (entradaPrincipal ? (entradaPrincipal.valor_meta||0) : (e.valorMeta||0));
         }, 0);
+
+        // Upsells — pelo mês da própria competencia_meta do upsell
+        const metaUpsell = (vmetasRows||[]).reduce((s,v) => {
+          if (v.regra !== 'upsell') return s;
+          if (v.competencia_meta?.substring(0,7) !== m) return s;
+          // Só soma se a empresa está na lista filtrada
+          const empNaLista = listaProcessada.some(e => e.id === v.empresa_id);
+          return empNaLista ? s + (v.valor_meta||0) : s;
+        }, 0);
+
+        metaPorMes[m] = metaPrincipal + metaUpsell;
       }
 
       setDados({
