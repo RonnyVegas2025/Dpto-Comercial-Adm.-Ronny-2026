@@ -131,7 +131,7 @@ export default function HomePage() {
       // ── 6. Mapas ─────────────────────────────────────────────────────────
       const libMap = {};
       for (const l of libsFiltradas) {
-        const k = \`\${l.produto_id}__\${l.competencia?.substring(0,10)}\`;
+        const k = `${l.produto_id}__${l.competencia?.substring(0,10)}`;
         libMap[k] = (libMap[k]||0) + (l.total_liberado||0);
       }
 
@@ -156,9 +156,9 @@ export default function HomePage() {
 
       for (const e of empresasMov) {
         const vUlt = meses.filter(m => m.substring(0,7) === ultimoMesYM)
-          .reduce((s,m) => s+(libMap[\`\${e.produto_id}__\${m}\`]||0), 0);
+          .reduce((s,m) => s+(libMap[`${e.produto_id}__${m}`]||0), 0);
         const vPen = meses.filter(m => m.substring(0,7) === penultimoMesYM)
-          .reduce((s,m) => s+(libMap[\`\${e.produto_id}__\${m}\`]||0), 0);
+          .reduce((s,m) => s+(libMap[`${e.produto_id}__${m}`]||0), 0);
         movUltimoMes    += vUlt;
         movPenultimoMes += vPen;
         if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
@@ -187,7 +187,7 @@ export default function HomePage() {
           if (libs.length < 3) return null;
           mesAlvo = libs[2].comp; valorBruto = libs[2].val;
         }
-        const aj = ajusteMap[\`\${empresa.id}__\${mesAlvo}\`];
+        const aj = ajusteMap[`${empresa.id}__${mesAlvo}`];
         const valorConsid = aj !== undefined ? aj : valorBruto;
         const valorMeta   = Math.round(valorConsid * peso * (pct/100) * 100) / 100;
         return { valor_meta: valorMeta, competencia_meta: mesAlvo, regra: isConv?'convenio':'beneficio' };
@@ -262,10 +262,10 @@ export default function HomePage() {
 
       const perf = pctMeta >= 80 ? 'verde' : pctMeta >= 60 ? 'amarelo' : 'vermelho';
       const perfMsg = perf === 'verde'
-        ? { emoji:'🟢', titulo:'Parabéns! Sua equipe está performando bem.',  sub:\`Meta atingida em \${fmtPct(pctMeta)} — continue assim!\` }
+        ? { emoji:'🟢', titulo:'Parabéns! Sua equipe está performando bem.',  sub:`Meta atingida em ${fmtPct(pctMeta)} — continue assim!` }
         : perf === 'amarelo'
-        ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:\`\${fmtPct(pctMeta)} da meta — foco para fechar forte o mês.\` }
-        : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:\`Apenas \${fmtPct(pctMeta)} da meta atingida — revise as prioridades.\` };
+        ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMeta)} da meta — foco para fechar forte o mês.` }
+        : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMeta)} da meta atingida — revise as prioridades.` };
 
       const top3 = consultores
         .map(c => ({ ...c, metaApurada: metaPorConsultor[c.id]||0 }))
