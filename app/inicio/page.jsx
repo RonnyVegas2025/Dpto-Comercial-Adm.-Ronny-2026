@@ -299,6 +299,7 @@ export default function HomePage() {
         metaTotal,
         metaApurada:   metaApuradaTotal,
         metaPorConsultor,
+        mesesDisp,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
         perf, perfMsg, top3,
@@ -333,7 +334,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor,
+    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -355,7 +356,7 @@ export default function HomePage() {
           Olá, {dados.prof?.nome?.split(' ')[0]} 👋
         </h1>
         <p style={{color:'#8b92b0',fontSize:'0.9rem',margin:0}}>
-          Resumo da equipe — referência: <strong style={{color:'#b45309'}}>{fmtMes(mesAtual ? mesAtual+'-01' : null)}</strong>
+          Resumo da sua equipe
         </p>
       </div>
 
@@ -402,10 +403,10 @@ export default function HomePage() {
             subCor:'#8b92b0',
           },
           {
-            label: 'Sem Movimentação',
-            val:   semMovAtual,
-            sub:   `${semMovCritico} há 2+ meses`,
-            subCor: semMovCritico > 0 ? '#dc2626' : '#8b92b0',
+            label: 'Meta Total/mês',
+            val:   fmt(metaTotal / (mesesDisp.length || 1)),
+            sub:   `acumulado: ${fmt(metaTotal)}`,
+            subCor: '#8b92b0',
           },
           {
             label: 'Novos Contratos',
@@ -523,9 +524,10 @@ export default function HomePage() {
       {(() => {
         const alertas = [];
         // Agrupa meta por consultor para detectar quem está abaixo
+        // Usa metaPorConsultor (todos os consultores, não só o top3)
         const consultoresAbaixo = consultores
           .map(c => {
-            const metaApur = top3.find(t => t.id === c.id)?.metaApurada || metaPorConsultor?.[c.id] || 0;
+            const metaApur = (metaPorConsultor && metaPorConsultor[c.id]) || 0;
             const metaMens = c.meta_mensal || 0;
             const pct = metaMens > 0 ? (metaApur / metaMens) * 100 : null;
             return { ...c, metaApurada: metaApur, pctMeta: pct };
@@ -597,7 +599,7 @@ export default function HomePage() {
           <div style={{fontSize:'1.8rem'}}>⚠️</div>
           <div style={{flex:1}}>
             <div style={{fontWeight:700,color:'#dc2626',marginBottom:2}}>
-              {semMovCritico} empresa{semMovCritico>1?'s':''} sem movimentação em {fmtMes(mesAtual ? mesAtual+'-01' : null)} e {fmtMes(mesAnterior ? mesAnterior+'-01' : null)}
+              {semMovCritico} empresa{semMovCritico>1?'s':''} nunca movimentaram desde o início
             </div>
             <div style={{color:'#6b7280',fontSize:'0.82rem'}}>Revise a carteira e entre em contato com essas empresas.</div>
           </div>
@@ -607,14 +609,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Ação rápida — só Dashboard Vendedor */}
-      <Link href="/vendedor" style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'18px 20px',textDecoration:'none',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',display:'inline-flex',alignItems:'center',gap:14}}>
-        <div style={{fontSize:'1.6rem'}}>📊</div>
-        <div>
-          <div style={{fontWeight:700,color:'#1a1d2e',fontSize:'0.88rem'}}>Dashboard Vendedor</div>
-          <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:2}}>Análise detalhada por equipe</div>
-        </div>
-      </Link>
+
     </div>
   );
 }
