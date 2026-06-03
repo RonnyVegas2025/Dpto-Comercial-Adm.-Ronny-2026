@@ -405,7 +405,7 @@ export default function HomePage() {
           {
             label: 'Meta Acumulada',
             val:   fmt(metaTotal),
-            sub:   `${fmt(consultores.reduce((s,c) => s+(c.meta_mensal||0), 0))}/mês`,
+            sub:   `${fmt(consultores.reduce((s,cons) => s+(cons.meta_mensal||0), 0))}/mês`,
             subCor: '#8b92b0',
           },
           {
@@ -490,24 +490,23 @@ export default function HomePage() {
           <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'16px 0'}}>Nenhum dado ainda</div>
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {top3.map((c,i) => {
-              const medal    = i===0?'🥇':i===1?'🥈':'🥉';
-              // % correto: metaApurada vs meta ACUMULADA (meta_mensal × meses válidos)
-              const validaMesC = (c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01');
-              const validaC    = validaMesC > '2026-01' ? validaMesC : '2026-01';
-              const qtdC       = (mesesDisp||[]).filter(m => m >= validaC).length || 1;
-              const metaAcum   = (c.meta_mensal||0) * qtdC;
-              const pct        = metaAcum > 0 ? (c.metaApurada/metaAcum)*100 : 0;
-              const cor      = corPct(pct);
+            {top3.map((vend,i) => {
+              const medal      = i===0?'🥇':i===1?'🥈':'🥉';
+              const validaMesV = (vend.meta_inicio ? String(vend.meta_inicio).substring(0,7) : '2026-01');
+              const validaV    = validaMesV > '2026-01' ? validaMesV : '2026-01';
+              const qtdV       = (mesesDisp||[]).filter(m => m >= validaV).length || 1;
+              const metaAcum   = (vend.meta_mensal||0) * qtdV;
+              const pct        = metaAcum > 0 ? (vend.metaApurada/metaAcum)*100 : 0;
+              const cor        = corPct(pct);
               return (
-                <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:i===0?'rgba(240,180,41,0.05)':'#f9fafb',borderRadius:10,border:`1px solid ${i===0?'rgba(240,180,41,0.2)':'#f0f2f8'}`}}>
+                <div key={vend.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:i===0?'rgba(240,180,41,0.05)':'#f9fafb',borderRadius:10,border:`1px solid ${i===0?'rgba(240,180,41,0.2)':'#f0f2f8'}`}}>
                   <span style={{fontSize:'1.3rem'}}>{medal}</span>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'0.88rem',color:'#1a1d2e'}}>{c.nome}</div>
-                    <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{c.equipe||c.gestor||'—'}</div>
+                    <div style={{fontWeight:700,fontSize:'0.88rem',color:'#1a1d2e'}}>{vend.nome}</div>
+                    <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{vend.equipe||vend.gestor||'—'}</div>
                   </div>
                   <div style={{textAlign:'right',minWidth:100}}>
-                    <div style={{fontWeight:700,color:'#34d399',fontSize:'0.9rem'}}>{fmt(c.metaApurada)}</div>
+                    <div style={{fontWeight:700,color:'#34d399',fontSize:'0.9rem'}}>{fmt(vend.metaApurada)}</div>
                     {metaAcum > 0 && <div style={{fontSize:'0.68rem',color:cor,fontWeight:600}}>{fmtPct(pct)} da meta</div>}
                   </div>
                   {metaAcum > 0 && (
@@ -604,11 +603,11 @@ export default function HomePage() {
                     </div>
                     <div style={{minWidth:120}}>
                       <div style={{background:'#f0f2f8',borderRadius:3,height:5,overflow:'hidden',marginBottom:2}}>
-                        <div style={{height:'100%',width:`${Math.min(c.pct,100)}%`,background:cor,borderRadius:3}}></div>
+                        <div style={{height:'100%',width:`${Math.min(cons.pct,100)}%`,background:cor,borderRadius:3}}></div>
                       </div>
                       <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.65rem'}}>
-                        <span style={{color:cor,fontWeight:700}}>{fmtPct(c.pct)}</span>
-                        <span style={{color:'#9ca3af'}}>{fmt(c.apurado)}</span>
+                        <span style={{color:cor,fontWeight:700}}>{fmtPct(cons.pct)}</span>
+                        <span style={{color:'#9ca3af'}}>{fmt(cons.apurado)}</span>
                       </div>
                     </div>
                   </div>
