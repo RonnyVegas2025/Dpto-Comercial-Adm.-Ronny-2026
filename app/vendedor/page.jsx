@@ -97,6 +97,10 @@ export default function DashboardVendedor() {
   const [aba,            setAba]            = useState('resumo');
   const [meses,          setMeses]          = useState([]);
   const [mesSelecionado, setMesSelecionado] = useState('');
+  // ✅ NOVO: seleção múltipla de meses
+  const [mesesSelecionados, setMesesSelecionados] = useState(new Set());
+  // ✅ NOVO: filtro por equipe no topo
+  const [filtroEquipeTopo, setFiltroEquipeTopo] = useState('');
   const [filtroMetaMesLocal, setFiltroMetaMesLocal] = useState('');
   const [filtroMetaProduto,  setFiltroMetaProduto]  = useState('');
   const [filtroMetaCadastro, setFiltroMetaCadastro] = useState('');
@@ -114,7 +118,7 @@ export default function DashboardVendedor() {
   const [filtroStatus,   setFiltroStatus]   = useState('');
 
   useEffect(() => { carregarBase(); }, []);
-  useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, consultores]);
+  useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, mesesSelecionados, filtroEquipeTopo, consultores]);
 
  async function carregarBase() {
     let consultorIdsPermitidos = null;
@@ -195,8 +199,12 @@ export default function DashboardVendedor() {
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
-      const mesInicio = mesSelecionado ? mesSelecionado+'-01' : '2000-01-01';
-      const mesFim    = mesSelecionado ? mesSelecionado+'-28' : '2099-12-31';
+      // Suporte a múltiplos meses selecionados
+      const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados] : (mesSelecionado ? [mesSelecionado] : []);
+      const mesInicio = mesesAtivos.length > 0 ? Math.min(...mesesAtivos.map(m=>m+'-01')).toString() : '2000-01-01';
+      const mesFim    = mesesAtivos.length > 0 ? Math.max(...mesesAtivos.map(m=>m+'-28')).toString() : '2099-12-31';
+      // Para filtro de equipe no topo
+      const equipeTopoFiltro = filtroEquipeTopo;
 
       const [libsFiltradas, ajustes, libsTodas, vmetasRows] = await Promise.all([
         prodIds.length ? fetchAll(
@@ -235,12 +243,19 @@ export default function DashboardVendedor() {
         libsTodasMap[pid].push({ comp: l.competencia?.substring(0,10), val: l.total_liberado || 0 });
       }
 
-      const mesesDisp = [...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
+      // mesesDisp: se há meses selecionados, filtra somente eles
+      const todosMesesDisp = [...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
+      const mesesDisp = mesesAtivos.length > 0
+        ? todosMesesDisp.filter(m => mesesAtivos.includes(m))
+        : todosMesesDisp;
 
       const consultor = consultorId ? consultores.find(c=>c.id===consultorId) : null;
       const consultoresDaVisao = consultorId ? [consultor].filter(Boolean)
-        : gestorFiltro === 'Geral' ? consultores
-        : consultores.filter(c=>c.gestor===gestorFiltro);
+        : (() => {
+            let base = gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
+            if (equipeTopoFiltro) base = base.filter(c => c.equipe === equipeTopoFiltro);
+            return base;
+          })();
 
       const listaProcessada = [];
 
@@ -260,6 +275,11 @@ export default function DashboardVendedor() {
           if (gestorFiltro !== 'Geral' && !consultorId) {
             const consCompleto = consultores.find(c=>c.id===cons.id);
             if (!consCompleto || consCompleto.gestor !== gestorFiltro) continue;
+          }
+          // Filtro por equipe no topo
+          if (equipeTopoFiltro) {
+            const consCompleto2 = consultores.find(c=>c.id===cons.id);
+            if (!consCompleto2 || consCompleto2.equipe !== equipeTopoFiltro) continue;
           }
 
           const fator = pct / 100;
@@ -473,29 +493,79 @@ export default function DashboardVendedor() {
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             {gestores.map(g => (
               <button key={g} style={{...s.gestorBtn,...(gestorFiltro===g?s.gestorBtnAtivo:{})}}
-                onClick={() => { setGestorFiltro(g); setConsultorId(''); }}>
+                onClick={() => { setGestorFiltro(g); setConsultorId(''); setFiltroEquipeTopo(''); }}>
                 {g==='Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
               </button>
             ))}
           </div>
         </div>
+        {/* ✅ NOVO: Filtro por Equipe */}
+        {(() => {
+          const equipes = [...new Set(consultsFiltrados.map(c=>c.equipe).filter(Boolean))].sort();
+          if (equipes.length < 2) return null;
+          return (
+            <div style={s.filtroGrupo}>
+              <label style={s.filtroLabel}>EQUIPE</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <button style={{...s.gestorBtn,...(filtroEquipeTopo===''?s.gestorBtnAtivo:{})}}
+                  onClick={() => { setFiltroEquipeTopo(''); setConsultorId(''); }}>
+                  🌐 Todas
+                </button>
+                {equipes.map(eq => (
+                  <button key={eq} style={{...s.gestorBtn,...(filtroEquipeTopo===eq?s.gestorBtnAtivo:{})}}
+                    onClick={() => { setFiltroEquipeTopo(eq); setConsultorId(''); }}>
+                    👥 {eq}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>VENDEDOR</label>
           <select style={s.select} value={consultorId} onChange={e => setConsultorId(e.target.value)}>
             <option value="">— Ver equipe consolidada —</option>
-            {consultsFiltrados.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {consultsFiltrados.filter(c => !filtroEquipeTopo || c.equipe === filtroEquipeTopo).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
         <div style={s.filtroGrupo}>
-          <label style={s.filtroLabel}>MÊS</label>
+          <label style={s.filtroLabel}>MÊS {mesesSelecionados.size > 0 && <span style={{color:'#f0b429',marginLeft:4}}>({mesesSelecionados.size} sel.)</span>}</label>
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            <button style={{...s.gestorBtn,...(mesSelecionado===''?s.gestorBtnAtivo:{})}} onClick={() => setMesSelecionado('')}>🌐 Todos</button>
-            {meses.map(m => (
-              <button key={m} style={{...s.gestorBtn,...(mesSelecionado===m?s.gestorBtnAtivo:{})}} onClick={() => setMesSelecionado(m)}>
-                📅 {fmtMes(m+'-01')}
-              </button>
-            ))}
+            {/* Todos = limpa seleção múltipla E seleção única */}
+            <button style={{...s.gestorBtn,...(mesSelecionado===''&&mesesSelecionados.size===0?s.gestorBtnAtivo:{})}}
+              onClick={() => { setMesSelecionado(''); setMesesSelecionados(new Set()); }}>
+              🌐 Todos
+            </button>
+            {meses.map(m => {
+              const selMulti  = mesesSelecionados.has(m);
+              const selUnico  = mesSelecionado === m && mesesSelecionados.size === 0;
+              const ativo     = selMulti || selUnico;
+              return (
+                <button key={m}
+                  style={{...s.gestorBtn,...(ativo?s.gestorBtnAtivo:{})}}
+                  onClick={() => {
+                    // Ctrl/Cmd click ou toggle: adiciona/remove da seleção múltipla
+                    setMesSelecionado(''); // limpa seleção única
+                    setMesesSelecionados(prev => {
+                      const next = new Set(prev);
+                      if (next.has(m)) {
+                        next.delete(m);
+                      } else {
+                        next.add(m);
+                      }
+                      return next;
+                    });
+                  }}>
+                  📅 {fmtMes(m+'-01')}
+                </button>
+              );
+            })}
           </div>
+          {mesesSelecionados.size > 0 && (
+            <div style={{fontSize:'0.68rem',color:'#b45309',marginTop:4}}>
+              💡 Clique nos meses para selecionar/deselecionar múltiplos
+            </div>
+          )}
         </div>
       </div>
 
