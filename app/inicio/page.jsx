@@ -45,9 +45,14 @@ export default function HomePage() {
       const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
       if (profData && perfisRestritos.includes(profData.perfil)) {
         if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
-          consultores = consultores.filter(c =>
-            vis.equipes.includes(c.equipe) && c.gestor === profData.nome
-          );
+          // CORRECAO: banco tem "Ronny Peterson", perfil tem "Ronny Peterson Izidorio"
+          // Compara se um nome e prefixo do outro
+          const nomePerf = profData.nome || '';
+          consultores = consultores.filter(c => {
+            if (!vis.equipes.includes(c.equipe)) return false;
+            const nomeGestor = c.gestor || '';
+            return nomePerf.startsWith(nomeGestor) || nomeGestor.startsWith(nomePerf);
+          });
         } else if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
           const idSet = new Set(vis.consultor_ids);
           consultores = consultores.filter(c => idSet.has(c.id));
