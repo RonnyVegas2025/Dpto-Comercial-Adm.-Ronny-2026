@@ -4,7 +4,6 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, PERFIS } from './context/AuthContext';
 
-// Itens base do menu — o href do Início é resolvido dinamicamente abaixo
 const nav = [
   { href: '/inicio',             icon: '◈',  label: 'Início',        pagina: 'inicio'             },
   { href: '/painel',             icon: '🎛️', label: 'Painel',        pagina: 'painel'             },
@@ -13,7 +12,7 @@ const nav = [
   { href: '/importar-base',      icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
   { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
   { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
-  { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio-empresas' },
+  { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
   { href: '/agregados',          icon: '📦', label: 'Agregados',     pagina: 'agregados'          },
   { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
 ];
@@ -25,12 +24,9 @@ export default function Sidebar() {
   const perfisAdmin = ['diretoria', 'gestor_master'];
   const isAdmin = perfisAdmin.includes(profile?.perfil);
 
-  // Filtra o menu por permissão e por perfil:
-  // - Admin (diretoria/gestor_master): vê /painel mas NÃO vê /inicio
-  // - Demais: vêm /inicio mas NÃO vêm /painel
   const navFiltrado = nav.filter(item => {
-    if (item.href === '/inicio' && isAdmin)  return false; // admin não precisa do dashboard gestor
-    if (item.href === '/painel' && !isAdmin) return false; // gestor_comercial não vê o painel admin
+    if (item.href === '/inicio' && isAdmin)  return false;
+    if (item.href === '/painel' && !isAdmin) return false;
     return podeVer(item.pagina);
   });
 
