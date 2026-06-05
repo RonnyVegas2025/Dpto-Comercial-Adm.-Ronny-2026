@@ -14,27 +14,42 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     if (loading) return;
+
+    // Não logado → vai para login
     if (!user && !isLoginPage) {
       router.replace('/login');
       return;
     }
+
+    // Logado e está na página de login → redireciona para home correta
     if (user && isLoginPage) {
       const perfil = profile?.perfil;
-      // Gestores comerciais, supervisores e vendedores → dashboard da equipe
       const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor'];
       if (perfil && perfisRestritos.includes(perfil)) {
         router.replace('/inicio');
       } else {
-        // Diretoria e gestor_master → painel de controle admin
         router.replace('/painel');
       }
       return;
     }
-  }, [user, loading, isLoginPage, router]);
+
+    // ✅ Logado e está na raiz "/" → redireciona para home correta
+    if (user && pathname === '/') {
+      const perfil = profile?.perfil;
+      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor'];
+      if (perfil && perfisRestritos.includes(perfil)) {
+        router.replace('/inicio');
+      } else {
+        router.replace('/painel');
+      }
+      return;
+    }
+  }, [user, loading, isLoginPage, pathname, profile, router]);
 
   // Verifica permissão para a rota atual
   useEffect(() => {
     if (loading || !user || isLoginPage) return;
+    if (pathname === '/') return; // raiz é tratada acima
     const pagina = pathname.split('/')[1] || 'inicio';
     if (profile && !podeVer(pagina) && profile.perfil !== 'gestor_master') {
       router.replace('/sem-acesso');
