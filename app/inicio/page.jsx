@@ -244,12 +244,15 @@ export default function HomePage() {
       }
 
       // ── 11. metaTotal — igual ao Vendedor ────────────────────────────────
+      // Usa apenas meses com liberações reais (meses de libsFiltradas), não todos do banco
+      const mesesComLib = [...new Set(libsFiltradas.map(l => l.competencia?.substring(0,7)).filter(Boolean))].sort();
       const metaTotal = consultores.reduce((total, cons) => {
         const metaMes   = cons.meta_mensal || 0;
         if (!metaMes) return total;
         const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
         const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
-        const qtd       = mesesDisp.filter(m => m >= valida).length || 1;
+        // Usa mesesComLib (meses com dados reais) em vez de mesesDisp (todos do banco)
+        const qtd       = mesesComLib.filter(m => m >= valida).length || 1;
         return total + metaMes * qtd;
       }, 0);
 
@@ -300,6 +303,7 @@ export default function HomePage() {
         metaApurada:   metaApuradaTotal,
         metaPorConsultor,
         mesesDisp,
+        mesesComLib,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
         perf, perfMsg, top3,
@@ -334,7 +338,7 @@ export default function HomePage() {
     perfMsg, perf, top3, semMovCritico, novasEsteMes, mesesComMeta,
     movAtual, movAnterior, comMovAtual, semMovAtual, variacao,
     metaTotal, metaApurada, naMeta, esperadoTotal, pctAderencia, pctMeta,
-    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp,
+    consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp, mesesComLib,
   } = dados;
 
   const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
@@ -494,7 +498,7 @@ export default function HomePage() {
               const medal      = i===0?'🥇':i===1?'🥈':'🥉';
               const validaMesV = (vend.meta_inicio ? String(vend.meta_inicio).substring(0,7) : '2026-01');
               const validaV    = validaMesV > '2026-01' ? validaMesV : '2026-01';
-              const qtdV       = (mesesDisp||[]).filter(m => m >= validaV).length || 1;
+              const qtdV       = (mesesComLib||mesesDisp||[]).filter(m => m >= validaV).length || 1;
               const metaAcum   = (vend.meta_mensal||0) * qtdV;
               const pct        = metaAcum > 0 ? (vend.metaApurada/metaAcum)*100 : 0;
               const cor        = corPct(pct);
@@ -536,7 +540,7 @@ export default function HomePage() {
           // % correto: vs meta ACUMULADA (meta_mensal × meses), não só 1 mês
           const validaM = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
           const validaR = validaM > '2026-01' ? validaM : '2026-01';
-          const qtdM    = (mesesDisp||[]).filter(m => m >= validaR).length || 1;
+          const qtdM    = (mesesComLib||mesesDisp||[]).filter(m => m >= validaR).length || 1;
           const mAcum   = (cons.meta_mensal||0) * qtdM;
           const pct   = mAcum > 0 ? (apurado / mAcum) * 100 : 0;
           return { ...cons, apurado, metaAcum: mAcum, pct };
