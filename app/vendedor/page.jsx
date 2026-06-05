@@ -404,7 +404,8 @@ export default function DashboardVendedor() {
         }
       }, 0);
 
-      const metaTotal  = meta;
+      const metaTotal    = meta; // acumulado (meta_mensal × meses)
+      const metaMensalBase = consultoresDaVisao.reduce((s,cons) => s+(cons.meta_mensal||0), 0); // só mensal
       const comMov     = listaProcessada.filter(e => e.totalMov > 0).length;
       const semMov     = listaProcessada.filter(e => e.totalMov === 0).length;
       const crescendo  = listaProcessada.filter(e => {
@@ -487,7 +488,7 @@ export default function DashboardVendedor() {
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
         lista: listaProcessada,
-        kpis: { totalMovReal, totalEsperado, meta, metaTotal, totalValorMeta, comMov, semMov, crescendo, empresas: listaProcessada.length },
+        kpis: { totalMovReal, totalEsperado, meta, metaTotal, metaMensalBase, totalValorMeta, comMov, semMov, crescendo, empresas: listaProcessada.length },
         porProduto: Object.entries(porProduto).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.movReal - a.movReal),
         ranking,
       });
@@ -680,7 +681,7 @@ export default function DashboardVendedor() {
               <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Meta Total Vendedor</div>
                 <div style={{fontSize:'1.2rem',fontWeight:700,color:'#1a1d2e'}}>{kpis.metaTotal>0?fmt(kpis.metaTotal):'—'}</div>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmt(kpis.meta||0)}/mês</div>
+                <div style={{color:'#8b92b0',fontSize:'0.68rem',marginTop:4}}>{fmt(kpis.metaMensalBase||0)}/mês</div>
               </div>
               <div style={{background:'#ffffff',border:`1px solid ${kpis.metaTotal>0?corApurado+'44':'#e4e7ef'}`,borderRadius:12,padding:'16px 18px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
                 <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>% Meta Atingida</div>
@@ -726,7 +727,7 @@ export default function DashboardVendedor() {
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.68rem',color:'#8b92b0'}}>
                     <span style={{color:corApurado,fontWeight:700}}>{fmt(apurado)} apurado · {fmtPct(pctApurado)}</span>
-                    <span>meta: {fmt(kpis.metaTotal)}/mês</span>
+                    <span>meta: {fmt(kpis.metaMensalBase||0)}/mês · acum: {fmt(kpis.metaTotal)}</span>
                   </div>
                   <div style={{marginTop:6,fontSize:'0.65rem',color:'#8b92b0'}}>Vegas Benefícios: 1ª recarga × peso · Convênio/Mobilidade: 3º mês</div>
                 </div>
