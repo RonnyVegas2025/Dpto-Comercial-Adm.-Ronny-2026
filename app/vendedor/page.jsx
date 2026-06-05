@@ -186,17 +186,17 @@ export default function DashboardVendedor() {
         .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
 
       if (consultorId) {
+        // Vendedor específico: busca em todas as posições
         empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
       } else {
+        // Visão da equipe: busca em todas as posições (principal + agregados)
         const ids = gestorFiltro !== 'Geral'
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        empQuery = empQuery.or(`
-  consultor_principal_id.in.(ids),
-  consultor_agregado_id.in.(ids),
-  consultor_agregado_2_id.in.(ids)
-`)
+        // ✅ Usa .or() para pegar empresas onde o consultor é principal OU agregado
+        empQuery = empQuery.or(`consultor_principal_id.in.(${ids.join(',')}),consultor_agregado_id.in.(${ids.join(',')}),consultor_agregado_2_id.in.(${ids.join(',')})`);
+      }
 
       const empresas = await fetchAll(empQuery);
       const prodIds  = empresas.map(e => e.produto_id);
