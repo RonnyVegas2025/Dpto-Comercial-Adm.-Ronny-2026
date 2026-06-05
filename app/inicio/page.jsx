@@ -251,8 +251,9 @@ export default function HomePage() {
         if (!metaMes) return total;
         const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
         const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
-        // Usa mesesComLib (meses com dados reais) em vez de mesesDisp (todos do banco)
-        const qtd       = mesesComLib.filter(m => m >= valida).length || 1;
+        // Usa mesesComLib — sem || 1, consultor com qtd=0 não entra (ex: Adriana Diniz Abr/2026)
+        const qtd       = mesesComLib.filter(m => m >= valida).length;
+        if (qtd === 0) return total;
         return total + metaMes * qtd;
       }, 0);
 
