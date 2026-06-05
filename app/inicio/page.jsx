@@ -256,6 +256,15 @@ export default function HomePage() {
         return total + metaMes * qtd;
       }, 0);
 
+      // DEBUG — remover após confirmar
+      console.log('[INICIO] mesesComLib:', mesesComLib);
+      console.log('[INICIO] metaTotal:', metaTotal);
+      consultores.filter(c=>c.meta_mensal>0).forEach(cons => {
+        const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
+        const valida = validaMes > '2026-01' ? validaMes : '2026-01';
+        const qtd = mesesComLib.filter(m => m >= valida).length || 1;
+        console.log('[INICIO]', cons.nome, '| meta_inicio:', cons.meta_inicio, '| valida:', valida, '| qtd:', qtd, '| contrib:', cons.meta_mensal * qtd);
+      });
       // ── 12. Demais cálculos ──────────────────────────────────────────────
       const esperadoTotal = empresasMov.reduce((s,e) => {
         const fator = (e.pct_principal??100)/100;
