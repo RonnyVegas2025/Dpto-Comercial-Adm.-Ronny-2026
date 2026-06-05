@@ -192,8 +192,11 @@ export default function DashboardVendedor() {
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        empQuery = empQuery.in('consultor_principal_id', ids);
-      }
+        empQuery = empQuery.or(`
+  consultor_principal_id.in.(ids),
+  consultor_agregado_id.in.(ids),
+  consultor_agregado_2_id.in.(ids)
+`)
 
       const empresas = await fetchAll(empQuery);
       const prodIds  = empresas.map(e => e.produto_id);
