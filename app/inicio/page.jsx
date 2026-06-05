@@ -81,9 +81,9 @@ export default function HomePage() {
           supabase.from('empresas')
             .select(`id, produto_id, nome, categoria, produto_contratado,
               potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
-              consultor_principal_id`)
+              consultor_principal_id, consultor_agregado_id, consultor_agregado_2_id`)
             .eq('ativo', true)
-            .in('consultor_principal_id', consIds)
+            .or(`consultor_principal_id.in.(${consIds.join(',')}),consultor_agregado_id.in.(${consIds.join(',')}),consultor_agregado_2_id.in.(${consIds.join(',')})`)
             .not('produto_contratado','ilike','%desconto condicional%')
             .not('categoria','eq','Taxa Negativa')
             .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade'])
@@ -92,9 +92,9 @@ export default function HomePage() {
           supabase.from('empresas')
             .select(`id, produto_id, nome, categoria, produto_contratado,
               potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
-              consultor_principal_id`)
+              consultor_principal_id, consultor_agregado_id, consultor_agregado_2_id`)
             .eq('ativo', true)
-            .in('consultor_principal_id', consIds)
+            .or(`consultor_principal_id.in.(${consIds.join(',')}),consultor_agregado_id.in.(${consIds.join(',')}),consultor_agregado_2_id.in.(${consIds.join(',')})`)
             .not('produto_contratado','ilike','%desconto condicional%')
             .not('categoria','eq','Taxa Negativa')
             .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade'])
