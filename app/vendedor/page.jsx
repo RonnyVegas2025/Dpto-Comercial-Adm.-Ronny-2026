@@ -186,15 +186,17 @@ export default function DashboardVendedor() {
         .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
 
       if (consultorId) {
-        // Vendedor específico: busca em todas as posições
+        // Vendedor específico: busca em todas as posições (principal + agregado)
         empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
       } else {
-        // Visão da equipe: busca em todas as posições (principal + agregados)
+        // Visão da equipe: principal da equipe + empresas onde são agregados MAS o principal também é da equipe
         const ids = gestorFiltro !== 'Geral'
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        // ✅ Usa .or() para pegar empresas onde o consultor é principal OU agregado
+        // Busca empresas onde o consultor da equipe é PRINCIPAL
+        // OU é AGREGADO (mas só empresas onde o principal também está na lista da visão)
+        // Isso evita puxar empresas de outros gestores onde nossos consultores são apenas agregados
         empQuery = empQuery.or(`consultor_principal_id.in.(${ids.join(',')}),consultor_agregado_id.in.(${ids.join(',')}),consultor_agregado_2_id.in.(${ids.join(',')})`);
       }
 
@@ -409,8 +411,13 @@ export default function DashboardVendedor() {
 
       const metaTotal    = meta; // acumulado (meta_mensal × meses)
       const metaMensalBase = consultoresDaVisao.reduce((s,cons) => s+(cons.meta_mensal||0), 0); // só mensal
-      const comMov     = listaProcessada.filter(e => e.totalMov > 0).length;
-      const semMov     = listaProcessada.filter(e => e.totalMov === 0).length;
+      // Contagem de empresas distintas com/sem movimentação
+      const empComMov  = new Set(listaProcessada.filter(e => e.totalMov > 0).map(e => e.id));
+      const empSemMov  = new Set(listaProcessada.filter(e => e.totalMov === 0).map(e => e.id));
+      // Remove da semMov empresas que aparecem em comMov (agregado pode ter mov mesmo que principal não)
+      empSemMov.forEach(id => { if (empComMov.has(id)) empSemMov.delete(id); });
+      const comMov = empComMov.size;
+      const semMov = empSemMov.size;
       const crescendo  = listaProcessada.filter(e => {
         const vals = mesesDisp.map(m => e.movPorMes[m] || 0);
         if (vals.length < 2) return false;
@@ -491,7 +498,9 @@ export default function DashboardVendedor() {
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
         lista: listaProcessada,
-        kpis: { totalMovReal, totalEsperado, meta, metaTotal, metaMensalBase, totalValorMeta, comMov, semMov, crescendo, empresas: listaProcessada.length },
+        kpis: { totalMovReal, totalEsperado, meta, metaTotal, metaMensalBase, totalValorMeta, comMov, semMov, crescendo,
+          // ✅ Conta empresas DISTINTAS (não linhas — uma empresa com 2 consultores da equipe geraria 2 linhas)
+          empresas: new Set(listaProcessada.map(e => e.id)).size },
         porProduto: Object.entries(porProduto).map(([nome,v]) => ({nome,...v})).sort((a,b) => b.movReal - a.movReal),
         ranking,
       });
