@@ -1260,10 +1260,12 @@ export default function Evolucao() {
       {/* KPIs */}
       <div style={s.kpis}>
         <div style={s.kpi}>
-          <span style={s.kpiLabel}>Total Empresas</span>
-          <span style={s.kpiVal}>{kpis.total}</span>
-          <span style={s.kpiSub}>Todas as categorias</span>
-        </div>
+  <span style={s.kpiLabel}>Total Contratos</span>
+  <span style={s.kpiVal}>{kpis.total}</span>
+  <span style={s.kpiSub}>
+    {new Set(listaFiltrada.map(e => e.id)).size} empresas distintas
+  </span>
+</div>
         <div style={{ ...s.kpi, borderColor: 'rgba(22,163,74,0.35)' }}>
           <span style={s.kpiLabel}>Movimentaram</span>
           <span style={{ ...s.kpiVal, color: '#16a34a' }}>{kpis.creditaram}</span>
