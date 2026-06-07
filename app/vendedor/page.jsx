@@ -204,6 +204,21 @@ export default function DashboardVendedor() {
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
+      // ✅ Para valor_meta_empresa: busca TODOS os ids de empresa dos consultores
+      // sem filtro de categoria — igual à página de Evolução
+      let allEmpIds = empIds;
+      if (!consultorId) {
+        const ids = gestorFiltro !== 'Geral'
+          ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
+          : consultores.map(c=>c.id);
+        const { data: allEmps } = await supabase.from('empresas')
+          .select('id')
+          .eq('ativo', true)
+          .not('produto_contratado','ilike','%desconto condicional%')
+          .or(`consultor_principal_id.in.(${ids.join(',')}),consultor_agregado_id.in.(${ids.join(',')}),consultor_agregado_2_id.in.(${ids.join(',')})`);
+        allEmpIds = (allEmps||[]).map(e => e.id);
+      }
+
       // Suporte a múltiplos meses selecionados
       const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados].sort() : (mesSelecionado ? [mesSelecionado] : []);
       // mesInicio e mesFim: pega menor e maior mês da seleção (ordenação lexicográfica funciona para YYYY-MM)
@@ -225,9 +240,9 @@ export default function DashboardVendedor() {
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
-        empIds.length ? supabase.from('valor_meta_empresa')
+        allEmpIds.length ? supabase.from('valor_meta_empresa')
           .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
-          .in('empresa_id', empIds)
+          .in('empresa_id', allEmpIds)
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
 
