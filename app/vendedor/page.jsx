@@ -204,20 +204,20 @@ export default function DashboardVendedor() {
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
-      // ✅ Para valor_meta_empresa: busca TODOS os ids de empresa dos consultores
-      // sem filtro de categoria — igual à página de Evolução
-      let allEmpIds = empIds;
-      if (!consultorId) {
-        const ids = gestorFiltro !== 'Geral'
-          ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
-          : consultores.map(c=>c.id);
-        const { data: allEmps } = await supabase.from('empresas')
+      // Busca TODOS os ids de empresa do gestor sem filtro de categoria
+      // para carregar valor_meta_empresa completo (igual à Evolução)
+      const consIdsParaMeta = consultorId
+        ? [consultorId]
+        : (gestorFiltro !== 'Geral'
+            ? consultores.filter(cc=>cc.gestor===gestorFiltro).map(cc=>cc.id)
+            : consultores.map(cc=>cc.id));
+      const empIdsParaMeta = consIdsParaMeta.length ? await fetchAll(
+        supabase.from('empresas')
           .select('id')
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
-          .or(`consultor_principal_id.in.(${ids.join(',')}),consultor_agregado_id.in.(${ids.join(',')}),consultor_agregado_2_id.in.(${ids.join(',')})`);
-        allEmpIds = (allEmps||[]).map(e => e.id);
-      }
+          .or(`consultor_principal_id.in.(${consIdsParaMeta.join(',')}),consultor_agregado_id.in.(${consIdsParaMeta.join(',')}),consultor_agregado_2_id.in.(${consIdsParaMeta.join(',')})`)
+      ).then(rows => rows.map(r=>r.id)) : empIds;
 
       // Suporte a múltiplos meses selecionados
       const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados].sort() : (mesSelecionado ? [mesSelecionado] : []);
@@ -240,9 +240,10 @@ export default function DashboardVendedor() {
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
-        allEmpIds.length ? supabase.from('valor_meta_empresa')
+        // Busca metas por todos os empIds do gestor (sem filtro de categoria = igual à Evolução)
+        empIdsParaMeta.length ? supabase.from('valor_meta_empresa')
           .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
-          .in('empresa_id', allEmpIds)
+          .in('empresa_id', empIdsParaMeta)
           .then(r => r.data||[]) : Promise.resolve([]),
       ]);
 
