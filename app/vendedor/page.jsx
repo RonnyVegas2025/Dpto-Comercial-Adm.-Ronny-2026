@@ -368,32 +368,24 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: meta principal filtrada por mês + upsells pelo seu próprio mês
+      // totalValorMeta: usa EXCLUSIVAMENTE os valores gravados em valor_meta_empresa
+      // (mesma fonte que a página de Evolução — garante consistência entre páginas)
       const totalValorMeta = (() => {
-        // Meta principal
-        const principal = listaProcessada.reduce((s,e) => {
+        // Monta set de empresa_ids da lista atual
+        const empIds = new Set(listaProcessada.map(e => e.id));
+
+        // Filtra todas as entradas do banco para empresas da lista
+        const entradasFiltradas = (vmetasRows||[]).filter(v => {
+          if (!empIds.has(v.empresa_id)) return false;
+          // Filtra por mês se houver seleção
           if (mesesAtivos.length > 0) {
-            const metaMes = e.metaComp?.substring(0,7);
-            if (!mesesAtivos.includes(metaMes)) return s;
+            const mesV = v.competencia_meta?.substring(0,7);
+            if (!mesesAtivos.includes(mesV)) return false;
           }
-          // Valor sem upsell (upsell contado separado)
-          const entradaPrincipal = (vmetasRows||[]).find(v =>
-            v.empresa_id === e.id && v.regra !== 'upsell' &&
-            (v.consultor_id === e._cons?.id || v.consultor_id === null)
-          );
-          const valorPrincipal = entradaPrincipal ? (entradaPrincipal.valor_meta||0) : (e.valorMeta||0);
-          return s + valorPrincipal;
-        }, 0);
+          return true;
+        });
 
-        // Upsells pelo próprio mês
-        const upsell = (vmetasRows||[]).reduce((s,v) => {
-          if (v.regra !== 'upsell') return s;
-          if (mesesAtivos.length > 0 && !mesesAtivos.includes(v.competencia_meta?.substring(0,7))) return s;
-          const empNaLista = listaProcessada.some(e => e.id === v.empresa_id);
-          return empNaLista ? s + (v.valor_meta||0) : s;
-        }, 0);
-
-        return principal + upsell;
+        return entradasFiltradas.reduce((s,v) => s + (v.valor_meta||0), 0);
       })();
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
@@ -468,31 +460,16 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
-      // metaPorMes: soma meta principal pelo metaComp + upsells pelo próprio mês
+      // metaPorMes: usa EXCLUSIVAMENTE os valores gravados em valor_meta_empresa
+      // (mesma fonte que a página de Evolução — garante consistência entre páginas)
       const metaPorMes = {};
+      const empIdsSet = new Set(listaProcessada.map(e => e.id));
       for (const m of mesesDisp) {
-        // Meta principal (beneficio/convenio) — pelo mês da competencia_meta
-        const metaPrincipal = listaProcessada.reduce((s,e) => {
-          const metaMes = e.metaComp?.substring(0,7);
-          if (metaMes !== m) return s;
-          // Soma só a meta principal (sem upsell — upsell será somado pelo seu próprio mês)
-          const entradaPrincipal = (vmetasRows||[]).find(v =>
-            v.empresa_id === e.id && v.regra !== 'upsell' &&
-            (v.consultor_id === e._cons?.id || v.consultor_id === null)
-          );
-          return s + (entradaPrincipal ? (entradaPrincipal.valor_meta||0) : (e.valorMeta||0));
-        }, 0);
-
-        // Upsells — pelo mês da própria competencia_meta do upsell
-        const metaUpsell = (vmetasRows||[]).reduce((s,v) => {
-          if (v.regra !== 'upsell') return s;
+        metaPorMes[m] = (vmetasRows||[]).reduce((s,v) => {
+          if (!empIdsSet.has(v.empresa_id)) return s;
           if (v.competencia_meta?.substring(0,7) !== m) return s;
-          // Só soma se a empresa está na lista filtrada
-          const empNaLista = listaProcessada.some(e => e.id === v.empresa_id);
-          return empNaLista ? s + (v.valor_meta||0) : s;
+          return s + (v.valor_meta||0);
         }, 0);
-
-        metaPorMes[m] = metaPrincipal + metaUpsell;
       }
 
       setDados({
