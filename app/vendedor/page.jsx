@@ -638,15 +638,34 @@ export default function DashboardVendedor() {
         }, 0);
       }
 
-      // 🔍 DIAGNÓSTICO TEMP — confere cobertura (todas as categorias) e as 9 empresas de Mar
-      const _alvosMar = [16782,16783,16784,16785,16786,16787,21010254,16790,16833];
-      console.log('[vendedor][diag] metasGestor:', metasGestor.length, 'empresas com meta',
-        '| escopo:', empresasEscopoMeta.length, '| total:', totalValorMeta,
-        '| Fev:', metaPorMes['2026-02'], '| Mar:', metaPorMes['2026-03']);
-      console.log('[vendedor][diag] alvos Mar em metasGestor:',
-        metasGestor.filter(e => _alvosMar.includes(Number(e.produto_id)))
-          .map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria,
-            entradas:e._metaEntradas.map(v => ({ mes:v.competencia_meta?.substring(0,7), val:v.valor_meta, regra:v.regra })) })));
+      // 🔍 DIAGNÓSTICO TEMP — rastreio completo das 7 empresas calculadas que faltam em Mar
+      const _alvosMar = [16782,16783,16784,16785,16786,16787,21010254];
+      const _isAlvo = (pid) => _alvosMar.includes(Number(pid));
+      console.log('[vendedor][diag] metasGestor:', metasGestor.length, '| escopo:', empresasEscopoMeta.length,
+        '| total:', totalValorMeta, '| Fev:', metaPorMes['2026-02'], '| Mar:', metaPorMes['2026-03'],
+        '| mesesDisp:', mesesDisp);
+      for (const pid of _alvosMar) {
+        const emParaMeta = empresasParaMeta.find(x => _isAlvo(x.produto_id) && Number(x.produto_id) === pid);
+        const emEscopo   = empresasEscopoMeta.find(x => Number(x.produto_id) === pid);
+        const libs       = (libsTodasMap[emParaMeta?.produto_id] || []).map(l => ({ comp:l.comp, val:l.val }));
+        const banco      = (vmetasRows||[]).filter(v => v.empresa_id === emParaMeta?.id)
+          .map(v => ({ mes:v.competencia_meta?.substring(0,7), val:v.valor_meta, regra:v.regra }));
+        const calc       = emEscopo ? calcularMeta(emEscopo, libsTodasMap, ajusteMap, emEscopo._pctEscopo, null) : null;
+        console.log(`[vendedor][diag] produto ${pid}:`, {
+          em_empresasParaMeta: !!emParaMeta,
+          nome: emParaMeta?.nome,
+          categoria: emParaMeta?.categoria,
+          cons_principal: emParaMeta?.consultor_principal?.nome,
+          gestor_principal: emParaMeta?.consultor_principal?.gestor,
+          pct_principal: emParaMeta?.pct_principal,
+          pctEscopo: emEscopo?._pctEscopo,
+          em_empresasEscopoMeta: !!emEscopo,
+          liberacoes: libs,
+          banco,
+          calc: calc && { elegivel: calc.elegivel, regra: calc.regra, mesAlvo: calc.mesAlvo, valorMeta: calc.valorMeta },
+          em_metasGestor: metasGestor.find(e => Number(e.produto_id) === pid)?._metaEntradas,
+        });
+      }
 
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
