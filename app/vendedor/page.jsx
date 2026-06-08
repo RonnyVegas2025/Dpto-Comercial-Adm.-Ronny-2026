@@ -670,6 +670,18 @@ export default function DashboardVendedor() {
         extrasFev:  extrasPorMes['2026-02']||0,
         extrasMar:  extrasPorMes['2026-03']||0,
       };
+      // Detalhe de produtos-alvo (16714 Auto Posto Tucano, 16511 Rgf Batatais)
+      const _dbgProd = (pid) => {
+        const ep = empresasParaMeta.find(e => Number(e.produto_id) === pid);
+        if (!ep) return `${pid}: NAO em empresasParaMeta (cat filtrada?)`;
+        const inScope = empIdsParaMeta.includes(ep.id);
+        const bE = (vmetasRows||[]).filter(v => v.empresa_id === ep.id).length;
+        const bC = (vmetasConsultor||[]).filter(v => v.empresa_id === ep.id).length;
+        return `${pid}[${ep.categoria}] pctEsc=${pctDoEscopo(ep)} P=${ep.consultor_principal?.gestor||'-'} A=${ep.consultor_agregado?.gestor||'-'} scope=${inScope} bancoEmp=${bE} bancoCons=${bC}`;
+      };
+      _debug.p16714 = _dbgProd(16714);
+      _debug.p16511 = _dbgProd(16511);
+      console.log('[diag] 16714:', _debug.p16714, '|| 16511:', _debug.p16511);
 
       // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
@@ -1048,6 +1060,10 @@ export default function DashboardVendedor() {
                   vmetasConsultor: <b>{_debug?.vmCount ?? '?'}</b> reg · Fev gravado: {fmt(_debug?.vmFevTotal||0)} (escopo {_debug?.vmFevIn ?? '?'}/fora {_debug?.vmFevOut ?? '?'}) · Mar gravado: {fmt(_debug?.vmMarTotal||0)} · extrasFev {fmt(_debug?.extrasFev||0)} / extrasMar {fmt(_debug?.extrasMar||0)}
                   <br/>
                   ⚠️ esperado: Fev 129.741,00 · Mar 179.986,44 — abra F12 e veja "[diag] FEV breakdown" p/ comparar empresa a empresa
+                  <br/>
+                  <span style={{color:'#7c2d12'}}>16714 → {_debug?.p16714 ?? '?'}</span>
+                  <br/>
+                  <span style={{color:'#7c2d12'}}>16511 → {_debug?.p16511 ?? '?'}</span>
                 </div>
               </div>
             )}
