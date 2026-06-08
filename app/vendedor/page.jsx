@@ -670,18 +670,17 @@ export default function DashboardVendedor() {
         extrasFev:  extrasPorMes['2026-02']||0,
         extrasMar:  extrasPorMes['2026-03']||0,
       };
-      // Detalhe de produtos-alvo (16714 Auto Posto Tucano, 16511 Rgf Batatais)
+      // Detalhe de produtos-alvo — mostra consultores e pcts crus p/ achar o bug do pctEscopo
       const _dbgProd = (pid) => {
         const ep = empresasParaMeta.find(e => Number(e.produto_id) === pid);
         if (!ep) return `${pid}: NAO em empresasParaMeta (cat filtrada?)`;
-        const inScope = empIdsParaMeta.includes(ep.id);
-        const bE = (vmetasRows||[]).filter(v => v.empresa_id === ep.id).length;
-        const bC = (vmetasConsultor||[]).filter(v => v.empresa_id === ep.id).length;
-        return `${pid}[${ep.categoria}] pctEsc=${pctDoEscopo(ep)} P=${ep.consultor_principal?.gestor||'-'} A=${ep.consultor_agregado?.gestor||'-'} scope=${inScope} bancoEmp=${bE} bancoCons=${bC}`;
+        const c = (cons,p) => cons ? `${cons.nome?.split(' ')[0]||'?'}/g:${cons.gestor||'-'}/pct:${p}` : `(vazio/pct:${p})`;
+        return `${pid}[${ep.categoria}] pctEsc=${pctDoEscopo(ep)} || P=${c(ep.consultor_principal,ep.pct_principal)} | A1=${c(ep.consultor_agregado,ep.pct_agregado_1)} | A2=${c(ep.consultor_agregado_2,ep.pct_agregado_2)}`;
       };
-      _debug.p16714 = _dbgProd(16714);
-      _debug.p16511 = _dbgProd(16511);
-      console.log('[diag] 16714:', _debug.p16714, '|| 16511:', _debug.p16511);
+      _debug.p16692 = _dbgProd(16692);
+      _debug.p16703 = _dbgProd(16703);
+      _debug.p16538 = _dbgProd(16538);
+      console.log('[diag] 16692:', _debug.p16692, '\n16702:', _dbgProd(16702), '\n16703:', _debug.p16703, '\n16538(ok):', _debug.p16538);
 
       // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
@@ -1079,9 +1078,11 @@ export default function DashboardVendedor() {
                   {(_debug?.difsFev?.length ? _debug.difsFev : ['nenhuma > R$0,50']).map((d,i) => (
                     <div key={i} style={{marginLeft:12,color:'#7c2d12'}}>• {d}</div>
                   ))}
-                  <span style={{color:'#7c2d12'}}>16714 → {_debug?.p16714 ?? '?'}</span>
+                  <span style={{color:'#7c2d12'}}>16692(erro) → {_debug?.p16692 ?? '?'}</span>
                   <br/>
-                  <span style={{color:'#7c2d12'}}>16511 → {_debug?.p16511 ?? '?'}</span>
+                  <span style={{color:'#7c2d12'}}>16703(erro) → {_debug?.p16703 ?? '?'}</span>
+                  <br/>
+                  <span style={{color:'#166534'}}>16538(ok) → {_debug?.p16538 ?? '?'}</span>
                 </div>
               </div>
             )}
