@@ -717,6 +717,24 @@ export default function DashboardVendedor() {
       _debug.fevCount = _breakFev.length;
       _debug.marCount = _breakMar.length;
 
+      // 🔧 DEBUG — diff contra a planilha de Fev (acha exatamente qual empresa diverge)
+      const _expFev = {16225:679.97,16306:639.78,16316:4200,16317:1100,16318:1300,16509:16610.52,
+        16511:400,16538:7947.50,16572:2380.96,16619:6034.05,16630:5251,16646:1593,16681:1120,
+        16691:21849.01,16692:501.25,16693:20245.68,16702:66.83,16703:3642.42,16714:6578.50,
+        16715:8584.50,16716:3864.50,16717:1534,16732:1169.67,16743:7665,15487:4782.86};
+      const _gotFev = {};
+      for (const e of metasGestor) {
+        const v = e._metaEntradas.filter(x=>x.competencia_meta?.substring(0,7)==='2026-02').reduce((s,x)=>s+(x.valor_meta||0),0);
+        if (v>0) _gotFev[Number(e.produto_id)] = (_gotFev[Number(e.produto_id)]||0) + v;
+      }
+      const _difs = [];
+      for (const pid of new Set([...Object.keys(_expFev),...Object.keys(_gotFev)].map(Number))) {
+        const exp=_expFev[pid]||0, got=_gotFev[pid]||0;
+        if (Math.abs(exp-got) > 0.5) _difs.push(`${pid}: planilha=${exp.toFixed(2)} card=${got.toFixed(2)} (falta ${(exp-got).toFixed(2)})`);
+      }
+      _debug.difsFev = _difs;
+      console.log('[diag] DIFs Fev (empresa: planilha vs card):', _difs);
+
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes, _debug,
         lista: listaProcessada,
@@ -1054,13 +1072,13 @@ export default function DashboardVendedor() {
                 )}
                 {/* 🔧 DEBUG TEMPORÁRIO — confirma se o código novo está em produção */}
                 <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace',lineHeight:1.6}}>
-                  🔧 BUILD <b>meta-break-v4</b> · metaPorMes →
+                  🔧 BUILD <b>meta-diff-v6</b> · metaPorMes →
                   {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} · Fev: <b>{fmt(metaPorMes?.['2026-02']||0)}</b> ({_debug?.fevCount ?? '?'} emp) · Mar: <b>{fmt(metaPorMes?.['2026-03']||0)}</b> ({_debug?.marCount ?? '?'} emp)
                   <br/>
-                  vmetasConsultor: <b>{_debug?.vmCount ?? '?'}</b> reg · Fev gravado: {fmt(_debug?.vmFevTotal||0)} (escopo {_debug?.vmFevIn ?? '?'}/fora {_debug?.vmFevOut ?? '?'}) · Mar gravado: {fmt(_debug?.vmMarTotal||0)} · extrasFev {fmt(_debug?.extrasFev||0)} / extrasMar {fmt(_debug?.extrasMar||0)}
-                  <br/>
-                  ⚠️ esperado: Fev 129.741,00 · Mar 179.986,44 — abra F12 e veja "[diag] FEV breakdown" p/ comparar empresa a empresa
-                  <br/>
+                  <b>⚠️ DIVERGÊNCIAS Fev vs planilha (esperado 129.741,00):</b>
+                  {(_debug?.difsFev?.length ? _debug.difsFev : ['nenhuma > R$0,50']).map((d,i) => (
+                    <div key={i} style={{marginLeft:12,color:'#7c2d12'}}>• {d}</div>
+                  ))}
                   <span style={{color:'#7c2d12'}}>16714 → {_debug?.p16714 ?? '?'}</span>
                   <br/>
                   <span style={{color:'#7c2d12'}}>16511 → {_debug?.p16511 ?? '?'}</span>
