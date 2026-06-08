@@ -577,15 +577,13 @@ export default function DashboardVendedor() {
           // Benefícios/Bônus → 1ª liberação; Convênio/Mobilidade → 3ª liberação.
           const libAlvo    = libsDaEmpresa.length === 0 ? null : (isConvenio ? libsDaEmpresa[2] : libsDaEmpresa[0]);
           const mesDaMeta  = libAlvo ? String(libAlvo.competencia).substring(0,7) : null;
-          // Valor: liberação do mês-alvo × peso × pct.
-          // (1) Ignora ajuste = 0 (ou negativo): usa total_liberado direto. Só um ajuste
-          //     positivo sobrepõe a liberação.
-          // (2) peso só p/ Vegas Benefícios, tratando 0/nulo como 1.
+          // Valor da meta = total_liberado × peso × (pct/100) — igual à Evolução.
+          // Usa o valor REAL da liberação (total_liberado); NÃO aplica ajuste
+          // (valor_considerado), que estava reduzindo a meta de algumas empresas.
+          // peso só p/ Vegas Benefícios, tratando 0/nulo como 1.
           let valorMeta = 0, peso = 1;
           if (libAlvo) {
-            const compKey   = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
-            const ajuste    = ajusteMap[compKey];
-            const valorBase = ajuste > 0 ? ajuste : (libAlvo.total_liberado || 0);
+            const valorBase = libAlvo.total_liberado || 0;
             const prodNorm  = (ep.produto_contratado || '').toLowerCase().trim();
             const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
             peso = isVB ? (ep.peso_categoria || 1) : 1;
