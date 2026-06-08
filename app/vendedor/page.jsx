@@ -52,56 +52,93 @@ async function fetchVmetasPorEmpresa(empIds) {
   return out;
 }
 
-function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
+// ─── LÓGICA DE META (copiada da página de Evolução para manter paridade) ──────
+// Regra de peso: APENAS Vegas Benefícios aplica peso na meta. Demais produtos: peso
+// só para previsão; meta usa 100% da movimentação.
+// Benefícios/Bônus → meta = 1ª liberação. Convênio/Mobilidade → meta = 3º mês corrido.
+function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
   const isConv    = catLower.includes('conv') || catLower.includes('mobil');
+  // Benefícios = tudo que não é Convênio/Mobilidade (Alimentação, Bônus, Aux. Combustível, etc.)
   const isBenef   = !isConv;
+  if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
+  const validaMes = validaDesdeMes?.substring(0,7) || '2000-01';
+
+  // Filtra movimentações: apenas a partir do mês válido da meta
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => {
-      const _v = validaDesdeMes ? String(validaDesdeMes).substring(0,7) : '2026-01';
-      const _limite = _v > '2026-01' ? _v : '2026-01';
-      return l.val > 0 && l.comp >= _limite;
-    })
+    .filter(l => l.val > 0 && l.comp >= validaMes)
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
-  if (libsOrdenadas.length === 0) return null;
+  const totalMesesComMov = libsOrdenadas.length;
 
-  const isVB  = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
-  const peso  = isVB ? (empresa.peso_categoria ?? 1) : 1;
+  // Peso só entra na meta se for Vegas Benefícios
+  const isVB   = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+  const peso   = isVB ? (empresa.peso_categoria ?? 1) : 1;
 
-  let mesAlvo = null, mesSeq = 0, valorBruto = 0;
-
-  if (isBenef) {
-    mesAlvo    = libsOrdenadas[0].comp;
-    mesSeq     = 1;
-    valorBruto = libsOrdenadas[0].val;
-  } else if (isConv) {
-    if (libsOrdenadas.length < 3) return null;
-    mesAlvo    = libsOrdenadas[2].comp;
-    mesSeq     = 3;
-    valorBruto = libsOrdenadas[2].val;
+  function calcValorMeta(valorConsid) {
+    return Math.round(valorConsid * peso * (pct / 100) * 100) / 100;
   }
 
-  if (!mesAlvo) return null;
+  if (isBenef) {
+    if (totalMesesComMov === 0) return { elegivel: false, regra: 'beneficio', progresso: 0, precisam: 1 };
+    const mesAlvo     = libsOrdenadas[0].comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = libsOrdenadas[0].val;
+    const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
+    const valorMeta   = calcValorMeta(valorConsid);
+    return { elegivel: true, regra: 'beneficio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: 1, precisam: 1 };
+  }
 
-  const compKey  = `${empresa.id}__${mesAlvo}`;
-  const ajuste   = ajusteMap[compKey];
-  const valorConsiderado = ajuste !== undefined ? ajuste : valorBruto;
-  const valorMeta = Math.round(valorConsiderado * peso * (pct / 100) * 100) / 100;
+  if (isConv) {
+    // Regra: 3 meses CORRIDOS a partir do 1º mês com movimentação VÁLIDA
+    const todosOsMeses = (libsTodasMap[empresa.produto_id] || [])
+      .filter(l => l.comp >= validaMes)
+      .sort((a, b) => a.comp.localeCompare(b.comp));
 
-  return {
-    empresa_id:        empresa.id,
-    produto_id:        empresa.produto_id,
-    competencia_meta:  mesAlvo,
-    valor_bruto:       valorBruto,
-    valor_considerado: valorConsiderado,
-    valor_meta:        valorMeta,
-    pct_consultor:     pct,
-    regra:             isBenef ? 'beneficio' : 'convenio',
-    mes_sequencia:     mesSeq,
-  };
+    const primeiroCom = todosOsMeses.find(l => l.val > 0);
+    if (!primeiroCom) return { elegivel: false, regra: 'convenio', progresso: 0, precisam: 3 };
+
+    // Monta os 3 meses corridos a partir do 1º com movimentação
+    const [y0, m0] = primeiroCom.comp.split('-').map(Number);
+    const tresMeses = [0, 1, 2].map(i => {
+      const d    = new Date(y0, m0 - 1 + i, 1);
+      const comp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const lib  = todosOsMeses.find(l => l.comp === comp);
+      return { comp, val: lib?.val || 0 };
+    });
+
+    const terceiro = tresMeses[2];
+
+    // 3º mês "chegou" se: (a) existe registro no banco, OU (b) a data atual já passou esse mês
+    const hoje       = new Date();
+    const mesAtual   = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const terceiroJaPassou = terceiro.comp < mesAtual; // comparação lexicográfica YYYY-MM funciona
+    const temTerceiro = todosOsMeses.some(l => l.comp === terceiro.comp) || terceiroJaPassou;
+
+    if (!temTerceiro) {
+      const mesesComMov = tresMeses.filter(m => m.val > 0).length;
+      return { elegivel: false, regra: 'convenio', progresso: mesesComMov, precisam: 3 };
+    }
+
+    // 3º mês fechou — usa 3º se tem valor, senão usa último com valor dentro dos 3
+    let mesAlvoObj = terceiro.val > 0
+      ? terceiro
+      : [...tresMeses].reverse().find(m => m.val > 0);
+
+    if (!mesAlvoObj) return { elegivel: false, regra: 'convenio', progresso: 0, precisam: 3 };
+
+    const mesAlvo     = mesAlvoObj.comp;
+    const ajuste      = ajusteMap[`${empresa.id}__${mesAlvo}`];
+    const valorBruto  = mesAlvoObj.val;
+    const valorConsid = ajuste !== undefined ? ajuste : valorBruto;
+    const valorMeta   = calcValorMeta(valorConsid);
+    const mesesComMov = tresMeses.filter(m => m.val > 0).length;
+    return { elegivel: true, regra: 'convenio', mesAlvo, valorMeta, valorBruto, valorConsid, peso, progresso: mesesComMov, precisam: 3 };
+  }
+
+  return { elegivel: false, regra: null };
 }
 
 export default function DashboardVendedor() {
@@ -402,7 +439,17 @@ export default function DashboardVendedor() {
               pct_consultor:     pctBanco,
             };
           } else {
-            metaCalc = calcularValorMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+            // Sem entrada no banco → calcula automaticamente (mesma lógica da Evolução):
+            // Benefícios/Bônus = 1ª liberação; Convênio/Mobilidade = 3º mês corrido.
+            const mc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+            metaCalc = (mc && mc.elegivel) ? {
+              valor_meta:        mc.valorMeta  || 0,
+              competencia_meta:  mc.mesAlvo,
+              regra:             mc.regra,
+              valor_bruto:       mc.valorBruto || 0,
+              valor_considerado: mc.valorConsid || 0,
+              mes_sequencia:     mc.regra === 'convenio' ? 3 : 1,
+            } : null;
           }
 
           // ✅ Guarda equipe do consultor para filtro na carteira
