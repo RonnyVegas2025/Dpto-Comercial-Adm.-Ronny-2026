@@ -656,6 +656,21 @@ export default function DashboardVendedor() {
       }
       mesesDisp.sort();
 
+      // 🔧 DEBUG — diagnóstico dos gravados por consultor
+      const _vmFev = (vmetasConsultor||[]).filter(v => v.competencia_meta?.substring(0,7)==='2026-02');
+      const _vmMar = (vmetasConsultor||[]).filter(v => v.competencia_meta?.substring(0,7)==='2026-03');
+      const _debug = {
+        vmCount:    (vmetasConsultor||[]).length,
+        consIds:    consIdsGestor.length,
+        empScope:   empIdsParaMeta.length,
+        vmFevTotal: _vmFev.reduce((s,v)=>s+(v.valor_meta||0),0),
+        vmMarTotal: _vmMar.reduce((s,v)=>s+(v.valor_meta||0),0),
+        vmFevIn:    _vmFev.filter(v=>empIdsEscopoSet.has(v.empresa_id)).length,
+        vmFevOut:   _vmFev.filter(v=>!empIdsEscopoSet.has(v.empresa_id)).length,
+        extrasFev:  extrasPorMes['2026-02']||0,
+        extrasMar:  extrasPorMes['2026-03']||0,
+      };
+
       // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
         const entradas = mesesAtivos.length > 0
@@ -676,7 +691,7 @@ export default function DashboardVendedor() {
         '| vmetasConsultor:', (vmetasConsultor||[]).length, '| empIdsEscopo:', empIdsParaMeta.length);
 
       setDados({
-        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
+        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes, _debug,
         lista: listaProcessada,
         kpis: { totalMovReal, totalEsperado, meta, metaTotal, metaMensalBase, totalValorMeta, comMov, semMov, crescendo,
           // ✅ Conta empresas DISTINTAS (não linhas — uma empresa com 2 consultores da equipe geraria 2 linhas)
@@ -809,7 +824,7 @@ export default function DashboardVendedor() {
       )}
 
       {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes } = dados;
+        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes, _debug } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corPct = (p) => p >= 80 ? '#34d399' : p >= 60 ? '#f0b429' : '#f87171';
@@ -1011,12 +1026,15 @@ export default function DashboardVendedor() {
                   </div>
                 )}
                 {/* 🔧 DEBUG TEMPORÁRIO — confirma se o código novo está em produção */}
-                <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace'}}>
-                  🔧 BUILD <b>meta-extras-consultor-v2</b> ·
-                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} ·
-                  {' '}Fev: {fmt(metaPorMes?.['2026-02']||0)} ·
-                  {' '}Mar: {fmt(metaPorMes?.['2026-03']||0)}
-                  {' '}· meses=[{Object.keys(metaPorMes||{}).join(', ')}]
+                <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace',lineHeight:1.6}}>
+                  🔧 BUILD <b>meta-extras-consultor-v3</b> ·
+                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} · Fev: {fmt(metaPorMes?.['2026-02']||0)} · Mar: {fmt(metaPorMes?.['2026-03']||0)}
+                  <br/>
+                  vmetasConsultor: <b>{_debug?.vmCount ?? '?'}</b> registros · consIds: {_debug?.consIds ?? '?'} · empScope: {_debug?.empScope ?? '?'}
+                  <br/>
+                  vmConsultor Fev total: {fmt(_debug?.vmFevTotal||0)} (dentro escopo: {_debug?.vmFevIn ?? '?'} · fora: {_debug?.vmFevOut ?? '?'}) · vmConsultor Mar total: {fmt(_debug?.vmMarTotal||0)}
+                  <br/>
+                  extrasFev: <b>{fmt(_debug?.extrasFev||0)}</b> · extrasMar: <b>{fmt(_debug?.extrasMar||0)}</b>
                 </div>
               </div>
             )}
