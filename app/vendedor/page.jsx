@@ -1010,6 +1010,14 @@ export default function DashboardVendedor() {
                     })}
                   </div>
                 )}
+                {/* 🔧 DEBUG TEMPORÁRIO — confirma se o código novo está em produção */}
+                <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace'}}>
+                  🔧 BUILD <b>meta-extras-consultor-v2</b> ·
+                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} ·
+                  {' '}Fev: {fmt(metaPorMes?.['2026-02']||0)} ·
+                  {' '}Mar: {fmt(metaPorMes?.['2026-03']||0)}
+                  {' '}· meses=[{Object.keys(metaPorMes||{}).join(', ')}]
+                </div>
               </div>
             )}
 
