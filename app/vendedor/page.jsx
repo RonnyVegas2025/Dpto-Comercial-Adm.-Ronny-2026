@@ -571,39 +571,17 @@ export default function DashboardVendedor() {
         if (banco.length > 0) {
           _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));
         } else {
-          // Liberações REAIS da empresa (valor > 0) DENTRO do período da meta (2026),
-          // ordenadas por competência crescente. Liberações de 2025 (empresas cadastradas
-          // em nov/dez/2025) NÃO contam: a meta de 2026 começa na 1ª liberação de 2026.
-          const libsDaEmpresa = (libsTodas||[])
-            .filter(l => Number(l.produto_id) === Number(ep.produto_id)
-              && (l.total_liberado || 0) > 0
-              && String(l.competencia).substring(0,7) >= '2026-01')
-            .sort((a,b) => String(a.competencia).localeCompare(String(b.competencia)));
-          const catLower   = (ep.categoria || '').toLowerCase();
-          const isConvenio = catLower.includes('conv') || catLower.includes('mobil');
-          // Benefícios/Bônus → 1ª liberação; Convênio/Mobilidade → 3ª liberação.
-          const libAlvo    = libsDaEmpresa.length === 0 ? null : (isConvenio ? libsDaEmpresa[2] : libsDaEmpresa[0]);
-          const mesDaMeta  = libAlvo ? String(libAlvo.competencia).substring(0,7) : null;
-          // Valor da meta = total_liberado × peso × (pct/100) — igual à Evolução.
-          // Usa o valor REAL da liberação (total_liberado); NÃO aplica ajuste
-          // (valor_considerado), que estava reduzindo a meta de algumas empresas.
-          // peso só p/ Vegas Benefícios, tratando 0/nulo como 1.
-          let valorMeta = 0, peso = 1;
-          if (libAlvo) {
-            const valorBase = libAlvo.total_liberado || 0;
-            const prodNorm  = (ep.produto_contratado || '').toLowerCase().trim();
-            const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
-            peso = isVB ? (ep.peso_categoria || 1) : 1;
-            valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
-          }
+          // Cálculo automático IGUAL à página de Evolução: usa a MESMA função calcularMeta
+          // (benefício = 1ª liberação; convênio/mobilidade = 3º mês corrido; valor com
+          // ajuste/valor_considerado; peso só p/ Vegas Benefícios), com piso no período da
+          // meta (2026-01). pct = pct efetivo do escopo (soma dos consultores do gestor na
+          // empresa) — equivale a somar a meta de cada consultor (principal + agregado).
+          const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pct, '2026-01');
           if (_alvosLog.has(Number(ep.produto_id))) {
-            console.log(`[diag] ${ep.produto_id} mesDaMeta:`, mesDaMeta,
-              '| categoria:', ep.categoria, '| isConvenio:', isConvenio, '| pctEscopo:', pct,
-              '| valorMeta:', valorMeta, '| INCLUIDO:', !!(mesDaMeta && valorMeta > 0),
-              '| liberacoes(2026+):', libsDaEmpresa.map(l => ({ comp: String(l.competencia).substring(0,7), val: l.total_liberado })));
+            console.log(`[diag] ${ep.produto_id} →`, mc && { elegivel: mc.elegivel, regra: mc.regra, mesAlvo: mc.mesAlvo, valorMeta: mc.valorMeta }, '| pctEscopo:', pct, '| cat:', ep.categoria);
           }
-          if (!mesDaMeta || !(valorMeta > 0)) return null; // sem liberação real / valor zero = sem meta
-          _metaEntradas = [{ competencia_meta: mesDaMeta + '-01', valor_meta: valorMeta, regra: isConvenio ? 'convenio' : 'beneficio' }];
+          if (!mc || !mc.elegivel || !(mc.valorMeta > 0) || !mc.mesAlvo) return null;
+          _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta, regra: mc.regra }];
         }
         const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100);
         return { ...ep, _pct: pct, esperadoMes, _metaEntradas };
