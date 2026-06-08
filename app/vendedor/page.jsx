@@ -264,9 +264,26 @@ export default function DashboardVendedor() {
       consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
     }
 
+    // PROBLEMA 1: gestor_comercial enxerga APENAS a própria equipe — não existe
+    // "Geral" (que mostraria todas as equipes). Sua "geral" é a própria equipe.
+    const ehGestorComercial = prof?.perfil === 'gestor_comercial';
+    if (ehGestorComercial && prof?.nome) {
+      const nomeG = prof.nome;
+      const minhaEquipe = consComValidade.filter(c => {
+        const g = c.gestor || '';
+        return g === nomeG || nomeG.startsWith(g) || g.startsWith(nomeG);
+      });
+      if (minhaEquipe.length) consComValidade = minhaEquipe;
+    }
+
     setConsultores(consComValidade);
-    const gs = ['Geral', ...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
+    const gestoresUnicos = [...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
+    const gs = (ehGestorComercial && gestoresUnicos.length)
+      ? gestoresUnicos                       // sem "Geral" p/ gestor comercial
+      : ['Geral', ...gestoresUnicos];
     setGestores(gs);
+    // Default: gestor comercial já entra na própria equipe (não em "Geral")
+    if (ehGestorComercial && gestoresUnicos.length) setGestorFiltro(gestoresUnicos[0]);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
     setMeses(ms);
   }
@@ -591,7 +608,6 @@ export default function DashboardVendedor() {
       // ou, na ausência, calcula automaticamente. O MÊS da meta é SEMPRE o mês da
       // PRIMEIRA LIBERAÇÃO REAL em libsTodas (benefício) ou da 3ª liberação (convênio) —
       // NUNCA a data_cadastro.
-      const _alvosLog = new Set([16714,16715,16716,16717,16743,16511]); // diag temp
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct   = ep._pctEscopo;
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
@@ -605,9 +621,6 @@ export default function DashboardVendedor() {
           // meta (2026-01). pct = pct efetivo do escopo (soma dos consultores do gestor na
           // empresa) — equivale a somar a meta de cada consultor (principal + agregado).
           const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pct, '2026-01');
-          if (_alvosLog.has(Number(ep.produto_id))) {
-            console.log(`[diag] ${ep.produto_id} →`, mc && { elegivel: mc.elegivel, regra: mc.regra, mesAlvo: mc.mesAlvo, valorMeta: mc.valorMeta }, '| pctEscopo:', pct, '| cat:', ep.categoria);
-          }
           if (!mc || !mc.elegivel || !(mc.valorMeta > 0) || !mc.mesAlvo) return null;
           _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta, regra: mc.regra }];
         }
@@ -656,35 +669,7 @@ export default function DashboardVendedor() {
       }
       mesesDisp.sort();
 
-      // 🔧 DEBUG — diagnóstico dos gravados por consultor
-      const _vmFev = (vmetasConsultor||[]).filter(v => v.competencia_meta?.substring(0,7)==='2026-02');
-      const _vmMar = (vmetasConsultor||[]).filter(v => v.competencia_meta?.substring(0,7)==='2026-03');
-      const _debug = {
-        vmCount:    (vmetasConsultor||[]).length,
-        consIds:    consIdsGestor.length,
-        empScope:   empIdsParaMeta.length,
-        vmFevTotal: _vmFev.reduce((s,v)=>s+(v.valor_meta||0),0),
-        vmMarTotal: _vmMar.reduce((s,v)=>s+(v.valor_meta||0),0),
-        vmFevIn:    _vmFev.filter(v=>empIdsEscopoSet.has(v.empresa_id)).length,
-        vmFevOut:   _vmFev.filter(v=>!empIdsEscopoSet.has(v.empresa_id)).length,
-        extrasFev:  extrasPorMes['2026-02']||0,
-        extrasMar:  extrasPorMes['2026-03']||0,
-      };
-      // Detalhe de produtos-alvo — liberações (já agregadas por mês) + meta calculada
-      const _dbgProd = (pid) => {
-        const ep = empresasParaMeta.find(e => Number(e.produto_id) === pid);
-        if (!ep) return `${pid}: NAO em empresasParaMeta (cat filtrada?)`;
-        const arr = (libsTodasMap[ep.produto_id]||[]).filter(l => l.comp >= '2026-01');
-        const libsStr = arr.map(l => `${l.comp.substring(0,7)}=${(l.val||0).toFixed(2)}`).join(', ');
-        const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pctDoEscopo(ep), '2026-01');
-        return `${pid} pctEsc=${pctDoEscopo(ep)} libs[${libsStr}] → META=${(mc?.valorMeta||0).toFixed(2)}`;
-      };
-      _debug.p16692 = _dbgProd(16692);
-      _debug.p16703 = _dbgProd(16703);
-      _debug.p16538 = _dbgProd(16538);
-      console.log('[diag] 16692:', _debug.p16692, '\n16702:', _dbgProd(16702), '\n16703:', _debug.p16703, '\n16538:', _debug.p16538);
-
-      // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
+      // Total e por mês = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
         const entradas = mesesAtivos.length > 0
           ? e._metaEntradas.filter(v => mesesAtivos.includes(v.competencia_meta?.substring(0,7)))
@@ -699,45 +684,9 @@ export default function DashboardVendedor() {
           return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
         }, 0) + (extrasPorMes[m] || 0);
       }
-      console.log('[diag] metaPorMes:', metaPorMes, '| total:', totalValorMeta,
-        '| extras (gravados fora do escopo):', extrasPorMes,
-        '| vmetasConsultor:', (vmetasConsultor||[]).length, '| empIdsEscopo:', empIdsParaMeta.length);
-
-      // 🔧 DEBUG — quebra por empresa de cada mês (p/ diferenciar contra a planilha)
-      const _breakMes = (mes) => metasGestor
-        .map(e => ({ pid: e.produto_id, nome: e.nome,
-          val: e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === mes).reduce((s,v)=>s+(v.valor_meta||0),0) }))
-        .filter(x => x.val > 0)
-        .sort((a,b) => (a.pid||0) - (b.pid||0));
-      const _breakFev = _breakMes('2026-02');
-      const _breakMar = _breakMes('2026-03');
-      console.log('[diag] FEV breakdown ('+_breakFev.length+' emp, total '+_breakFev.reduce((s,e)=>s+e.val,0).toFixed(2)+'):',
-        _breakFev.map(e => e.pid+'='+e.val.toFixed(2)).join('  '));
-      console.log('[diag] MAR breakdown ('+_breakMar.length+' emp, total '+_breakMar.reduce((s,e)=>s+e.val,0).toFixed(2)+'):',
-        _breakMar.map(e => e.pid+'='+e.val.toFixed(2)).join('  '));
-      _debug.fevCount = _breakFev.length;
-      _debug.marCount = _breakMar.length;
-
-      // 🔧 DEBUG — diff contra a planilha de Fev (acha exatamente qual empresa diverge)
-      const _expFev = {16225:679.97,16306:639.78,16316:4200,16317:1100,16318:1300,16509:16610.52,
-        16511:400,16538:7947.50,16572:2380.96,16619:6034.05,16630:5251,16646:1593,16681:1120,
-        16691:21849.01,16692:501.25,16693:20245.68,16702:66.83,16703:3642.42,16714:6578.50,
-        16715:8584.50,16716:3864.50,16717:1534,16732:1169.67,16743:7665,15487:4782.86};
-      const _gotFev = {};
-      for (const e of metasGestor) {
-        const v = e._metaEntradas.filter(x=>x.competencia_meta?.substring(0,7)==='2026-02').reduce((s,x)=>s+(x.valor_meta||0),0);
-        if (v>0) _gotFev[Number(e.produto_id)] = (_gotFev[Number(e.produto_id)]||0) + v;
-      }
-      const _difs = [];
-      for (const pid of new Set([...Object.keys(_expFev),...Object.keys(_gotFev)].map(Number))) {
-        const exp=_expFev[pid]||0, got=_gotFev[pid]||0;
-        if (Math.abs(exp-got) > 0.5) _difs.push(`${pid}: planilha=${exp.toFixed(2)} card=${got.toFixed(2)} (falta ${(exp-got).toFixed(2)})`);
-      }
-      _debug.difsFev = _difs;
-      console.log('[diag] DIFs Fev (empresa: planilha vs card):', _difs);
 
       setDados({
-        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes, _debug,
+        consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
         lista: listaProcessada,
         kpis: { totalMovReal, totalEsperado, meta, metaTotal, metaMensalBase, totalValorMeta, comMov, semMov, crescendo,
           // ✅ Conta empresas DISTINTAS (não linhas — uma empresa com 2 consultores da equipe geraria 2 linhas)
@@ -870,7 +819,7 @@ export default function DashboardVendedor() {
       )}
 
       {dados && !loading && (() => {
-        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes, _debug } = dados;
+        const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes } = dados;
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corPct = (p) => p >= 80 ? '#34d399' : p >= 60 ? '#f0b429' : '#f87171';
@@ -1071,21 +1020,6 @@ export default function DashboardVendedor() {
                     })}
                   </div>
                 )}
-                {/* 🔧 DEBUG TEMPORÁRIO — confirma se o código novo está em produção */}
-                <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace',lineHeight:1.6}}>
-                  🔧 BUILD <b>meta-diff-v6</b> · metaPorMes →
-                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} · Fev: <b>{fmt(metaPorMes?.['2026-02']||0)}</b> ({_debug?.fevCount ?? '?'} emp) · Mar: <b>{fmt(metaPorMes?.['2026-03']||0)}</b> ({_debug?.marCount ?? '?'} emp)
-                  <br/>
-                  <b>⚠️ DIVERGÊNCIAS Fev vs planilha (esperado 129.741,00):</b>
-                  {(_debug?.difsFev?.length ? _debug.difsFev : ['nenhuma > R$0,50']).map((d,i) => (
-                    <div key={i} style={{marginLeft:12,color:'#7c2d12'}}>• {d}</div>
-                  ))}
-                  <span style={{color:'#7c2d12'}}>16692(erro) → {_debug?.p16692 ?? '?'}</span>
-                  <br/>
-                  <span style={{color:'#7c2d12'}}>16703(erro) → {_debug?.p16703 ?? '?'}</span>
-                  <br/>
-                  <span style={{color:'#166534'}}>16538(ok) → {_debug?.p16538 ?? '?'}</span>
-                </div>
               </div>
             )}
 

@@ -89,15 +89,16 @@ export default function HomePage() {
             .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade'])
         ),
         fetchAll(
+          // todasEmpresas (p/ meta): TODAS as categorias elegíveis (igual ao Vendedor),
+          // com os pcts de agregado p/ somar a meta de principal + agregados.
           supabase.from('empresas')
             .select(`id, produto_id, nome, categoria, produto_contratado,
-              potencial_movimentacao, peso_categoria, pct_principal, data_cadastro,
+              potencial_movimentacao, peso_categoria, pct_principal, pct_agregado_1, pct_agregado_2, data_cadastro,
               consultor_principal_id, consultor_agregado_id, consultor_agregado_2_id`)
             .eq('ativo', true)
             .or(`consultor_principal_id.in.(${consIds.join(',')}),consultor_agregado_id.in.(${consIds.join(',')}),consultor_agregado_2_id.in.(${consIds.join(',')})`)
             .not('produto_contratado','ilike','%desconto condicional%')
             .not('categoria','eq','Taxa Negativa')
-            .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade'])
         ),
       ]);
 
@@ -203,43 +204,45 @@ export default function HomePage() {
       const metaPorMes = {};
       let naMeta = 0;
 
+      // pct efetivo do escopo numa empresa = soma dos pcts dos consultores visíveis
+      // (principal + agregados) — igual ao Vendedor. Assim empresas com principal E
+      // agregado da mesma equipe contam a meta dos dois.
+      const consIdSet = new Set(consIds);
+      const pctEscopoEmpresa = (e) => {
+        let p = 0;
+        if (consIdSet.has(e.consultor_principal_id))  p += (e.pct_principal  ?? 100);
+        if (consIdSet.has(e.consultor_agregado_id))   p += (e.pct_agregado_1 ?? 0);
+        if (consIdSet.has(e.consultor_agregado_2_id)) p += (e.pct_agregado_2 ?? 0);
+        return p;
+      };
+
       for (const e of todasEmpresas) {
-        const pct = (e.pct_principal??100);
+        const pct = pctEscopoEmpresa(e);
+        if (pct <= 0) continue;
         const consId = e.consultor_principal_id;
-        const cons = consultores.find(c => c.id === consId);
-        const validaDesdeMes = cons?.meta_inicio || null;
 
-        // Busca entrada gravada no banco (excluindo upsell)
-        const entradaBanco = vmetasRows.find(v =>
-          v.empresa_id === e.id && v.regra !== 'upsell' &&
-          (v.consultor_id === consId || v.consultor_id === null)
-        );
-        const entradaUpsell = vmetasRows.find(v =>
-          v.empresa_id === e.id && v.regra === 'upsell'
-        );
-
-        let valorMeta = 0;
-        let compMeta  = null;
-
-        if (entradaBanco) {
-          // Usa o que está gravado no banco (igual ao Vendedor)
-          valorMeta = (entradaBanco.valor_meta||0) + (entradaUpsell?.valor_meta||0);
-          compMeta  = entradaBanco.competencia_meta;
+        // Meta gravada no banco (PRIORIDADE): soma TODAS as entradas da empresa
+        // (principal + agregado podem ter linhas separadas). Sem entrada → calcula.
+        const banco = vmetasRows.filter(v => v.empresa_id === e.id);
+        let entradas = [];
+        if (banco.length > 0) {
+          entradas = banco.map(v => ({ valor_meta: v.valor_meta||0, comp: v.competencia_meta }));
         } else {
-          // Calcula automaticamente (igual ao Vendedor quando não tem entrada)
-          const calc = calcularValorMeta(e, pct, validaDesdeMes);
-          if (calc) {
-            valorMeta = calc.valor_meta;
-            compMeta  = calc.competencia_meta;
-          }
+          const calc = calcularValorMeta(e, pct, '2026-01');
+          if (calc) entradas = [{ valor_meta: calc.valor_meta, comp: calc.competencia_meta }];
         }
 
-        if (valorMeta > 0) {
-          metaApuradaTotal += valorMeta;
+        let metaEmpresa = 0;
+        for (const ent of entradas) {
+          if (!(ent.valor_meta > 0)) continue;
+          metaEmpresa += ent.valor_meta;
+          const m = ent.comp?.substring(0,7);
+          if (m) metaPorMes[m] = (metaPorMes[m]||0) + ent.valor_meta;
+        }
+        if (metaEmpresa > 0) {
+          metaApuradaTotal += metaEmpresa;
           naMeta++;
-          metaPorConsultor[consId] = (metaPorConsultor[consId]||0) + valorMeta;
-          const m = compMeta?.substring(0,7);
-          if (m) metaPorMes[m] = (metaPorMes[m]||0) + valorMeta;
+          metaPorConsultor[consId] = (metaPorConsultor[consId]||0) + metaEmpresa;
         }
       }
 
@@ -257,15 +260,6 @@ export default function HomePage() {
         return total + metaMes * qtd;
       }, 0);
 
-      // DEBUG — remover após confirmar
-      console.log('[INICIO] mesesComLib:', mesesComLib);
-      console.log('[INICIO] metaTotal:', metaTotal);
-      consultores.filter(c=>c.meta_mensal>0).forEach(cons => {
-        const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
-        const valida = validaMes > '2026-01' ? validaMes : '2026-01';
-        const qtd = mesesComLib.filter(m => m >= valida).length || 1;
-        console.log('[INICIO]', cons.nome, '| meta_inicio:', cons.meta_inicio, '| valida:', valida, '| qtd:', qtd, '| contrib:', cons.meta_mensal * qtd);
-      });
       // ── 12. Demais cálculos ──────────────────────────────────────────────
       const esperadoTotal = empresasMov.reduce((s,e) => {
         const fator = (e.pct_principal??100)/100;
@@ -474,17 +468,20 @@ export default function HomePage() {
               {mesesComMeta.map(([mes, val]) => {
                 const maxVal = Math.max(...mesesComMeta.map(([,v])=>v), 1);
                 const pct    = (val/maxVal)*100;
-                const isLast = mes === mesAtual;
+                // Destaca o mês com a MAIOR meta apurada (verde forte); os demais em verde claro.
+                const isMax  = val >= maxVal;
+                const corTexto = isMax ? '#15803d' : '#4a5068';
+                const corBarra = isMax ? '#16a34a' : '#86efac';
                 return (
                   <div key={mes}>
                     <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                      <span style={{fontSize:'0.78rem',fontWeight:isLast?700:400,color:isLast?'#b45309':'#4a5068'}}>
-                        {fmtMes(mes+'-01')}{isLast?' ← último mês':''}
+                      <span style={{fontSize:'0.78rem',fontWeight:isMax?700:500,color:corTexto}}>
+                        {fmtMes(mes+'-01')}{isMax?' ← maior':''}
                       </span>
-                      <span style={{fontSize:'0.78rem',fontWeight:700,color:isLast?'#b45309':'#16a34a'}}>{fmt(val)}</span>
+                      <span style={{fontSize:'0.78rem',fontWeight:700,color:isMax?'#15803d':'#16a34a'}}>{fmt(val)}</span>
                     </div>
                     <div style={{background:'#f0f2f8',borderRadius:4,height:8,overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${pct}%`,background:isLast?'#f0b429':'#34d399',borderRadius:4,transition:'width 0.8s'}}></div>
+                      <div style={{height:'100%',width:`${pct}%`,background:corBarra,borderRadius:4,transition:'width 0.8s'}}></div>
                     </div>
                   </div>
                 );
