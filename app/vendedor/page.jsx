@@ -52,6 +52,24 @@ async function fetchVmetasPorEmpresa(empIds) {
   return out;
 }
 
+// Busca valor_meta_empresa por lista de consultor_id (consultores do gestor), em lotes.
+// Pega metas gravadas mesmo de empresas que ficaram fora do escopo por filtro de categoria.
+async function fetchVmetasPorConsultor(consIds) {
+  const ids = (consIds || []).filter(Boolean);
+  if (!ids.length) return [];
+  const CHUNK = 300;
+  const out = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    out.push(...await fetchAll(
+      supabase.from('valor_meta_empresa')
+        .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra')
+        .in('consultor_id', slice).order('empresa_id')
+    ));
+  }
+  return out;
+}
+
 // Liberações por lista (grande) de produto_ids — em lotes + paginação, p/ não truncar.
 async function fetchLibsPorProduto(prodIds, { gte, lte } = {}) {
   if (!prodIds.length) return [];
@@ -343,7 +361,15 @@ export default function DashboardVendedor() {
       // Para filtro de equipe no topo
       const equipeTopoFiltro = filtroEquipeTopo;
 
-      const [libsFiltradas, ajustes, libsTodas, vmetasRows] = await Promise.all([
+      // Consultores do escopo (gestor/vendedor) — usados para pegar metas gravadas mesmo
+      // de empresas que ficaram fora do escopo (ex.: categoria filtrada).
+      const consIdsGestor = consultorId
+        ? [consultorId]
+        : (gestorFiltro !== 'Geral'
+            ? consultores.filter(c => c.gestor === gestorFiltro).map(c => c.id)
+            : consultores.map(c => c.id));
+
+      const [libsFiltradas, ajustes, libsTodas, vmetasRows, vmetasConsultor] = await Promise.all([
         // Movimentação da carteira (listaProcessada), no intervalo de meses selecionado
         fetchLibsPorProduto(prodIds, { gte: mesInicio, lte: mesFim }),
         // Ajustes de TODO o escopo (carteira + cálculo de meta), em lotes
@@ -352,6 +378,8 @@ export default function DashboardVendedor() {
         fetchLibsPorProduto(prodIdsTodos),
         // Metas gravadas de todos os empIds do escopo (em lotes, sem truncar)
         fetchVmetasPorEmpresa(empIdsParaMeta),
+        // Metas gravadas por consultor do gestor (captura empresas fora do escopo)
+        fetchVmetasPorConsultor(consIdsGestor),
       ]);
 
       const libMap = {};
@@ -612,24 +640,40 @@ export default function DashboardVendedor() {
           b._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0) -
           a._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0));
 
-      // Cards (total e por mês) — somam a MESMA fonte (metasGestor), então batem com a
-      // seção "Empresas na Meta".
+      // EXTRAS: metas gravadas para consultores do gestor cujas EMPRESAS ficaram fora do
+      // escopo (empIdsParaMeta) — ex.: categoria filtrada (Taxa Negativa) ou pctEscopo=0.
+      // Sem isso, uma meta gravada existente no banco nunca seria somada. Evita duplicar
+      // ignorando empresas que já estão no escopo (já contabilizadas via metasGestor).
+      const empIdsEscopoSet = new Set(empIdsParaMeta);
+      const extrasPorMes = {};
+      for (const v of (vmetasConsultor || [])) {
+        if (v.empresa_id == null || empIdsEscopoSet.has(v.empresa_id)) continue;
+        const m = v.competencia_meta?.substring(0,7);
+        if (!m) continue;
+        if (mesesAtivos.length > 0 && !mesesAtivos.includes(m)) continue;
+        extrasPorMes[m] = (extrasPorMes[m] || 0) + (v.valor_meta || 0);
+        if (!mesesDisp.includes(m)) mesesDisp.push(m);
+      }
+      mesesDisp.sort();
+
+      // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
         const entradas = mesesAtivos.length > 0
           ? e._metaEntradas.filter(v => mesesAtivos.includes(v.competencia_meta?.substring(0,7)))
           : e._metaEntradas;
         return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
-      }, 0);
+      }, 0) + Object.values(extrasPorMes).reduce((s,v) => s + v, 0);
 
       const metaPorMes = {};
       for (const m of mesesDisp) {
         metaPorMes[m] = metasGestor.reduce((s,e) => {
           const entradas = e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
           return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
-        }, 0);
+        }, 0) + (extrasPorMes[m] || 0);
       }
-      console.log('[diag] metaPorMes completo:', metaPorMes, '| totalValorMeta:', totalValorMeta,
-        '| soma metaPorMes:', Object.values(metaPorMes).reduce((s,v)=>s+v,0), '| meses:', mesesDisp);
+      console.log('[diag] metaPorMes:', metaPorMes, '| total:', totalValorMeta,
+        '| extras (gravados fora do escopo):', extrasPorMes,
+        '| vmetasConsultor:', (vmetasConsultor||[]).length, '| empIdsEscopo:', empIdsParaMeta.length);
 
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
