@@ -374,7 +374,9 @@ export default function DashboardVendedor() {
 
       // mesesDisp: se há meses selecionados, filtra somente eles
       const todosMesesDisp = [...new Set(libsFiltradas.map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
-      const mesesDisp = mesesAtivos.length > 0
+      // mesesDisp é ampliado mais abaixo (após metasGestor) p/ incluir meses que têm
+      // meta mas não têm liberação na carteira (ex.: Jan/2026 de outras categorias).
+      let mesesDisp = mesesAtivos.length > 0
         ? todosMesesDisp.filter(m => mesesAtivos.includes(m))
         : todosMesesDisp;
 
@@ -607,6 +609,17 @@ export default function DashboardVendedor() {
         return { ...ep, _pct: pct, esperadoMes, _metaEntradas };
       }).filter(Boolean);
 
+      // Amplia mesesDisp p/ incluir meses que têm meta (metasGestor) mas não têm liberação
+      // na carteira (ex.: Jan/2026 de categorias fora das 4 da listaProcessada). Assim o
+      // card mensal e o metaPorMes cobrem TODOS os meses com meta. Respeita o filtro do topo.
+      const mesesComMeta = [...new Set(
+        metasGestor.flatMap(e => e._metaEntradas.map(v => v.competencia_meta?.substring(0,7))).filter(Boolean)
+      )];
+      const todosMesesComMeta = [...new Set([...todosMesesDisp, ...mesesComMeta])].sort();
+      mesesDisp = mesesAtivos.length > 0
+        ? todosMesesComMeta.filter(m => mesesAtivos.includes(m))
+        : todosMesesComMeta;
+
       // Lista detalhada "Empresas na Meta" = metasGestor (respeita o filtro de mês único)
       const empresasNaMeta = metasGestor
         .map(e => {
@@ -637,6 +650,8 @@ export default function DashboardVendedor() {
           return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
         }, 0);
       }
+      console.log('[diag] metaPorMes completo:', metaPorMes, '| totalValorMeta:', totalValorMeta,
+        '| soma metaPorMes:', Object.values(metaPorMes).reduce((s,v)=>s+v,0), '| meses:', mesesDisp);
 
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
@@ -914,7 +929,10 @@ export default function DashboardVendedor() {
                       const corMes      = corPct(pctMes);
                       const empresasMes = lista.filter(e => (e.movPorMes[m]||0) > 0).length;
                       const novosMes    = lista.filter(e => e.data_cadastro?.substring(0,7) === m).length;
-                      const metaMes     = mesSelecionado === m ? (kpis.totalValorMeta || 0) : (metaPorMes?.[m] || 0);
+                      // Sempre usa metaPorMes[m] (calculado pelo metasGestor: banco +
+                      // cálculo automático). Antes, com mês selecionado, usava totalValorMeta
+                      // e perdia as empresas calculadas automaticamente.
+                      const metaMes     = metaPorMes?.[m] || 0;
                       return (
                         <div key={m} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
                           <div style={{display:'inline-block',background:'rgba(240,180,41,0.12)',border:'1px solid rgba(240,180,41,0.3)',color:'#b45309',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
