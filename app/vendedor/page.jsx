@@ -690,6 +690,21 @@ export default function DashboardVendedor() {
         '| extras (gravados fora do escopo):', extrasPorMes,
         '| vmetasConsultor:', (vmetasConsultor||[]).length, '| empIdsEscopo:', empIdsParaMeta.length);
 
+      // 🔧 DEBUG — quebra por empresa de cada mês (p/ diferenciar contra a planilha)
+      const _breakMes = (mes) => metasGestor
+        .map(e => ({ pid: e.produto_id, nome: e.nome,
+          val: e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === mes).reduce((s,v)=>s+(v.valor_meta||0),0) }))
+        .filter(x => x.val > 0)
+        .sort((a,b) => (a.pid||0) - (b.pid||0));
+      const _breakFev = _breakMes('2026-02');
+      const _breakMar = _breakMes('2026-03');
+      console.log('[diag] FEV breakdown ('+_breakFev.length+' emp, total '+_breakFev.reduce((s,e)=>s+e.val,0).toFixed(2)+'):',
+        _breakFev.map(e => e.pid+'='+e.val.toFixed(2)).join('  '));
+      console.log('[diag] MAR breakdown ('+_breakMar.length+' emp, total '+_breakMar.reduce((s,e)=>s+e.val,0).toFixed(2)+'):',
+        _breakMar.map(e => e.pid+'='+e.val.toFixed(2)).join('  '));
+      _debug.fevCount = _breakFev.length;
+      _debug.marCount = _breakMar.length;
+
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes, _debug,
         lista: listaProcessada,
@@ -1027,14 +1042,12 @@ export default function DashboardVendedor() {
                 )}
                 {/* 🔧 DEBUG TEMPORÁRIO — confirma se o código novo está em produção */}
                 <div style={{marginTop:12,padding:'10px 14px',background:'#fee2e2',border:'2px dashed #dc2626',borderRadius:8,color:'#b91c1c',fontSize:13,fontWeight:700,fontFamily:'monospace',lineHeight:1.6}}>
-                  🔧 BUILD <b>meta-extras-consultor-v3</b> ·
-                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} · Fev: {fmt(metaPorMes?.['2026-02']||0)} · Mar: {fmt(metaPorMes?.['2026-03']||0)}
+                  🔧 BUILD <b>meta-break-v4</b> · metaPorMes →
+                  {' '}Jan: {fmt(metaPorMes?.['2026-01']||0)} · Fev: <b>{fmt(metaPorMes?.['2026-02']||0)}</b> ({_debug?.fevCount ?? '?'} emp) · Mar: <b>{fmt(metaPorMes?.['2026-03']||0)}</b> ({_debug?.marCount ?? '?'} emp)
                   <br/>
-                  vmetasConsultor: <b>{_debug?.vmCount ?? '?'}</b> registros · consIds: {_debug?.consIds ?? '?'} · empScope: {_debug?.empScope ?? '?'}
+                  vmetasConsultor: <b>{_debug?.vmCount ?? '?'}</b> reg · Fev gravado: {fmt(_debug?.vmFevTotal||0)} (escopo {_debug?.vmFevIn ?? '?'}/fora {_debug?.vmFevOut ?? '?'}) · Mar gravado: {fmt(_debug?.vmMarTotal||0)} · extrasFev {fmt(_debug?.extrasFev||0)} / extrasMar {fmt(_debug?.extrasMar||0)}
                   <br/>
-                  vmConsultor Fev total: {fmt(_debug?.vmFevTotal||0)} (dentro escopo: {_debug?.vmFevIn ?? '?'} · fora: {_debug?.vmFevOut ?? '?'}) · vmConsultor Mar total: {fmt(_debug?.vmMarTotal||0)}
-                  <br/>
-                  extrasFev: <b>{fmt(_debug?.extrasFev||0)}</b> · extrasMar: <b>{fmt(_debug?.extrasMar||0)}</b>
+                  ⚠️ esperado: Fev 129.741,00 · Mar 179.986,44 — abra F12 e veja "[diag] FEV breakdown" p/ comparar empresa a empresa
                 </div>
               </div>
             )}
