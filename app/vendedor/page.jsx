@@ -279,10 +279,6 @@ export default function DashboardVendedor() {
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
-        // 🔍 DIAGNÓSTICO TEMP — IDs de consultores usados no filtro de gestor
-        console.log('[vendedor][diag] gestor:', gestorFiltro, '| qtd consultores no filtro:', ids.length,
-          '| Adriana (080f65a8…) incluída?', ids.includes('080f65a8-c95a-43a2-94ac-bb4847aba422'),
-          '| ids:', ids);
         // Busca empresas onde o consultor da equipe é PRINCIPAL
         // OU é AGREGADO (mas só empresas onde o principal também está na lista da visão)
         // Isso evita puxar empresas de outros gestores onde nossos consultores são apenas agregados
@@ -292,27 +288,6 @@ export default function DashboardVendedor() {
       const empresas = await fetchAll(empQuery);
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
-
-      // 🔍 DIAGNÓSTICO TEMP — rastreia Emexlab (21010260) e Famolab (21010261)
-      const _alvoProd = [21010260, 21010261];
-      const _ehAlvo = (e) => _alvoProd.includes(Number(e.produto_id));
-      console.log('[vendedor][diag] empresas carregadas (após empQuery/fetchAll):', empresas.length,
-        '| gestor:', gestorFiltro, '| consultorId:', consultorId || '(visão equipe)');
-      console.log('[vendedor][diag] alvos presentes no resultado do empQuery:',
-        empresas.filter(_ehAlvo).map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria,
-          cons_id:e.consultor_principal?.id, cons:e.consultor_principal?.nome, gestor:e.consultor_principal?.gestor })));
-      try {
-        // Consulta direta dos alvos SEM filtro de gestor — mostra o consultor/gestor reais no banco
-        const _diag = await fetchAll(
-          supabase.from('empresas')
-            .select('id,produto_id,nome,categoria,ativo,consultor_principal_id,consultor_principal:consultor_principal_id(id,nome,gestor,ativo)')
-            .in('produto_id', _alvoProd).order('id')
-        );
-        console.log('[vendedor][diag] alvos direto no banco (sem filtro de gestor):',
-          _diag.map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria, ativo:e.ativo,
-            cons_id:e.consultor_principal_id, cons:e.consultor_principal?.nome,
-            cons_gestor:e.consultor_principal?.gestor, cons_ativo:e.consultor_principal?.ativo })));
-      } catch(_e) { console.log('[vendedor][diag] erro na consulta direta dos alvos:', _e); }
 
       // Busca TODOS os ids de empresa do gestor SEM filtro de categoria, para carregar
       // valor_meta_empresa completo (igual à Evolução). A atribuição ao gestor é feita
@@ -524,11 +499,6 @@ export default function DashboardVendedor() {
         }
       }
 
-      // 🔍 DIAGNÓSTICO TEMP — alvos sobreviveram ao loop (filtro de gestor por consultor)?
-      console.log('[vendedor][diag] linhas em listaProcessada:', listaProcessada.length,
-        '| alvos após filtro de gestor (loop):',
-        listaProcessada.filter(_ehAlvo).map(e => ({ nome:e.nome, vendedor:e.vendedor, gestor:e.gestor })));
-
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
       // totalValorMeta e metaPorMes são calculados mais abaixo: banco (vmetasRows, prioridade)
@@ -591,7 +561,6 @@ export default function DashboardVendedor() {
       // ou, na ausência, calcula automaticamente. O MÊS da meta é SEMPRE o mês da
       // PRIMEIRA LIBERAÇÃO REAL em libsTodas (benefício) ou da 3ª liberação (convênio) —
       // NUNCA a data_cadastro.
-      const _alvosLog = new Set([16782,16783,16784,16785,16786,16787,21010254]);
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct   = ep._pctEscopo;
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
@@ -608,25 +577,19 @@ export default function DashboardVendedor() {
           // Benefícios/Bônus → 1ª liberação; Convênio/Mobilidade → 3ª liberação.
           const libAlvo    = libsDaEmpresa.length === 0 ? null : (isConvenio ? libsDaEmpresa[2] : libsDaEmpresa[0]);
           const mesDaMeta  = libAlvo ? String(libAlvo.competencia).substring(0,7) : null;
-          // Valor: liberação do mês-alvo (com ajuste), × peso (só Vegas Benefícios) × pct.
-          let valorMeta = 0, valorBase = 0, peso = 1, ajuste;
+          // Valor: liberação do mês-alvo × peso × pct.
+          // (1) Ignora ajuste = 0 (ou negativo): usa total_liberado direto. Só um ajuste
+          //     positivo sobrepõe a liberação.
+          // (2) peso só p/ Vegas Benefícios, tratando 0/nulo como 1.
+          let valorMeta = 0, peso = 1;
           if (libAlvo) {
-            const compKey = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
-            ajuste    = ajusteMap[compKey];
-            valorBase = ajuste !== undefined ? ajuste : (libAlvo.total_liberado || 0);
-            const prodNorm = (ep.produto_contratado || '').toLowerCase().trim();
-            const isVB     = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
-            peso = isVB ? (ep.peso_categoria ?? 1) : 1;
+            const compKey   = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
+            const ajuste    = ajusteMap[compKey];
+            const valorBase = ajuste > 0 ? ajuste : (libAlvo.total_liberado || 0);
+            const prodNorm  = (ep.produto_contratado || '').toLowerCase().trim();
+            const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+            peso = isVB ? (ep.peso_categoria || 1) : 1;
             valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
-          }
-          if (_alvosLog.has(Number(ep.produto_id))) {
-            console.log(`[vendedor][diag] produto ${ep.produto_id} detalhe →`,
-              'mesDaMeta:', mesDaMeta, '| pctEscopo:', pct, '| categoria:', ep.categoria,
-              '| produto:', ep.produto_contratado,
-              '| libAlvo:', libAlvo && { comp: String(libAlvo.competencia).substring(0,10), total_liberado: libAlvo.total_liberado },
-              '| ajuste:', ajuste, '| valorBase:', valorBase, '| peso:', peso,
-              '| valorMeta:', valorMeta, '| INCLUIDO:', !!(mesDaMeta && valorMeta > 0),
-              '| liberacoes:', libsDaEmpresa.map(l => ({ comp: String(l.competencia).substring(0,7), val: l.total_liberado })));
           }
           if (!mesDaMeta || !(valorMeta > 0)) return null; // sem liberação real / valor zero = sem meta
           _metaEntradas = [{ competencia_meta: mesDaMeta + '-01', valor_meta: valorMeta, regra: isConvenio ? 'convenio' : 'beneficio' }];
@@ -664,35 +627,6 @@ export default function DashboardVendedor() {
           const entradas = e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
           return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
         }, 0);
-      }
-
-      // 🔍 DIAGNÓSTICO TEMP — rastreio completo das 7 empresas calculadas que faltam em Mar
-      const _alvosMar = [16782,16783,16784,16785,16786,16787,21010254];
-      const _isAlvo = (pid) => _alvosMar.includes(Number(pid));
-      console.log('[vendedor][diag] metasGestor:', metasGestor.length, '| escopo:', empresasEscopoMeta.length,
-        '| total:', totalValorMeta, '| Fev:', metaPorMes['2026-02'], '| Mar:', metaPorMes['2026-03'],
-        '| mesesDisp:', mesesDisp);
-      for (const pid of _alvosMar) {
-        const emParaMeta = empresasParaMeta.find(x => _isAlvo(x.produto_id) && Number(x.produto_id) === pid);
-        const emEscopo   = empresasEscopoMeta.find(x => Number(x.produto_id) === pid);
-        const libs       = (libsTodasMap[emParaMeta?.produto_id] || []).map(l => ({ comp:l.comp, val:l.val }));
-        const banco      = (vmetasRows||[]).filter(v => v.empresa_id === emParaMeta?.id)
-          .map(v => ({ mes:v.competencia_meta?.substring(0,7), val:v.valor_meta, regra:v.regra }));
-        const calc       = emEscopo ? calcularMeta(emEscopo, libsTodasMap, ajusteMap, emEscopo._pctEscopo, null) : null;
-        console.log(`[vendedor][diag] produto ${pid}:`, {
-          em_empresasParaMeta: !!emParaMeta,
-          nome: emParaMeta?.nome,
-          categoria: emParaMeta?.categoria,
-          cons_principal: emParaMeta?.consultor_principal?.nome,
-          gestor_principal: emParaMeta?.consultor_principal?.gestor,
-          pct_principal: emParaMeta?.pct_principal,
-          pctEscopo: emEscopo?._pctEscopo,
-          em_empresasEscopoMeta: !!emEscopo,
-          liberacoes: libs,
-          banco,
-          calc: calc && { elegivel: calc.elegivel, regra: calc.regra, mesAlvo: calc.mesAlvo, valorMeta: calc.valorMeta },
-          em_metasGestor: metasGestor.find(e => Number(e.produto_id) === pid)?._metaEntradas,
-        });
       }
 
       setDados({
