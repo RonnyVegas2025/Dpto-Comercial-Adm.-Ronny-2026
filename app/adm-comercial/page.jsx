@@ -268,8 +268,19 @@ function PaginaVendedores({ equipesDB = [] }) {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setE = (k, v) => setEditando(e => ({ ...e, [k]: v }));
 
+  // Representações de gestor de um consultor: nome resolvido pelo gestor_id (fonte de
+  // verdade na tabela gestores), o nome denormalizado `gestor`, e o `diretor`. Assim,
+  // consultores com gestor_id correto mas `gestor` (nome) vazio/desatualizado — ou
+  // vice-versa — entram no filtro. Trim p/ tolerar espaços.
+  const nomesGestor = (c) => {
+    const byId = c.gestor_id ? (gestoresList.find(g => g.id === c.gestor_id)?.nome) : null;
+    return [byId, c.gestor, c.diretor].map(n => (n || '').trim()).filter(Boolean);
+  };
+  const nomeGestor = (c) => nomesGestor(c)[0] || '';     // canônico p/ exibição (prefere gestor_id)
+  const casaGestor = (c, alvo) => nomesGestor(c).includes(alvo);
+
   const gestoresDoFiltro = filtroGestor
-    ? consultores.filter(c => (c.gestor || c.diretor) === filtroGestor).map(c => c.equipe).filter(Boolean)
+    ? consultores.filter(c => casaGestor(c, filtroGestor)).map(c => c.equipe).filter(Boolean)
     : equipesList.map(e => e.nome);
 
   const handleFiltroGestorChange = (g) => { setFiltroGestor(g); setFiltroEquipe(''); };
@@ -277,7 +288,7 @@ function PaginaVendedores({ equipesDB = [] }) {
   const filtrados = consultores.filter(c => {
     if (busca && !c.nome?.toLowerCase().includes(busca.toLowerCase())) return false;
     if (filtroEquipe && (c.equipe || 'Outros') !== filtroEquipe) return false;
-    if (filtroGestor && (c.gestor || c.diretor) !== filtroGestor) return false;
+    if (filtroGestor && !casaGestor(c, filtroGestor)) return false;
     return true;
   });
 
@@ -288,7 +299,7 @@ function PaginaVendedores({ equipesDB = [] }) {
     porEquipe[eq].push(c);
   });
 
-  const diretoresUnicos = [...new Set(consultores.map(c => c.gestor || c.diretor).filter(Boolean))].sort();
+  const diretoresUnicos = [...new Set(consultores.map(nomeGestor).filter(Boolean))].sort();
   const totalAtivos     = consultores.filter(c => c.ativo).length;
   const totalInativos   = consultores.filter(c => !c.ativo).length;
   const equipes         = [...new Set(consultores.map(c => c.equipe || 'Sem Equipe').filter(Boolean))];
