@@ -561,6 +561,7 @@ export default function DashboardVendedor() {
       // ou, na ausência, calcula automaticamente. O MÊS da meta é SEMPRE o mês da
       // PRIMEIRA LIBERAÇÃO REAL em libsTodas (benefício) ou da 3ª liberação (convênio) —
       // NUNCA a data_cadastro.
+      const _alvosLog = new Set([16714,16715,16716,16717,16743,16511]); // diag temp
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct   = ep._pctEscopo;
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
@@ -568,9 +569,13 @@ export default function DashboardVendedor() {
         if (banco.length > 0) {
           _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));
         } else {
-          // Liberações REAIS da empresa (valor > 0), ordenadas por competência crescente.
+          // Liberações REAIS da empresa (valor > 0) DENTRO do período da meta (2026),
+          // ordenadas por competência crescente. Liberações de 2025 (empresas cadastradas
+          // em nov/dez/2025) NÃO contam: a meta de 2026 começa na 1ª liberação de 2026.
           const libsDaEmpresa = (libsTodas||[])
-            .filter(l => Number(l.produto_id) === Number(ep.produto_id) && (l.total_liberado || 0) > 0)
+            .filter(l => Number(l.produto_id) === Number(ep.produto_id)
+              && (l.total_liberado || 0) > 0
+              && String(l.competencia).substring(0,7) >= '2026-01')
             .sort((a,b) => String(a.competencia).localeCompare(String(b.competencia)));
           const catLower   = (ep.categoria || '').toLowerCase();
           const isConvenio = catLower.includes('conv') || catLower.includes('mobil');
@@ -588,6 +593,12 @@ export default function DashboardVendedor() {
             const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
             peso = isVB ? (ep.peso_categoria || 1) : 1;
             valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
+          }
+          if (_alvosLog.has(Number(ep.produto_id))) {
+            console.log(`[diag] ${ep.produto_id} mesDaMeta:`, mesDaMeta,
+              '| categoria:', ep.categoria, '| isConvenio:', isConvenio, '| pctEscopo:', pct,
+              '| valorMeta:', valorMeta, '| INCLUIDO:', !!(mesDaMeta && valorMeta > 0),
+              '| liberacoes(2026+):', libsDaEmpresa.map(l => ({ comp: String(l.competencia).substring(0,7), val: l.total_liberado })));
           }
           if (!mesDaMeta || !(valorMeta > 0)) return null; // sem liberação real / valor zero = sem meta
           _metaEntradas = [{ competencia_meta: mesDaMeta + '-01', valor_meta: valorMeta, regra: isConvenio ? 'convenio' : 'beneficio' }];
