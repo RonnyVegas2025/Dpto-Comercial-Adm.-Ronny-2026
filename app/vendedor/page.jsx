@@ -52,6 +52,35 @@ async function fetchVmetasPorEmpresa(empIds) {
   return out;
 }
 
+// Liberações por lista (grande) de produto_ids — em lotes + paginação, p/ não truncar.
+async function fetchLibsPorProduto(prodIds, { gte, lte } = {}) {
+  if (!prodIds.length) return [];
+  const CHUNK = 200;
+  const out = [];
+  for (let i = 0; i < prodIds.length; i += CHUNK) {
+    const slice = prodIds.slice(i, i + CHUNK);
+    let q = supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id', slice);
+    if (gte) q = q.gte('competencia', gte);
+    if (lte) q = q.lte('competencia', lte);
+    out.push(...await fetchAll(q.order('competencia')));
+  }
+  return out;
+}
+
+// Ajustes por lista (grande) de empresa_ids — em lotes + paginação.
+async function fetchAjustesPorEmpresa(empIds) {
+  if (!empIds.length) return [];
+  const CHUNK = 300;
+  const out = [];
+  for (let i = 0; i < empIds.length; i += CHUNK) {
+    const slice = empIds.slice(i, i + CHUNK);
+    out.push(...await fetchAll(
+      supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado').in('empresa_id', slice)
+    ));
+  }
+  return out;
+}
+
 // ─── LÓGICA DE META (copiada da página de Evolução para manter paridade) ──────
 // Regra de peso: APENAS Vegas Benefícios aplica peso na meta. Demais produtos: peso
 // só para previsão; meta usa 100% da movimentação.
@@ -293,21 +322,43 @@ export default function DashboardVendedor() {
       // fetchAll garante paginação para não truncar.
       const empresasParaMeta = await fetchAll(
         supabase.from('empresas')
-          .select(`id,
-            consultor_principal:consultor_principal_id (id, gestor),
-            consultor_agregado:consultor_agregado_id (id, gestor),
-            consultor_agregado_2:consultor_agregado_2_id (id, gestor)`)
+          .select(`id, produto_id, nome, cnpj, categoria, produto_contratado,
+            potencial_movimentacao, peso_categoria, data_cadastro,
+            pct_principal, pct_agregado_1, pct_agregado_2,
+            consultor_principal:consultor_principal_id (id, nome, gestor),
+            consultor_agregado:consultor_agregado_id (id, nome, gestor),
+            consultor_agregado_2:consultor_agregado_2_id (id, nome, gestor)`)
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')
           .order('id')
       );
-      const empIdsParaMeta = empresasParaMeta.filter(ep => {
-        const cs = [ep.consultor_principal, ep.consultor_agregado, ep.consultor_agregado_2].filter(Boolean);
-        if (consultorId)              return cs.some(c => c.id === consultorId);
-        if (gestorFiltro !== 'Geral') return cs.some(c => c.gestor === gestorFiltro);
-        return true;
-      }).map(ep => ep.id);
+      // pct efetivo do escopo (vendedor/gestor) numa empresa = soma dos pcts dos
+      // consultores do escopo que atuam nela (principal + agregados).
+      const pctDoEscopo = (ep) => {
+        let pct = 0;
+        const add = (cons, p) => {
+          if (!cons) return;
+          if (consultorId)                   { if (cons.id === consultorId)       pct += (p || 0); }
+          else if (gestorFiltro !== 'Geral') { if (cons.gestor === gestorFiltro)  pct += (p || 0); }
+          else                               pct += (p || 0);
+        };
+        add(ep.consultor_principal,  ep.pct_principal  ?? 100);
+        add(ep.consultor_agregado,   ep.pct_agregado_1 ?? 0);
+        add(ep.consultor_agregado_2, ep.pct_agregado_2 ?? 0);
+        return pct;
+      };
+      // Empresas do escopo do gestor/vendedor — TODAS as categorias elegíveis (igual à
+      // Evolução), com o pct efetivo do escopo. É sobre este conjunto que a meta total e
+      // a meta por mês são calculadas (banco + cálculo automático).
+      const empresasEscopoMeta = empresasParaMeta
+        .map(ep => ({ ...ep, _pctEscopo: pctDoEscopo(ep) }))
+        .filter(ep => ep._pctEscopo > 0);
+      const empIdsParaMeta  = empresasEscopoMeta.map(ep => ep.id);
+      const prodIdsParaMeta = [...new Set(empresasEscopoMeta.map(ep => ep.produto_id))];
+      // Uniões p/ carregar liberações e ajustes cobrindo TODO o escopo (não só listaProcessada)
+      const prodIdsTodos = [...new Set([...prodIds, ...prodIdsParaMeta])];
+      const empIdsTodos  = [...new Set([...empIds,  ...empIdsParaMeta])];
 
       // Suporte a múltiplos meses selecionados
       const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados].sort() : (mesSelecionado ? [mesSelecionado] : []);
@@ -318,20 +369,13 @@ export default function DashboardVendedor() {
       const equipeTopoFiltro = filtroEquipeTopo;
 
       const [libsFiltradas, ajustes, libsTodas, vmetasRows] = await Promise.all([
-        prodIds.length ? fetchAll(
-          supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds).gte('competencia', mesInicio).lte('competencia', mesFim)
-        ) : Promise.resolve([]),
-        empIds.length ? fetchAll(
-          supabase.from('ajustes_movimentacao').select('empresa_id,competencia,valor_considerado')
-            .in('empresa_id', empIds)
-        ) : Promise.resolve([]),
-        prodIds.length ? fetchAll(
-          supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds).order('competencia')
-        ) : Promise.resolve([]),
-        // Busca metas por todos os empIds do gestor (sem filtro de categoria = igual à
-        // Evolução), em lotes e com paginação para não truncar.
+        // Movimentação da carteira (listaProcessada), no intervalo de meses selecionado
+        fetchLibsPorProduto(prodIds, { gte: mesInicio, lte: mesFim }),
+        // Ajustes de TODO o escopo (carteira + cálculo de meta), em lotes
+        fetchAjustesPorEmpresa(empIdsTodos),
+        // Liberações de TODO o escopo (todas as categorias) p/ cálculo automático de meta
+        fetchLibsPorProduto(prodIdsTodos),
+        // Metas gravadas de todos os empIds do escopo (em lotes, sem truncar)
         fetchVmetasPorEmpresa(empIdsParaMeta),
       ]);
 
@@ -542,57 +586,67 @@ export default function DashboardVendedor() {
       });
       const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
 
-      const empresasNaMeta = listaProcessada
+      // ── Metas do escopo (banco + cálculo automático) — TODAS as categorias ───
+      // Para cada empresa do escopo do gestor/vendedor: usa a(s) meta(s) gravada(s) no
+      // banco (prioridade) ou, na ausência, calcula automaticamente via calcularMeta.
+      // O mês da meta vem SEMPRE da liberação (1ª p/ benefício, 3º mês p/ convênio) —
+      // nunca da data de cadastro. Cobre categorias fora da listaProcessada (ex.:
+      // Alimentação, Vegas Plus) que a Evolução considera e a carteira (4 cat.) não.
+      const metasGestor = empresasEscopoMeta.map(ep => {
+        const pct   = ep._pctEscopo;
+        const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
+        let _metaEntradas;
+        if (banco.length > 0) {
+          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));
+        } else {
+          const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pct, null);
+          if (!mc || !mc.elegivel || !(mc.valorMeta > 0) || !mc.mesAlvo) return null;
+          _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta, regra: mc.regra }];
+        }
+        const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100);
+        return { ...ep, _pct: pct, esperadoMes, _metaEntradas };
+      }).filter(Boolean);
+
+      // Lista detalhada "Empresas na Meta" = metasGestor (respeita o filtro de mês único)
+      const empresasNaMeta = metasGestor
         .map(e => {
-          const todasEntradas = (vmetasRows||[]).filter(v => v.empresa_id === e.id);
-          const entradasFiltradas = mesSelecionado
-            ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
-            : todasEntradas;
-          if (entradasFiltradas.length === 0) {
-            const metaComp = e.metaComp?.substring(0,7);
-            if (!e.valorMeta || (mesSelecionado && metaComp !== mesSelecionado)) return null;
-            return { ...e, _metaEntradas: [{ competencia_meta: e.metaComp, valor_meta: e.valorMeta, regra: e.metaRegra }] };
-          }
-          return { ...e, _metaEntradas: entradasFiltradas };
+          const entradas = mesSelecionado
+            ? e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === mesSelecionado)
+            : e._metaEntradas;
+          if (entradas.length === 0) return null;
+          return { ...e, _metaEntradas: entradas };
         })
         .filter(Boolean)
-        .sort((a,b) => {
-          const va = a._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0);
-          const vb = b._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0);
-          return vb - va;
-        });
+        .sort((a,b) =>
+          b._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0) -
+          a._metaEntradas.reduce((s,v)=>s+(v.valor_meta||0),0));
 
-      // ── Meta total e por mês (mesma lógica da Evolução) ─────────────────────
-      // 1) BANCO (prioridade): soma todas as entradas gravadas em valor_meta_empresa.
-      //    vmetasRows já cobre todo o escopo do gestor.
-      const somaBanco = (incluiMes) => (vmetasRows||[]).reduce((s,v) =>
-        incluiMes(v.competencia_meta?.substring(0,7)) ? s + (v.valor_meta || 0) : s, 0);
+      // Cards (total e por mês) — somam a MESMA fonte (metasGestor), então batem com a
+      // seção "Empresas na Meta".
+      const totalValorMeta = metasGestor.reduce((s,e) => {
+        const entradas = mesesAtivos.length > 0
+          ? e._metaEntradas.filter(v => mesesAtivos.includes(v.competencia_meta?.substring(0,7)))
+          : e._metaEntradas;
+        return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
+      }, 0);
 
-      // 2) CALCULADO: para cada item da listaProcessada cuja empresa NÃO tem entrada no
-      //    banco, calcula a meta automaticamente (libsTodas → libsTodasMap), usando o pct
-      //    do consultor do próprio item. Benefícios/Bônus = 1ª liberação; Convênio/
-      //    Mobilidade = 3º mês corrido. O banco sempre tem prioridade.
-      const empIdsComBanco = new Set((vmetasRows||[]).map(v => v.empresa_id));
-      const metasCalc = [];
-      for (const e of listaProcessada) {
-        if (empIdsComBanco.has(e.id)) continue; // banco tem prioridade sobre o calculado
-        const mc = calcularMeta(e, libsTodasMap, ajusteMap, e._pct ?? 100, null);
-        if (mc && mc.elegivel && (mc.valorMeta || 0) > 0 && mc.mesAlvo) {
-          metasCalc.push({ mes: mc.mesAlvo.substring(0,7), valor: mc.valorMeta });
-        }
-      }
-      const somaCalc = (incluiMes) => metasCalc.reduce((s,x) =>
-        incluiMes(x.mes) ? s + x.valor : s, 0);
-
-      // Total = banco + calculado (respeitando o filtro de meses do topo)
-      const noMesAtivo = (mes) => mesesAtivos.length === 0 || mesesAtivos.includes(mes);
-      const totalValorMeta = somaBanco(noMesAtivo) + somaCalc(noMesAtivo);
-
-      // Por mês = banco do mês + calculado do mês
       const metaPorMes = {};
       for (const m of mesesDisp) {
-        metaPorMes[m] = somaBanco(mes => mes === m) + somaCalc(mes => mes === m);
+        metaPorMes[m] = metasGestor.reduce((s,e) => {
+          const entradas = e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
+          return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
+        }, 0);
       }
+
+      // 🔍 DIAGNÓSTICO TEMP — confere cobertura (todas as categorias) e as 9 empresas de Mar
+      const _alvosMar = [16782,16783,16784,16785,16786,16787,21010254,16790,16833];
+      console.log('[vendedor][diag] metasGestor:', metasGestor.length, 'empresas com meta',
+        '| escopo:', empresasEscopoMeta.length, '| total:', totalValorMeta,
+        '| Fev:', metaPorMes['2026-02'], '| Mar:', metaPorMes['2026-03']);
+      console.log('[vendedor][diag] alvos Mar em metasGestor:',
+        metasGestor.filter(e => _alvosMar.includes(Number(e.produto_id)))
+          .map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria,
+            entradas:e._metaEntradas.map(v => ({ mes:v.competencia_meta?.substring(0,7), val:v.valor_meta, regra:v.regra })) })));
 
       setDados({
         consultor, consultoresDaVisao, mesesDisp, empresasNaMeta, vmetasRows, metaPorMes,
