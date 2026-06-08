@@ -393,24 +393,11 @@ export default function DashboardVendedor() {
         ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`] = a.valor_considerado;
       }
 
-      // libsTodasMap: AGREGA (soma) os registros de liberação por produto+mês — igual ao
-      // libMap. Antes empurrava cada registro separado, e o calcularMeta (que pega
-      // libsOrdenadas[0]) usava só UM registro. Empresas com 2+ registros no mês (ex.:
-      // 16692, 16702, 16703) saíam pela metade. Agora cada mês vira 1 entrada com a soma.
       const libsTodasMap = {};
-      const _libAgg = {};
       for (const l of libsTodas) {
         const pid = l.produto_id;
-        const comp = l.competencia?.substring(0,10);
-        if (!comp) continue;
-        const k = pid + '__' + comp;
-        if (!_libAgg[k]) _libAgg[k] = { pid, comp, val: 0 };
-        _libAgg[k].val += (l.total_liberado || 0);
-      }
-      for (const k of Object.keys(_libAgg)) {
-        const { pid, comp, val } = _libAgg[k];
         if (!libsTodasMap[pid]) libsTodasMap[pid] = [];
-        libsTodasMap[pid].push({ comp, val });
+        libsTodasMap[pid].push({ comp: l.competencia?.substring(0,10), val: l.total_liberado || 0 });
       }
 
       // mesesDisp: se há meses selecionados, filtra somente eles
