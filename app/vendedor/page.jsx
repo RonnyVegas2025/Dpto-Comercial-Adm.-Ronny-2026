@@ -608,21 +608,27 @@ export default function DashboardVendedor() {
           // Benefícios/Bônus → 1ª liberação; Convênio/Mobilidade → 3ª liberação.
           const libAlvo    = libsDaEmpresa.length === 0 ? null : (isConvenio ? libsDaEmpresa[2] : libsDaEmpresa[0]);
           const mesDaMeta  = libAlvo ? String(libAlvo.competencia).substring(0,7) : null;
+          // Valor: liberação do mês-alvo (com ajuste), × peso (só Vegas Benefícios) × pct.
+          let valorMeta = 0, valorBase = 0, peso = 1, ajuste;
+          if (libAlvo) {
+            const compKey = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
+            ajuste    = ajusteMap[compKey];
+            valorBase = ajuste !== undefined ? ajuste : (libAlvo.total_liberado || 0);
+            const prodNorm = (ep.produto_contratado || '').toLowerCase().trim();
+            const isVB     = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+            peso = isVB ? (ep.peso_categoria ?? 1) : 1;
+            valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
+          }
           if (_alvosLog.has(Number(ep.produto_id))) {
-            console.log(`[vendedor][diag] empresa ${ep.produto_id} → mesDaMeta:`, mesDaMeta,
-              '| categoria:', ep.categoria, '| isConvenio:', isConvenio, '| pctEscopo:', pct,
+            console.log(`[vendedor][diag] produto ${ep.produto_id} detalhe →`,
+              'mesDaMeta:', mesDaMeta, '| pctEscopo:', pct, '| categoria:', ep.categoria,
+              '| produto:', ep.produto_contratado,
+              '| libAlvo:', libAlvo && { comp: String(libAlvo.competencia).substring(0,10), total_liberado: libAlvo.total_liberado },
+              '| ajuste:', ajuste, '| valorBase:', valorBase, '| peso:', peso,
+              '| valorMeta:', valorMeta, '| INCLUIDO:', !!(mesDaMeta && valorMeta > 0),
               '| liberacoes:', libsDaEmpresa.map(l => ({ comp: String(l.competencia).substring(0,7), val: l.total_liberado })));
           }
-          if (!mesDaMeta) return null; // sem liberação real (ou convênio sem 3ª) = sem meta
-          // Valor: liberação do mês-alvo (com ajuste), × peso (só Vegas Benefícios) × pct.
-          const compKey   = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
-          const ajuste    = ajusteMap[compKey];
-          const valorBase = ajuste !== undefined ? ajuste : (libAlvo.total_liberado || 0);
-          const prodNorm  = (ep.produto_contratado || '').toLowerCase().trim();
-          const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
-          const peso      = isVB ? (ep.peso_categoria ?? 1) : 1;
-          const valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
-          if (!(valorMeta > 0)) return null;
+          if (!mesDaMeta || !(valorMeta > 0)) return null; // sem liberação real / valor zero = sem meta
           _metaEntradas = [{ competencia_meta: mesDaMeta + '-01', valor_meta: valorMeta, regra: isConvenio ? 'convenio' : 'beneficio' }];
         }
         const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100);
