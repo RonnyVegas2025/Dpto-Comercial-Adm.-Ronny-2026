@@ -409,14 +409,8 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: soma TODAS as metas gravadas (principal + upsell) dos empIds do
-      // gestor, filtradas por mês — igual à página de Evolução (sem filtro de categoria).
-      // vmetasRows já cobre todos os empIds do gestor (empIdsParaMeta), então somamos
-      // direto sobre ele em vez de iterar a lista filtrada por categoria.
-      const totalValorMeta = (vmetasRows||[]).reduce((s,v) => {
-        if (mesesAtivos.length > 0 && !mesesAtivos.includes(v.competencia_meta?.substring(0,7))) return s;
-        return s + (v.valor_meta || 0);
-      }, 0);
+      // totalValorMeta é calculado mais abaixo, a partir de empresasNaMeta, para usar
+      // exatamente a mesma lógica da seção "Empresas na Meta" (entradas do banco + fallback).
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -490,13 +484,23 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
-      // metaPorMes: soma TODAS as metas gravadas (principal + upsell) por mês — igual
-      // Evolução. Usa vmetasRows direto (todos os empIds do gestor, sem filtro de categoria).
+      // totalValorMeta: usa EXATAMENTE a mesma lógica da seção "Empresas na Meta" —
+      // soma os _metaEntradas de cada empresa (entradas gravadas no banco ou, na ausência
+      // delas, a meta calculada como fallback). Assim o card "Valor Apurado Meta" bate
+      // com o total exibido na seção "Empresas na Meta".
+      const totalValorMeta = empresasNaMeta.reduce((s,e) => {
+        const entradas = mesesAtivos.length > 0
+          ? e._metaEntradas.filter(v => mesesAtivos.includes(v.competencia_meta?.substring(0,7)))
+          : e._metaEntradas;
+        return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
+      }, 0);
+
+      // metaPorMes: mesma lógica, agrupada por mês da competência da meta.
       const metaPorMes = {};
       for (const m of mesesDisp) {
-        metaPorMes[m] = (vmetasRows||[]).reduce((s,v) => {
-          if (v.competencia_meta?.substring(0,7) !== m) return s;
-          return s + (v.valor_meta || 0);
+        metaPorMes[m] = empresasNaMeta.reduce((s,e) => {
+          const entradas = e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
+          return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
         }, 0);
       }
 
