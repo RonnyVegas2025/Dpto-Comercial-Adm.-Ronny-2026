@@ -384,32 +384,14 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta: meta principal filtrada por mês + upsells pelo seu próprio mês
-      // Usa banco como fonte primária (igual Evolução); sem fallback calculado
-      const totalValorMeta = (() => {
-        // Meta principal — pelo mês da competencia_meta gravada no banco
-        const principal = listaProcessada.reduce((s,e) => {
-          if (mesesAtivos.length > 0) {
-            const metaMes = e.metaComp?.substring(0,7);
-            if (!mesesAtivos.includes(metaMes)) return s;
-          }
-          const entradaPrincipal = (vmetasRows||[]).find(v =>
-            v.empresa_id === e.id && v.regra !== 'upsell'
-          );
-          // ✅ Só usa banco — sem fallback para valor calculado
-          return s + (entradaPrincipal ? (entradaPrincipal.valor_meta||0) : 0);
-        }, 0);
-
-        // Upsells pelo próprio mês
-        const empIdsLista = new Set(listaProcessada.map(e => e.id));
-        const upsell = (vmetasRows||[]).reduce((s,v) => {
-          if (v.regra !== 'upsell') return s;
-          if (mesesAtivos.length > 0 && !mesesAtivos.includes(v.competencia_meta?.substring(0,7))) return s;
-          return empIdsLista.has(v.empresa_id) ? s + (v.valor_meta||0) : s;
-        }, 0);
-
-        return principal + upsell;
-      })();
+      // totalValorMeta: soma TODAS as metas gravadas (principal + upsell) dos empIds do
+      // gestor, filtradas por mês — igual à página de Evolução (sem filtro de categoria).
+      // vmetasRows já cobre todos os empIds do gestor (empIdsParaMeta), então somamos
+      // direto sobre ele em vez de iterar a lista filtrada por categoria.
+      const totalValorMeta = (vmetasRows||[]).reduce((s,v) => {
+        if (mesesAtivos.length > 0 && !mesesAtivos.includes(v.competencia_meta?.substring(0,7))) return s;
+        return s + (v.valor_meta || 0);
+      }, 0);
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -483,26 +465,14 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
-      // metaPorMes: usa banco como fonte primária (igual Evolução)
+      // metaPorMes: soma TODAS as metas gravadas (principal + upsell) por mês — igual
+      // Evolução. Usa vmetasRows direto (todos os empIds do gestor, sem filtro de categoria).
       const metaPorMes = {};
-      const empIdsListaSet = new Set(listaProcessada.map(e => e.id));
       for (const m of mesesDisp) {
-        // Meta principal pelo mês gravado
-        const principal = listaProcessada.reduce((s,e) => {
-          const metaMes = e.metaComp?.substring(0,7);
-          if (metaMes !== m) return s;
-          const entradaPrincipal = (vmetasRows||[]).find(v =>
-            v.empresa_id === e.id && v.regra !== 'upsell'
-          );
-          return s + (entradaPrincipal ? (entradaPrincipal.valor_meta||0) : 0);
-        }, 0);
-        // Upsells pelo próprio mês
-        const upsell = (vmetasRows||[]).reduce((s,v) => {
-          if (v.regra !== 'upsell') return s;
+        metaPorMes[m] = (vmetasRows||[]).reduce((s,v) => {
           if (v.competencia_meta?.substring(0,7) !== m) return s;
-          return empIdsListaSet.has(v.empresa_id) ? s + (v.valor_meta||0) : s;
+          return s + (v.valor_meta || 0);
         }, 0);
-        metaPorMes[m] = principal + upsell;
       }
 
       setDados({
