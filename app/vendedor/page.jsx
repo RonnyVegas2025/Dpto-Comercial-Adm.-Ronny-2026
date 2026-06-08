@@ -229,7 +229,7 @@ export default function DashboardVendedor() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const [{ data: profData }, { data: vis }] = await Promise.all([
-          supabase.from('user_profiles').select('perfil,nome').eq('id', user.id).single(),
+          supabase.from('user_profiles').select('perfil,nome,gestor_vinculado').eq('id', user.id).single(),
           supabase.from('user_visibilidade').select('tipo,consultor_ids,equipes').eq('user_id', user.id).maybeSingle(),
         ]);
         prof = profData;
@@ -264,26 +264,28 @@ export default function DashboardVendedor() {
       consComValidade = consComValidade.filter(c => equipes.includes(c.equipe) && c.gestor === prof?.nome);
     }
 
-    // PROBLEMA 1: gestor_comercial enxerga APENAS a própria equipe — não existe
-    // "Geral" (que mostraria todas as equipes). Sua "geral" é a própria equipe.
-    const ehGestorComercial = prof?.perfil === 'gestor_comercial';
-    if (ehGestorComercial && prof?.nome) {
-      const nomeG = prof.nome;
+    // Gestor fixo: perfis NÃO livres ficam travados no gestor vinculado (gestor_vinculado).
+    // Esse usuário enxerga APENAS a própria equipe — não existe "Geral" (todas as equipes).
+    const perfisLivres = ['gestor_master','supervisor_adm_master','diretoria'];
+    const gestorFixo = (prof && !perfisLivres.includes(prof.perfil))
+      ? ((prof.gestor_vinculado || prof.nome || '').trim() || null)
+      : null;
+    if (gestorFixo) {
       const minhaEquipe = consComValidade.filter(c => {
-        const g = c.gestor || '';
-        return g === nomeG || nomeG.startsWith(g) || g.startsWith(nomeG);
+        const g = (c.gestor || '').trim();
+        return g === gestorFixo || gestorFixo.startsWith(g) || (g && g.startsWith(gestorFixo));
       });
       if (minhaEquipe.length) consComValidade = minhaEquipe;
     }
 
     setConsultores(consComValidade);
     const gestoresUnicos = [...new Set(consComValidade.map(c=>c.gestor).filter(Boolean))];
-    const gs = (ehGestorComercial && gestoresUnicos.length)
-      ? gestoresUnicos                       // sem "Geral" p/ gestor comercial
+    const gs = (gestorFixo && gestoresUnicos.length)
+      ? gestoresUnicos                       // sem "Geral" p/ gestor travado
       : ['Geral', ...gestoresUnicos];
     setGestores(gs);
-    // Default: gestor comercial já entra na própria equipe (não em "Geral")
-    if (ehGestorComercial && gestoresUnicos.length) setGestorFiltro(gestoresUnicos[0]);
+    // Default: gestor travado já entra na própria equipe (não em "Geral")
+    if (gestorFixo && gestoresUnicos.length) setGestorFiltro(gestoresUnicos[0]);
     const ms = [...new Set((libs||[]).map(l=>l.competencia?.substring(0,7)).filter(Boolean))].sort();
     setMeses(ms);
   }
@@ -344,11 +346,14 @@ export default function DashboardVendedor() {
           .order('id')
       );
       // pct efetivo do escopo (vendedor/gestor) numa empresa = soma dos pcts dos
-      // consultores do escopo que atuam nela (principal + agregados).
+      // consultores do escopo que atuam nela (principal + agregados). Respeita o filtro
+      // de EQUIPE do topo (PROBLEMA 2): só conta consultores da equipe selecionada.
+      const equipeDoCons = (id) => consultores.find(c => c.id === id)?.equipe;
       const pctDoEscopo = (ep) => {
         let pct = 0;
         const add = (cons, p) => {
           if (!cons) return;
+          if (filtroEquipeTopo && equipeDoCons(cons.id) !== filtroEquipeTopo) return;
           if (consultorId)                   { if (cons.id === consultorId)       pct += (p || 0); }
           else if (gestorFiltro !== 'Geral') { if (cons.gestor === gestorFiltro)  pct += (p || 0); }
           else                               pct += (p || 0);
@@ -379,12 +384,14 @@ export default function DashboardVendedor() {
       const equipeTopoFiltro = filtroEquipeTopo;
 
       // Consultores do escopo (gestor/vendedor) — usados para pegar metas gravadas mesmo
-      // de empresas que ficaram fora do escopo (ex.: categoria filtrada).
+      // de empresas que ficaram fora do escopo (ex.: categoria filtrada). Respeita o
+      // filtro de equipe do topo (PROBLEMA 2).
       const consIdsGestor = consultorId
         ? [consultorId]
         : (gestorFiltro !== 'Geral'
-            ? consultores.filter(c => c.gestor === gestorFiltro).map(c => c.id)
-            : consultores.map(c => c.id));
+            ? consultores.filter(c => c.gestor === gestorFiltro)
+            : consultores
+          ).filter(c => !filtroEquipeTopo || c.equipe === filtroEquipeTopo).map(c => c.id);
 
       const [libsFiltradas, ajustes, libsTodas, vmetasRows, vmetasConsultor] = await Promise.all([
         // Movimentação da carteira (listaProcessada), no intervalo de meses selecionado
