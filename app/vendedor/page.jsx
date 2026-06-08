@@ -34,6 +34,24 @@ async function fetchAll(query) {
   return all;
 }
 
+// Busca valor_meta_empresa para uma lista (possivelmente grande) de empresa_ids,
+// em lotes para não estourar o tamanho da URL e com paginação (fetchAll) para não truncar.
+async function fetchVmetasPorEmpresa(empIds) {
+  if (!empIds.length) return [];
+  const CHUNK = 300;
+  const out = [];
+  for (let i = 0; i < empIds.length; i += CHUNK) {
+    const slice = empIds.slice(i, i + CHUNK);
+    const rows = await fetchAll(
+      supabase.from('valor_meta_empresa')
+        .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
+        .in('empresa_id', slice).order('empresa_id')
+    );
+    out.push(...rows);
+  }
+  return out;
+}
+
 function calcularValorMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
@@ -204,20 +222,29 @@ export default function DashboardVendedor() {
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
 
-      // Busca TODOS os ids de empresa do gestor sem filtro de categoria
-      // para carregar valor_meta_empresa completo (igual à Evolução)
-      const consIdsParaMeta = consultorId
-        ? [consultorId]
-        : (gestorFiltro !== 'Geral'
-            ? consultores.filter(cc=>cc.gestor===gestorFiltro).map(cc=>cc.id)
-            : consultores.map(cc=>cc.id));
-      const empIdsParaMeta = consIdsParaMeta.length ? await fetchAll(
+      // Busca TODOS os ids de empresa do gestor SEM filtro de categoria, para carregar
+      // valor_meta_empresa completo (igual à Evolução). A atribuição ao gestor é feita
+      // pelo campo `gestor` do consultor da própria empresa (principal/agregado/agregado_2),
+      // exatamente como a Evolução faz — não depende da lista `consultores` (que é
+      // filtrada por ativo/visibilidade e deixava de fora empresas de outras categorias).
+      // fetchAll garante paginação para não truncar.
+      const empresasParaMeta = await fetchAll(
         supabase.from('empresas')
-          .select('id')
+          .select(`id,
+            consultor_principal:consultor_principal_id (id, gestor),
+            consultor_agregado:consultor_agregado_id (id, gestor),
+            consultor_agregado_2:consultor_agregado_2_id (id, gestor)`)
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
-          .or(`consultor_principal_id.in.(${consIdsParaMeta.join(',')}),consultor_agregado_id.in.(${consIdsParaMeta.join(',')}),consultor_agregado_2_id.in.(${consIdsParaMeta.join(',')})`)
-      ).then(rows => rows.map(r=>r.id)) : empIds;
+          .not('categoria','eq','Taxa Negativa')
+          .order('id')
+      );
+      const empIdsParaMeta = empresasParaMeta.filter(ep => {
+        const cs = [ep.consultor_principal, ep.consultor_agregado, ep.consultor_agregado_2].filter(Boolean);
+        if (consultorId)              return cs.some(c => c.id === consultorId);
+        if (gestorFiltro !== 'Geral') return cs.some(c => c.gestor === gestorFiltro);
+        return true;
+      }).map(ep => ep.id);
 
       // Suporte a múltiplos meses selecionados
       const mesesAtivos = mesesSelecionados.size > 0 ? [...mesesSelecionados].sort() : (mesSelecionado ? [mesSelecionado] : []);
@@ -240,11 +267,9 @@ export default function DashboardVendedor() {
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
             .in('produto_id', prodIds).order('competencia')
         ) : Promise.resolve([]),
-        // Busca metas por todos os empIds do gestor (sem filtro de categoria = igual à Evolução)
-        empIdsParaMeta.length ? supabase.from('valor_meta_empresa')
-          .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
-          .in('empresa_id', empIdsParaMeta)
-          .then(r => r.data||[]) : Promise.resolve([]),
+        // Busca metas por todos os empIds do gestor (sem filtro de categoria = igual à
+        // Evolução), em lotes e com paginação para não truncar.
+        fetchVmetasPorEmpresa(empIdsParaMeta),
       ]);
 
       const libMap = {};
