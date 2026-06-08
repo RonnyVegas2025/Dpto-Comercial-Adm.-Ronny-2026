@@ -201,7 +201,8 @@ export default function DashboardVendedor() {
       `).eq('ativo',true)
         .not('produto_contratado','ilike','%desconto condicional%')
         .not('categoria','eq','Taxa Negativa')
-        .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade']);
+        .in('categoria',['Beneficios','Benefícios','Bonus','Bônus','Convênio','Convenio','Mobilidade'])
+        .order('id'); // ordenação estável → paginação confiável no fetchAll (evita perder linhas quando há >1000)
 
       if (consultorId) {
         // Vendedor específico: busca em todas as posições (principal + agregado)
@@ -212,6 +213,10 @@ export default function DashboardVendedor() {
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
+        // 🔍 DIAGNÓSTICO TEMP — IDs de consultores usados no filtro de gestor
+        console.log('[vendedor][diag] gestor:', gestorFiltro, '| qtd consultores no filtro:', ids.length,
+          '| Adriana (080f65a8…) incluída?', ids.includes('080f65a8-c95a-43a2-94ac-bb4847aba422'),
+          '| ids:', ids);
         // Busca empresas onde o consultor da equipe é PRINCIPAL
         // OU é AGREGADO (mas só empresas onde o principal também está na lista da visão)
         // Isso evita puxar empresas de outros gestores onde nossos consultores são apenas agregados
@@ -221,6 +226,27 @@ export default function DashboardVendedor() {
       const empresas = await fetchAll(empQuery);
       const prodIds  = empresas.map(e => e.produto_id);
       const empIds   = empresas.map(e => e.id);
+
+      // 🔍 DIAGNÓSTICO TEMP — rastreia Emexlab (21010260) e Famolab (21010261)
+      const _alvoProd = [21010260, 21010261];
+      const _ehAlvo = (e) => _alvoProd.includes(Number(e.produto_id));
+      console.log('[vendedor][diag] empresas carregadas (após empQuery/fetchAll):', empresas.length,
+        '| gestor:', gestorFiltro, '| consultorId:', consultorId || '(visão equipe)');
+      console.log('[vendedor][diag] alvos presentes no resultado do empQuery:',
+        empresas.filter(_ehAlvo).map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria,
+          cons_id:e.consultor_principal?.id, cons:e.consultor_principal?.nome, gestor:e.consultor_principal?.gestor })));
+      try {
+        // Consulta direta dos alvos SEM filtro de gestor — mostra o consultor/gestor reais no banco
+        const _diag = await fetchAll(
+          supabase.from('empresas')
+            .select('id,produto_id,nome,categoria,ativo,consultor_principal_id,consultor_principal:consultor_principal_id(id,nome,gestor,ativo)')
+            .in('produto_id', _alvoProd).order('id')
+        );
+        console.log('[vendedor][diag] alvos direto no banco (sem filtro de gestor):',
+          _diag.map(e => ({ nome:e.nome, produto_id:e.produto_id, categoria:e.categoria, ativo:e.ativo,
+            cons_id:e.consultor_principal_id, cons:e.consultor_principal?.nome,
+            cons_gestor:e.consultor_principal?.gestor, cons_ativo:e.consultor_principal?.ativo })));
+      } catch(_e) { console.log('[vendedor][diag] erro na consulta direta dos alvos:', _e); }
 
       // Busca TODOS os ids de empresa do gestor SEM filtro de categoria, para carregar
       // valor_meta_empresa completo (igual à Evolução). A atribuição ao gestor é feita
@@ -406,6 +432,11 @@ export default function DashboardVendedor() {
           });
         }
       }
+
+      // 🔍 DIAGNÓSTICO TEMP — alvos sobreviveram ao loop (filtro de gestor por consultor)?
+      console.log('[vendedor][diag] linhas em listaProcessada:', listaProcessada.length,
+        '| alvos após filtro de gestor (loop):',
+        listaProcessada.filter(_ehAlvo).map(e => ({ nome:e.nome, vendedor:e.vendedor, gestor:e.gestor })));
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
