@@ -617,7 +617,17 @@ export default function DashboardVendedor() {
       // NUNCA a data_cadastro.
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct   = ep._pctEscopo;
-        const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
+        // Banco: metas gravadas da empresa. Com filtro de EQUIPE do topo (PROBLEMA 2),
+        // só conta as gravadas de consultores DAQUELA equipe — empresas mistas (principal
+        // de uma equipe, agregado de outra) não vazam a meta do consultor da outra equipe.
+        const banco = (vmetasRows||[]).filter(v => {
+          if (v.empresa_id !== ep.id) return false;
+          if (!filtroEquipeTopo) return true;
+          const eq = v.consultor_id
+            ? equipeDoCons(v.consultor_id)
+            : equipeDoCons(ep.consultor_principal?.id); // gravado sem consultor → equipe do principal
+          return eq === filtroEquipeTopo;
+        });
         let _metaEntradas;
         if (banco.length > 0) {
           _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));

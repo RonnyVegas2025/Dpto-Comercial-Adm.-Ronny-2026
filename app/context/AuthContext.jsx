@@ -110,11 +110,10 @@ export function AuthProvider({ children }) {
     if (!profile) return false;
     // gestor_master e supervisor_adm_master veem tudo via permissões do banco
     if (profile.perfil === 'gestor_master') return true;
-    // 'inicio' é a home dos perfis comerciais (login os manda p/ lá) — sempre acessível,
-    // independente de existir linha em perfil_permissoes/user_permissoes. Evita o loop
-    // login → /inicio → /sem-acesso quando falta essa permissão no banco.
-    if (pagina === 'inicio' &&
-        ['gestor_comercial','supervisor_comercial','vendedor'].includes(profile.perfil)) return true;
+    // 'inicio' é a home pessoal — sempre acessível a quem está logado, independente de
+    // existir linha em perfil_permissoes/user_permissoes. Evita o loop login → /inicio →
+    // /sem-acesso (ex.: Danilo) qualquer que seja o valor exato do perfil.
+    if (pagina === 'inicio') return true;
     return permissoes[pagina]?.pode_ver === true;
   };
 
