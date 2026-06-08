@@ -487,8 +487,8 @@ export default function DashboardVendedor() {
 
       const totalMovReal   = listaProcessada.reduce((s,e) => s + e.totalMov, 0);
       const totalEsperado  = listaProcessada.reduce((s,e) => s + e.esperadoMes * (mesesDisp.length || 1), 0);
-      // totalValorMeta é calculado mais abaixo, a partir de empresasNaMeta, para usar
-      // exatamente a mesma lógica da seção "Empresas na Meta" (entradas do banco + fallback).
+      // totalValorMeta e metaPorMes são calculados mais abaixo: banco (vmetasRows, prioridade)
+      // + meta calculada automaticamente para empresas da listaProcessada sem entrada no banco.
 
       const meta = consultoresDaVisao.reduce((total, cons) => {
         const metaMes = cons.meta_mensal || 0;
@@ -562,36 +562,36 @@ export default function DashboardVendedor() {
           return vb - va;
         });
 
-      // totalValorMeta: soma a meta de cada empresa de empresasNaMeta (entradas do banco
-      // ou meta calculada como fallback) — igual à seção "Empresas na Meta" — E SOMA
-      // TAMBÉM as metas gravadas (vmetasRows) de empresas do gestor que NÃO entram em
-      // empresasNaMeta. Isso ocorre quando o consultor da empresa não está na lista ativa
-      // de consultores (ex.: Emexlab/Famolab), fazendo a empresa ficar de fora de
-      // listaProcessada mesmo tendo meta gravada. Garante paridade com a Evolução.
-      const empIdsNaMeta = new Set(empresasNaMeta.map(e => e.id));
-      const somaExtrasBanco = (filtroMes) => (vmetasRows||[]).reduce((s,v) => {
-        if (empIdsNaMeta.has(v.empresa_id)) return s; // já contabilizada via empresasNaMeta
-        if (!filtroMes(v.competencia_meta?.substring(0,7))) return s;
-        return s + (v.valor_meta || 0);
-      }, 0);
+      // ── Meta total e por mês (mesma lógica da Evolução) ─────────────────────
+      // 1) BANCO (prioridade): soma todas as entradas gravadas em valor_meta_empresa.
+      //    vmetasRows já cobre todo o escopo do gestor.
+      const somaBanco = (incluiMes) => (vmetasRows||[]).reduce((s,v) =>
+        incluiMes(v.competencia_meta?.substring(0,7)) ? s + (v.valor_meta || 0) : s, 0);
 
-      const totalValorMeta =
-        empresasNaMeta.reduce((s,e) => {
-          const entradas = mesesAtivos.length > 0
-            ? e._metaEntradas.filter(v => mesesAtivos.includes(v.competencia_meta?.substring(0,7)))
-            : e._metaEntradas;
-          return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
-        }, 0)
-        + somaExtrasBanco(mes => mesesAtivos.length === 0 || mesesAtivos.includes(mes));
+      // 2) CALCULADO: para cada item da listaProcessada cuja empresa NÃO tem entrada no
+      //    banco, calcula a meta automaticamente (libsTodas → libsTodasMap), usando o pct
+      //    do consultor do próprio item. Benefícios/Bônus = 1ª liberação; Convênio/
+      //    Mobilidade = 3º mês corrido. O banco sempre tem prioridade.
+      const empIdsComBanco = new Set((vmetasRows||[]).map(v => v.empresa_id));
+      const metasCalc = [];
+      for (const e of listaProcessada) {
+        if (empIdsComBanco.has(e.id)) continue; // banco tem prioridade sobre o calculado
+        const mc = calcularMeta(e, libsTodasMap, ajusteMap, e._pct ?? 100, null);
+        if (mc && mc.elegivel && (mc.valorMeta || 0) > 0 && mc.mesAlvo) {
+          metasCalc.push({ mes: mc.mesAlvo.substring(0,7), valor: mc.valorMeta });
+        }
+      }
+      const somaCalc = (incluiMes) => metasCalc.reduce((s,x) =>
+        incluiMes(x.mes) ? s + x.valor : s, 0);
 
-      // metaPorMes: mesma lógica, agrupada por mês da competência da meta.
+      // Total = banco + calculado (respeitando o filtro de meses do topo)
+      const noMesAtivo = (mes) => mesesAtivos.length === 0 || mesesAtivos.includes(mes);
+      const totalValorMeta = somaBanco(noMesAtivo) + somaCalc(noMesAtivo);
+
+      // Por mês = banco do mês + calculado do mês
       const metaPorMes = {};
       for (const m of mesesDisp) {
-        const base = empresasNaMeta.reduce((s,e) => {
-          const entradas = e._metaEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
-          return s + entradas.reduce((sv,v) => sv + (v.valor_meta || 0), 0);
-        }, 0);
-        metaPorMes[m] = base + somaExtrasBanco(mes => mes === m);
+        metaPorMes[m] = somaBanco(mes => mes === m) + somaCalc(mes => mes === m);
       }
 
       setDados({
