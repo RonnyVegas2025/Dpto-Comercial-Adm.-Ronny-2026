@@ -587,11 +587,11 @@ export default function DashboardVendedor() {
       const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
 
       // ── Metas do escopo (banco + cálculo automático) — TODAS as categorias ───
-      // Para cada empresa do escopo do gestor/vendedor: usa a(s) meta(s) gravada(s) no
-      // banco (prioridade) ou, na ausência, calcula automaticamente via calcularMeta.
-      // O mês da meta vem SEMPRE da liberação (1ª p/ benefício, 3º mês p/ convênio) —
-      // nunca da data de cadastro. Cobre categorias fora da listaProcessada (ex.:
-      // Alimentação, Vegas Plus) que a Evolução considera e a carteira (4 cat.) não.
+      // Para cada empresa do escopo: usa a(s) meta(s) gravada(s) no banco (prioridade)
+      // ou, na ausência, calcula automaticamente. O MÊS da meta é SEMPRE o mês da
+      // PRIMEIRA LIBERAÇÃO REAL em libsTodas (benefício) ou da 3ª liberação (convênio) —
+      // NUNCA a data_cadastro.
+      const _alvosLog = new Set([16782,16783,16784,16785,16786,16787,21010254]);
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct   = ep._pctEscopo;
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
@@ -599,9 +599,31 @@ export default function DashboardVendedor() {
         if (banco.length > 0) {
           _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));
         } else {
-          const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pct, null);
-          if (!mc || !mc.elegivel || !(mc.valorMeta > 0) || !mc.mesAlvo) return null;
-          _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta, regra: mc.regra }];
+          // Liberações REAIS da empresa (valor > 0), ordenadas por competência crescente.
+          const libsDaEmpresa = (libsTodas||[])
+            .filter(l => Number(l.produto_id) === Number(ep.produto_id) && (l.total_liberado || 0) > 0)
+            .sort((a,b) => String(a.competencia).localeCompare(String(b.competencia)));
+          const catLower   = (ep.categoria || '').toLowerCase();
+          const isConvenio = catLower.includes('conv') || catLower.includes('mobil');
+          // Benefícios/Bônus → 1ª liberação; Convênio/Mobilidade → 3ª liberação.
+          const libAlvo    = libsDaEmpresa.length === 0 ? null : (isConvenio ? libsDaEmpresa[2] : libsDaEmpresa[0]);
+          const mesDaMeta  = libAlvo ? String(libAlvo.competencia).substring(0,7) : null;
+          if (_alvosLog.has(Number(ep.produto_id))) {
+            console.log(`[vendedor][diag] empresa ${ep.produto_id} → mesDaMeta:`, mesDaMeta,
+              '| categoria:', ep.categoria, '| isConvenio:', isConvenio, '| pctEscopo:', pct,
+              '| liberacoes:', libsDaEmpresa.map(l => ({ comp: String(l.competencia).substring(0,7), val: l.total_liberado })));
+          }
+          if (!mesDaMeta) return null; // sem liberação real (ou convênio sem 3ª) = sem meta
+          // Valor: liberação do mês-alvo (com ajuste), × peso (só Vegas Benefícios) × pct.
+          const compKey   = `${ep.id}__${String(libAlvo.competencia).substring(0,10)}`;
+          const ajuste    = ajusteMap[compKey];
+          const valorBase = ajuste !== undefined ? ajuste : (libAlvo.total_liberado || 0);
+          const prodNorm  = (ep.produto_contratado || '').toLowerCase().trim();
+          const isVB      = prodNorm === 'vegas benefícios' || prodNorm === 'vegas beneficios';
+          const peso      = isVB ? (ep.peso_categoria ?? 1) : 1;
+          const valorMeta = Math.round(valorBase * peso * (pct / 100) * 100) / 100;
+          if (!(valorMeta > 0)) return null;
+          _metaEntradas = [{ competencia_meta: mesDaMeta + '-01', valor_meta: valorMeta, regra: isConvenio ? 'convenio' : 'beneficio' }];
         }
         const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100);
         return { ...ep, _pct: pct, esperadoMes, _metaEntradas };
