@@ -393,11 +393,24 @@ export default function DashboardVendedor() {
         ajusteMap[`${a.empresa_id}__${a.competencia?.substring(0,10)}`] = a.valor_considerado;
       }
 
+      // libsTodasMap: AGREGA (soma) os registros de liberação por produto+mês — igual ao
+      // libMap. Antes empurrava cada registro separado, e o calcularMeta (que pega
+      // libsOrdenadas[0]) usava só UM registro. Empresas com 2+ registros no mês (ex.:
+      // 16692, 16702, 16703) saíam pela metade. Agora cada mês vira 1 entrada com a soma.
       const libsTodasMap = {};
+      const _libAgg = {};
       for (const l of libsTodas) {
         const pid = l.produto_id;
+        const comp = l.competencia?.substring(0,10);
+        if (!comp) continue;
+        const k = pid + '__' + comp;
+        if (!_libAgg[k]) _libAgg[k] = { pid, comp, val: 0 };
+        _libAgg[k].val += (l.total_liberado || 0);
+      }
+      for (const k of Object.keys(_libAgg)) {
+        const { pid, comp, val } = _libAgg[k];
         if (!libsTodasMap[pid]) libsTodasMap[pid] = [];
-        libsTodasMap[pid].push({ comp: l.competencia?.substring(0,10), val: l.total_liberado || 0 });
+        libsTodasMap[pid].push({ comp, val });
       }
 
       // mesesDisp: se há meses selecionados, filtra somente eles
@@ -670,17 +683,19 @@ export default function DashboardVendedor() {
         extrasFev:  extrasPorMes['2026-02']||0,
         extrasMar:  extrasPorMes['2026-03']||0,
       };
-      // Detalhe de produtos-alvo — mostra consultores e pcts crus p/ achar o bug do pctEscopo
+      // Detalhe de produtos-alvo — liberações (já agregadas por mês) + meta calculada
       const _dbgProd = (pid) => {
         const ep = empresasParaMeta.find(e => Number(e.produto_id) === pid);
         if (!ep) return `${pid}: NAO em empresasParaMeta (cat filtrada?)`;
-        const c = (cons,p) => cons ? `${cons.nome?.split(' ')[0]||'?'}/g:${cons.gestor||'-'}/pct:${p}` : `(vazio/pct:${p})`;
-        return `${pid}[${ep.categoria}] pctEsc=${pctDoEscopo(ep)} || P=${c(ep.consultor_principal,ep.pct_principal)} | A1=${c(ep.consultor_agregado,ep.pct_agregado_1)} | A2=${c(ep.consultor_agregado_2,ep.pct_agregado_2)}`;
+        const arr = (libsTodasMap[ep.produto_id]||[]).filter(l => l.comp >= '2026-01');
+        const libsStr = arr.map(l => `${l.comp.substring(0,7)}=${(l.val||0).toFixed(2)}`).join(', ');
+        const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pctDoEscopo(ep), '2026-01');
+        return `${pid} pctEsc=${pctDoEscopo(ep)} libs[${libsStr}] → META=${(mc?.valorMeta||0).toFixed(2)}`;
       };
       _debug.p16692 = _dbgProd(16692);
       _debug.p16703 = _dbgProd(16703);
       _debug.p16538 = _dbgProd(16538);
-      console.log('[diag] 16692:', _debug.p16692, '\n16702:', _dbgProd(16702), '\n16703:', _debug.p16703, '\n16538(ok):', _debug.p16538);
+      console.log('[diag] 16692:', _debug.p16692, '\n16702:', _dbgProd(16702), '\n16703:', _debug.p16703, '\n16538:', _debug.p16538);
 
       // Cards (total e por mês) = metasGestor (escopo) + extras (gravados fora do escopo).
       const totalValorMeta = metasGestor.reduce((s,e) => {
