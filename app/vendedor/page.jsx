@@ -604,7 +604,7 @@ export default function DashboardVendedor() {
       const rankingMap = {};
       listaProcessada.forEach(e => {
         const cid = e._cons.id;
-        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
+        if (!rankingMap[cid]) rankingMap[cid] = { id:cid, nome:e.vendedor, gestor:e.gestor, equipe:e._equipe, movReal:0, esperado:0, empresas:0, valorMeta:0, fechadoBruto:0, naMeta:0 };
         rankingMap[cid].movReal      += e.mediaMovMes;
         rankingMap[cid].esperado     += e.esperadoMes;
         rankingMap[cid].empresas     += 1;
@@ -612,7 +612,19 @@ export default function DashboardVendedor() {
         rankingMap[cid].fechadoBruto += e.potencial_movimentacao || 0;
         if ((e.valorMeta||0) > 0) rankingMap[cid].naMeta += 1;
       });
-      const ranking = Object.values(rankingMap).sort((a,b) => b.movReal - a.movReal);
+
+      // Adiciona consultores do escopo que não têm empresas (sem movimentação)
+      consultoresDaVisao.forEach(c => {
+        if (!rankingMap[c.id]) {
+          rankingMap[c.id] = {
+            id: c.id, nome: c.nome, gestor: c.gestor, equipe: c.equipe,
+            movReal: 0, esperado: 0, empresas: 0, valorMeta: 0,
+            fechadoBruto: 0, naMeta: 0
+          };
+        }
+      });
+
+      const ranking = Object.values(rankingMap).sort((a,b) => b.valorMeta - a.valorMeta);
 
       // ── Metas do escopo (banco + cálculo automático) — TODAS as categorias ───
       // Para cada empresa do escopo: usa a(s) meta(s) gravada(s) no banco (prioridade)
