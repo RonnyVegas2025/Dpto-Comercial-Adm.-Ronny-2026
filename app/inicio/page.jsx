@@ -368,9 +368,6 @@ export default function HomePage() {
     consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp, mesesComLib,
   } = dados;
 
-  const corPerf = perf==='verde'?'#16a34a':perf==='amarelo'?'#d97706':'#dc2626';
-  const bgPerf  = perf==='verde'?'rgba(22,163,74,0.06)':perf==='amarelo'?'rgba(217,119,6,0.06)':'rgba(220,38,38,0.06)';
-  const bdPerf  = perf==='verde'?'rgba(22,163,74,0.2)':perf==='amarelo'?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)';
   const corPct  = (p) => p>=80?'#16a34a':p>=60?'#d97706':'#dc2626';
 
   // ── Filtro de equipe (Melhoria 2): deriva as métricas da equipe selecionada ──
@@ -392,9 +389,23 @@ export default function HomePage() {
     : metaTotal;
   const pctMetaView      = metaTotalView > 0 ? (metaApuradaView / metaTotalView) * 100 : 0;
   const mesesComMetaView = Object.entries(metaPorMesView).sort((a,b) => a[0].localeCompare(b[0])).slice(-5);
-  const top3View         = consEscopo.map(c => ({ ...c, metaApurada: (metaPorConsultor?.[c.id]) || 0 }))
-    .sort((a,b) => b.metaApurada - a.metaApurada).slice(0, 3);
+  const top3View = consEscopo
+    .map(c => ({ ...c, metaApurada: (metaPorConsultor?.[c.id]) || 0 }))
+    .filter(c => c.metaApurada > 0)
+    .sort((a,b) => b.metaApurada - a.metaApurada)
+    .slice(0, equipeAtiva ? 50 : 3);
   const semMovCriticoView = equipeAtiva ? ((dados.semMovPorEquipe?.[equipeAtiva]) || 0) : semMovCritico;
+
+  // Banner de performance — usa o pct filtrado pela equipe (pctMetaView)
+  const perfView  = pctMetaView >= 80 ? 'verde' : pctMetaView >= 60 ? 'amarelo' : 'vermelho';
+  const perfMsgView = perfView === 'verde'
+    ? { emoji:'🟢', titulo:'Parabéns! Sua equipe está performando bem.',  sub:`Meta atingida em ${fmtPct(pctMetaView)} — continue assim!` }
+    : perfView === 'amarelo'
+    ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMetaView)} da meta — foco para fechar forte o mês.` }
+    : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMetaView)} da meta atingida — revise as prioridades.` };
+  const corPerf = perfView==='verde'?'#16a34a':perfView==='amarelo'?'#d97706':'#dc2626';
+  const bgPerf  = perfView==='verde'?'rgba(22,163,74,0.06)':perfView==='amarelo'?'rgba(217,119,6,0.06)':'rgba(220,38,38,0.06)';
+  const bdPerf  = perfView==='verde'?'rgba(22,163,74,0.2)':perfView==='amarelo'?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)';
 
   return (
     <div style={{maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'}}>
@@ -432,13 +443,13 @@ export default function HomePage() {
 
       {/* Banner de performance */}
       <div style={{background:bgPerf,border:`1px solid ${bdPerf}`,borderRadius:14,padding:'20px 24px',marginBottom:24,display:'flex',alignItems:'center',gap:16,animation:'fadeIn 0.4s ease'}}>
-        <div style={{fontSize:'2.5rem',lineHeight:1}}>{perfMsg.emoji}</div>
+        <div style={{fontSize:'2.5rem',lineHeight:1}}>{perfMsgView.emoji}</div>
         <div style={{flex:1}}>
-          <div style={{fontWeight:700,fontSize:'1.05rem',color:corPerf,marginBottom:4}}>{perfMsg.titulo}</div>
-          <div style={{color:'#6b7280',fontSize:'0.85rem'}}>{perfMsg.sub}</div>
+          <div style={{fontWeight:700,fontSize:'1.05rem',color:corPerf,marginBottom:4}}>{perfMsgView.titulo}</div>
+          <div style={{color:'#6b7280',fontSize:'0.85rem'}}>{perfMsgView.sub}</div>
         </div>
         <div style={{textAlign:'right',flexShrink:0}}>
-          <div style={{fontSize:'2rem',fontWeight:800,color:corPerf}}>{fmtPct(pctMeta)}</div>
+          <div style={{fontSize:'2rem',fontWeight:800,color:corPerf}}>{fmtPct(pctMetaView)}</div>
           <div style={{color:'#9ca3af',fontSize:'0.72rem',textTransform:'uppercase',letterSpacing:1}}>da meta</div>
         </div>
       </div>
@@ -468,14 +479,14 @@ export default function HomePage() {
           },
           {
             label: 'Meta Apurada',
-            val:   fmt(metaApurada),
-            sub:   `meta: ${fmt(metaTotal)}/mês`,
+            val:   fmt(metaApuradaView),
+            sub:   `meta: ${fmt(metaTotalView)}/mês`,
             subCor:'#8b92b0',
           },
           {
             label: 'Meta Acumulada',
-            val:   fmt(metaTotal),
-            sub:   `${fmt(consultores.reduce((s,cons) => s+(cons.meta_mensal||0), 0))}/mês`,
+            val:   fmt(metaTotalView),
+            sub:   `${fmt(consEscopo.reduce((s,c) => s+(c.meta_mensal||0), 0))}/mês`,
             subCor: '#8b92b0',
           },
           {
@@ -556,7 +567,7 @@ export default function HomePage() {
       {/* Top 3 vendedores */}
       <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'20px 24px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',marginBottom:24}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-          <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>🏆 Top Vendedores — Meta Apurada</div>
+          <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>{equipeAtiva ? `👥 Vendedores — ${equipeAtiva}` : '🏆 Top Vendedores — Meta Apurada'}</div>
           <Link href="/vendedor" style={{color:'#b45309',fontSize:'0.78rem',fontWeight:600,textDecoration:'none'}}>Ver ranking completo →</Link>
         </div>
         {top3View.length === 0 ? (
