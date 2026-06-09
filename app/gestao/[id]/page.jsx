@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -83,6 +84,8 @@ function calcularMetaAutomatica(empresa, movimentos, ajustes) {
 
 export default function GestaoEmpresaDetalhe({ params }) {
   const router = useRouter();
+  const { profile } = useAuth();
+  const podeEditar = profile && ['diretoria','gestor_master','supervisor_adm_master'].includes(profile.perfil);
   const id     = params?.id;
 
   const [empresa,      setEmpresa]      = useState(null);
@@ -290,6 +293,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
     await supabase.from('historico_empresa').insert({
       empresa_id: id, tipo: novaOco.tipo,
       titulo: novaOco.titulo.trim(), descricao: novaOco.descricao.trim()||null,
+      criado_por: profile?.nome || profile?.email || 'Sistema',
     });
     setNovaOco({tipo:'contato',titulo:'',descricao:''});
     setAddCRM(false);
@@ -458,8 +462,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
         </div>
         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
           {sucesso&&<span style={{color:'#16a34a',fontSize:'0.85rem',fontWeight:600}}>✅ Salvo!</span>}
-          {abaAtiva==='dados'&&!editando&&<button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
-          {abaAtiva==='dados'&&editando&&<>
+          {abaAtiva==='dados'&&!editando&&podeEditar&&<button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
+          {abaAtiva==='dados'&&editando&&podeEditar&&<>
             <button style={sp.btnSec} onClick={()=>{setEditando(false);setErro('');}}>Cancelar</button>
             <button style={sp.btnPri} onClick={salvar} disabled={salvando}>{salvando?'Salvando...':'💾 Salvar'}</button>
           </>}
@@ -579,7 +583,10 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           <span style={{background:`${cfg.cor}15`,color:cfg.cor,border:`1px solid ${cfg.cor}30`,borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,textTransform:'uppercase'}}>{cfg.label}</span>
                         </div>
                         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                          <span style={{color:'#8b92b0',fontSize:'0.72rem',whiteSpace:'nowrap'}}>{fmtDT(h.criado_em)}</span>
+                          <span style={{color:'#8b92b0',fontSize:'0.72rem',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:6}}>
+                            {h.criado_por && <span style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe',borderRadius:5,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>👤 {h.criado_por}</span>}
+                            {fmtDT(h.criado_em)}
+                          </span>
                           <button onClick={()=>deletarCRM(h.id)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}>✕</button>
                         </div>
                       </div>

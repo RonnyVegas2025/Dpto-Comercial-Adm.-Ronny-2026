@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -1402,7 +1403,12 @@ export default function DashboardVendedor() {
                           const corSit=e.situacao==='acima do esperado'?'#34d399':e.situacao==='dentro do esperado'?'#f0b429':e.situacao==='abaixo do esperado'?'#f87171':'#9ca3af';
                           return (
                             <tr key={e._key} style={{background:i%2===0?'#ffffff':'#fafafa',borderBottom:'1px solid #f0f2f8'}}>
-                              {colV('empresa')&&<td style={s.td}><span>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>}
+                              {colV('empresa')&&<td style={s.td}>
+                                <Link href={`/gestao/${e.id}`} style={{textDecoration:'none',color:'inherit'}}>
+                                  <span style={{fontWeight:600,color:'#1a1d2e',cursor:'pointer'}}>{e.nome}</span>
+                                  <div style={{color:'#60a5fa',fontSize:'0.65rem',marginTop:2}}>ID {e.produto_id} · ver detalhes →</div>
+                                </Link>
+                              </td>}
                               {colV('produto')&&<td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.produto_contratado||'—'}</span></td>}
                               <td style={s.td}><span style={{fontSize:'0.78rem'}}>{e.vendedor}</span></td>
                               {colV('esperado')&&<td style={{...s.td,color:'#a78bfa',fontWeight:600}}>{fmt(e.esperadoMes)}</td>}
