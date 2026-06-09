@@ -43,8 +43,8 @@ export default function HomePage() {
         .eq('ativo', true);
 
       let consultores = todosConsultores || [];
-      // supervisor_comercial (Diretor Comercial) é livre: vê tudo sem restrição, igual ao gestor_master.
-      const perfisRestritos = ['gestor_comercial','vendedor'];
+      // supervisor_comercial (Diretor Comercial) respeita user_visibilidade (ex.: Rossi → 27 consultores específicos).
+      const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
       if (profData && perfisRestritos.includes(profData.perfil)) {
         if (vis?.tipo === 'equipes' && vis.equipes?.length > 0) {
           const nomePerf = profData.nome || '';

@@ -266,7 +266,7 @@ export default function DashboardVendedor() {
 
     // Gestor fixo: perfis NÃO livres ficam travados no gestor vinculado (gestor_vinculado).
     // Esse usuário enxerga APENAS a própria equipe — não existe "Geral" (todas as equipes).
-    const perfisLivres = ['gestor_master','supervisor_adm_master','diretoria','supervisor_comercial'];
+    const perfisLivres = ['gestor_master','supervisor_adm_master','diretoria'];
     const gestorFixo = (prof && !perfisLivres.includes(prof.perfil))
       ? ((prof.gestor_vinculado || prof.nome || '').trim() || null)
       : null;
