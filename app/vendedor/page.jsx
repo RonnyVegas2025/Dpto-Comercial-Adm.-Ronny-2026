@@ -16,7 +16,6 @@ const norm   = (s) => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const ABAS = [
   { key:'resumo',     label:'📊 Resumo'     },
   { key:'categorias', label:'📂 Categorias' },
-  { key:'equipes',    label:'👥 Equipes'    },
   { key:'carteira',   label:'📋 Carteira'   },
   { key:'produtos',   label:'🎯 Produtos'   },
   { key:'ranking',    label:'🏆 Ranking'    },
@@ -766,6 +765,28 @@ export default function DashboardVendedor() {
             ))}
           </div>
         </div>
+        {/* ✅ NOVO: Filtro por Equipe */}
+        {(() => {
+          const equipes = [...new Set(consultsFiltrados.map(c=>c.equipe).filter(Boolean))].sort();
+          if (equipes.length < 2) return null;
+          return (
+            <div style={s.filtroGrupo}>
+              <label style={s.filtroLabel}>EQUIPE</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <button style={{...s.gestorBtn,...(filtroEquipeTopo===''?s.gestorBtnAtivo:{})}}
+                  onClick={() => { setFiltroEquipeTopo(''); setConsultorId(''); }}>
+                  🌐 Todas
+                </button>
+                {equipes.map(eq => (
+                  <button key={eq} style={{...s.gestorBtn,...(filtroEquipeTopo===eq?s.gestorBtnAtivo:{})}}
+                    onClick={() => { setFiltroEquipeTopo(eq); setConsultorId(''); }}>
+                    👥 {eq}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>VENDEDOR</label>
           <select style={s.select} value={consultorId} onChange={e => setConsultorId(e.target.value)}>
