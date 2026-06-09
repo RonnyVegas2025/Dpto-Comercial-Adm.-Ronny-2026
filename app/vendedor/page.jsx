@@ -332,7 +332,8 @@ export default function DashboardVendedor() {
       // exatamente como a Evolução faz — não depende da lista `consultores` (que é
       // filtrada por ativo/visibilidade e deixava de fora empresas de outras categorias).
       // fetchAll garante paginação para não truncar.
-      const empresasParaMeta = await fetchAll(
+      const idsEscopoMeta = consultores.map(c => c.id);
+      const empresasParaMeta = idsEscopoMeta.length ? await fetchAll(
         supabase.from('empresas')
           .select(`id, produto_id, nome, cnpj, categoria, produto_contratado,
             potencial_movimentacao, peso_categoria, data_cadastro,
@@ -343,8 +344,9 @@ export default function DashboardVendedor() {
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')
+          .or(`consultor_principal_id.in.(${idsEscopoMeta.join(',')}),consultor_agregado_id.in.(${idsEscopoMeta.join(',')}),consultor_agregado_2_id.in.(${idsEscopoMeta.join(',')})`)
           .order('id')
-      );
+      ) : [];
       // Atribuição da empresa por equipe. Modelo (igual à Evolução):
       //  • "Todas": a empresa conta 100% (uma vez).
       //  • Filtro de equipe: a empresa entra com a FRAÇÃO que cabe à equipe — ex.: mista
