@@ -242,6 +242,7 @@ function PaginaVendedores({ equipesDB = [] }) {
 
   async function salvarEdicao() {
     if (!editando?.nome?.trim()) { setErro('Informe o nome'); return; }
+    if (!editando?.id) { setErro('Erro: ID do consultor não encontrado. Feche e abra o formulário novamente.'); return; }
     setSalvando(true); setErro('');
     const dirNome  = (diretoresList.find(d => d.id === editando.diretor_id))?.nome || editando.diretor || null;
     const gestNome = (gestoresList.find(g => g.id === editando.gestor_id))?.nome || editando.gestor_intermediario || null;
@@ -447,7 +448,7 @@ function PaginaVendedores({ equipesDB = [] }) {
                         <button style={{ ...sBtnSec, flex:1, fontSize:'0.78rem', padding:'6px 10px' }}
                           onClick={() => {
                             // ✅ data_admissao incluído no setEditando
-                            setEditando({...c, diretor_id: c.diretor_id||'', gestor_id: c.gestor_id||'', meta_inicio: c.meta_inicio||'', data_admissao: c.data_admissao||''});
+                            setEditando({...c, id: c.id, diretor_id: c.diretor_id||'', gestor_id: c.gestor_id||'', meta_inicio: c.meta_inicio||'', data_admissao: c.data_admissao||''});
                             setErro('');
                           }}>
                           ✏️ Editar
