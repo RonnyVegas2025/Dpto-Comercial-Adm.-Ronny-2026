@@ -345,30 +345,32 @@ export default function DashboardVendedor() {
           .not('categoria','eq','Taxa Negativa')
           .order('id')
       );
-      // pct efetivo do escopo (vendedor/gestor) numa empresa = soma dos pcts dos
-      // consultores do escopo que atuam nela (principal + agregados). Respeita o filtro
-      // de EQUIPE do topo (PROBLEMA 2): só conta consultores da equipe selecionada.
+      // Atribuição da empresa por equipe. Modelo (igual à Evolução):
+      //  • "Todas": a empresa conta 100% (uma vez).
+      //  • Filtro de equipe: a empresa entra com a FRAÇÃO que cabe à equipe — ex.: mista
+      //    (principal Inside 50% + agregado Pós Vendas 50%) entra com 50% no Inside e 50%
+      //    no Pós Vendas. Calc/banco usam o valor CHEIO da empresa × fração da equipe.
       const equipeDoCons = (id) => consultores.find(c => c.id === id)?.equipe;
-      const pctDoEscopo = (ep) => {
-        let pct = 0;
-        const add = (cons, p) => {
-          if (!cons) return;
-          if (filtroEquipeTopo && equipeDoCons(cons.id) !== filtroEquipeTopo) return;
-          if (consultorId)                   { if (cons.id === consultorId)       pct += (p || 0); }
-          else if (gestorFiltro !== 'Geral') { if (cons.gestor === gestorFiltro)  pct += (p || 0); }
-          else                               pct += (p || 0);
-        };
+      const noEscopo = (cons) => consultorId
+        ? cons.id === consultorId
+        : (gestorFiltro !== 'Geral' ? cons.gestor === gestorFiltro : true);
+      const naEquipe = (cons) => !filtroEquipeTopo || equipeDoCons(cons.id) === filtroEquipeTopo;
+      const pctSoma = (ep, pred) => {
+        let p = 0;
+        const add = (cons, v) => { if (cons && pred(cons)) p += (v || 0); };
         add(ep.consultor_principal,  ep.pct_principal  ?? 100);
         add(ep.consultor_agregado,   ep.pct_agregado_1 ?? 0);
         add(ep.consultor_agregado_2, ep.pct_agregado_2 ?? 0);
-        return pct;
+        return p;
       };
-      // Empresas do escopo do gestor/vendedor — TODAS as categorias elegíveis (igual à
-      // Evolução), com o pct efetivo do escopo. É sobre este conjunto que a meta total e
-      // a meta por mês são calculadas (banco + cálculo automático).
       const empresasEscopoMeta = empresasParaMeta
-        .map(ep => ({ ...ep, _pctEscopo: pctDoEscopo(ep) }))
-        .filter(ep => ep._pctEscopo > 0);
+        .map(ep => {
+          const pctGestor = pctSoma(ep, noEscopo);                              // pct cheio do gestor
+          const pctEquipe = pctSoma(ep, c => noEscopo(c) && naEquipe(c));       // pct da equipe filtrada
+          const fracEquipe = filtroEquipeTopo ? (pctGestor > 0 ? pctEquipe / pctGestor : 0) : 1;
+          return { ...ep, _pctGestor: pctGestor, _fracEquipe: fracEquipe };
+        })
+        .filter(ep => ep._pctGestor > 0 && ep._fracEquipe > 0);
       const empIdsParaMeta  = empresasEscopoMeta.map(ep => ep.id);
       const prodIdsParaMeta = [...new Set(empresasEscopoMeta.map(ep => ep.produto_id))];
       // Uniões p/ carregar liberações e ajustes cobrindo TODO o escopo (não só listaProcessada)
@@ -616,32 +618,24 @@ export default function DashboardVendedor() {
       // PRIMEIRA LIBERAÇÃO REAL em libsTodas (benefício) ou da 3ª liberação (convênio) —
       // NUNCA a data_cadastro.
       const metasGestor = empresasEscopoMeta.map(ep => {
-        const pct   = ep._pctEscopo;
-        // Banco: metas gravadas da empresa. Com filtro de EQUIPE do topo (PROBLEMA 2),
-        // só conta as gravadas de consultores DAQUELA equipe — empresas mistas (principal
-        // de uma equipe, agregado de outra) não vazam a meta do consultor da outra equipe.
-        const banco = (vmetasRows||[]).filter(v => {
-          if (v.empresa_id !== ep.id) return false;
-          if (!filtroEquipeTopo) return true;
-          const eq = v.consultor_id
-            ? equipeDoCons(v.consultor_id)
-            : equipeDoCons(ep.consultor_principal?.id); // gravado sem consultor → equipe do principal
-          return eq === filtroEquipeTopo;
-        });
+        const pct  = ep._pctGestor;     // pct cheio do gestor na empresa
+        const frac = ep._fracEquipe;    // fração da equipe filtrada (1 quando "Todas")
+        // Banco: TODAS as metas gravadas da empresa (valor cheio). O recorte por equipe
+        // é feito pela FRAÇÃO (× frac) — empresas mistas entram com a parte da equipe.
+        const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
         let _metaEntradas;
         if (banco.length > 0) {
-          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra }));
+          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: (v.valor_meta || 0) * frac, regra: v.regra }));
         } else {
           // Cálculo automático IGUAL à página de Evolução: usa a MESMA função calcularMeta
           // (benefício = 1ª liberação; convênio/mobilidade = 3º mês corrido; valor com
           // ajuste/valor_considerado; peso só p/ Vegas Benefícios), com piso no período da
-          // meta (2026-01). pct = pct efetivo do escopo (soma dos consultores do gestor na
-          // empresa) — equivale a somar a meta de cada consultor (principal + agregado).
+          // meta (2026-01). pct = pct cheio do gestor; aplica a fração da equipe no valor.
           const mc = calcularMeta(ep, libsTodasMap, ajusteMap, pct, '2026-01');
           if (!mc || !mc.elegivel || !(mc.valorMeta > 0) || !mc.mesAlvo) return null;
-          _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta, regra: mc.regra }];
+          _metaEntradas = [{ competencia_meta: mc.mesAlvo, valor_meta: mc.valorMeta * frac, regra: mc.regra }];
         }
-        const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100);
+        const esperadoMes = (ep.potencial_movimentacao || 0) * (ep.peso_categoria || 1) * (pct / 100) * frac;
         return { ...ep, _pct: pct, esperadoMes, _metaEntradas };
       }).filter(Boolean);
 
