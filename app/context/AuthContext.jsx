@@ -13,7 +13,7 @@ export const PERFIS = {
   supervisor_adm_master:  'Supervisor Adm Master',
   diretoria:              'Diretoria',
   gestor_comercial:       'Gestor Comercial',
-  supervisor_comercial:   'Supervisor Comercial',
+  supervisor_comercial:   'Diretor Comercial',
   supervisor_adm:         'Supervisor Adm',
   administrativo:         'Administrativo',
   vendedor:               'Vendedor',

@@ -639,7 +639,7 @@ const PERMS_PADRAO = {
   gestor_master:        { all: true },
   diretoria:            { inicio:'ver', vendedor:'ver', gestao:'ver', relatorios:'editar', 'relatorio-empresas':'ver', agregados:'ver' },
   gestor_comercial:     { inicio:'ver', vendedor:'editar', movimentacoes:'editar', gestao:'editar', relatorios:'editar', 'relatorio-empresas':'editar', agregados:'editar' },
-  supervisor_comercial: { inicio:'ver', vendedor:'ver', gestao:'ver', relatorios:'ver', 'relatorio-empresas':'ver' },
+  supervisor_comercial: { inicio:'ver', vendedor:'editar', movimentacoes:'editar', gestao:'editar', relatorios:'editar', 'relatorio-empresas':'editar', agregados:'editar', adm_vendedores:'editar', adm_equipes:'editar', adm_gestores:'editar', adm_usuarios:'editar' },
   supervisor_adm:       { inicio:'ver', movimentacoes:'editar', gestao:'editar', relatorios:'editar', 'relatorio-empresas':'editar', agregados:'editar' },
   administrativo:       { inicio:'ver', movimentacoes:'editar', gestao:'ver', relatorios:'ver', 'relatorio-empresas':'ver' },
   vendedor:             { inicio:'ver', vendedor:'ver' },
