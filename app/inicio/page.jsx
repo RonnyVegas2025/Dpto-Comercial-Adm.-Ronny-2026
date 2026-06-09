@@ -20,6 +20,7 @@ const fmtMes = (d) => {
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [dados,   setDados]   = useState(null);
+  const [filtroEquipe, setFiltroEquipe] = useState('Geral');
 
   useEffect(() => { carregar(); }, []);
 
@@ -152,8 +153,19 @@ export default function HomePage() {
       const penultimoMesYM = meses.length > 1 ? meses[meses.length-2].substring(0,7) : null;
 
       // ── 8. Movimentação ──────────────────────────────────────────────────
+      const consIdSet = new Set(consIds);
+      const equipeDe  = (id) => consultores.find(c => c.id === id)?.equipe || 'Sem equipe';
+      const equipesDaEmpresa = (e) => {
+        const set = new Set();
+        for (const id of [e.consultor_principal_id, e.consultor_agregado_id, e.consultor_agregado_2_id]) {
+          if (id && consIdSet.has(id)) set.add(equipeDe(id));
+        }
+        return [...set];
+      };
+
       let movUltimoMes = 0, movPenultimoMes = 0;
       let comMovUltimoMes = 0, semMovUltimoMes = 0, semMovDoisMeses = 0;
+      const semMovPorEquipe = {};   // { equipe: nº de empresas que nunca movimentaram }
 
       for (const e of empresasMov) {
         const vUlt = meses.filter(m => m.substring(0,7) === ultimoMesYM)
@@ -165,7 +177,10 @@ export default function HomePage() {
         if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
         // "Nunca movimentou" = zero em TODOS os meses disponíveis (igual ao filtro Carteira do Vendedor)
         const nuncaMovimentou = meses.every(m => (libMap[`${e.produto_id}__${m}`]||0) === 0);
-        if (nuncaMovimentou) semMovDoisMeses++;
+        if (nuncaMovimentou) {
+          semMovDoisMeses++;
+          equipesDaEmpresa(e).forEach(eq => { semMovPorEquipe[eq] = (semMovPorEquipe[eq]||0) + 1; });
+        }
       }
 
       // ── 9. calcularValorMeta — CÓPIA EXATA do Vendedor ───────────────────
@@ -200,35 +215,35 @@ export default function HomePage() {
       // Vendedor: para cada empresa, usa entradaBanco se existir, senão calcula
       // Aqui fazemos o mesmo loop sobre todasEmpresas
       let metaApuradaTotal = 0;
-      const metaPorConsultor = {};
-      const metaPorMes = {};
+      const metaPorConsultor = {};   // por consultor (parcela = valor × pct/total) → p/ Top e filtro de equipe
+      const metaPorMes = {};         // total (todas as equipes)
+      const metaPorMesEq = {};       // { equipe: { mes: valor } } — parcela de cada equipe (split por pct)
       let naMeta = 0;
 
-      // pct efetivo do escopo numa empresa = soma dos pcts dos consultores visíveis
-      // (principal + agregados) — igual ao Vendedor. Assim empresas com principal E
-      // agregado da mesma equipe contam a meta dos dois.
-      const consIdSet = new Set(consIds);
-      const pctEscopoEmpresa = (e) => {
-        let p = 0;
-        if (consIdSet.has(e.consultor_principal_id))  p += (e.pct_principal  ?? 100);
-        if (consIdSet.has(e.consultor_agregado_id))   p += (e.pct_agregado_1 ?? 0);
-        if (consIdSet.has(e.consultor_agregado_2_id)) p += (e.pct_agregado_2 ?? 0);
-        return p;
+      // consIdSet e equipeDe já definidos na seção 8 (Movimentação).
+      // Consultores do escopo numa empresa, com seu pct e equipe.
+      const consDaEmpresa = (e) => {
+        const arr = [];
+        const add = (id, p) => { if (id && consIdSet.has(id)) arr.push({ id, pct: p || 0, equipe: equipeDe(id) }); };
+        add(e.consultor_principal_id,  e.pct_principal  ?? 100);
+        add(e.consultor_agregado_id,   e.pct_agregado_1 ?? 0);
+        add(e.consultor_agregado_2_id, e.pct_agregado_2 ?? 0);
+        return arr;
       };
 
       for (const e of todasEmpresas) {
-        const pct = pctEscopoEmpresa(e);
-        if (pct <= 0) continue;
-        const consId = e.consultor_principal_id;
+        const cons = consDaEmpresa(e);
+        const totalPct = cons.reduce((s,c) => s + c.pct, 0);
+        if (totalPct <= 0) continue;
 
-        // Meta gravada no banco (PRIORIDADE): soma TODAS as entradas da empresa
-        // (principal + agregado podem ter linhas separadas). Sem entrada → calcula.
+        // Meta gravada no banco (PRIORIDADE): soma TODAS as entradas da empresa.
+        // Sem entrada → calcula com o pct cheio do escopo.
         const banco = vmetasRows.filter(v => v.empresa_id === e.id);
         let entradas = [];
         if (banco.length > 0) {
           entradas = banco.map(v => ({ valor_meta: v.valor_meta||0, comp: v.competencia_meta }));
         } else {
-          const calc = calcularValorMeta(e, pct, '2026-01');
+          const calc = calcularValorMeta(e, totalPct, '2026-01');
           if (calc) entradas = [{ valor_meta: calc.valor_meta, comp: calc.competencia_meta }];
         }
 
@@ -237,13 +252,17 @@ export default function HomePage() {
           if (!(ent.valor_meta > 0)) continue;
           metaEmpresa += ent.valor_meta;
           const m = ent.comp?.substring(0,7);
-          if (m) metaPorMes[m] = (metaPorMes[m]||0) + ent.valor_meta;
+          if (!m) continue;
+          metaPorMes[m] = (metaPorMes[m]||0) + ent.valor_meta;
+          // split por consultor/equipe (proporcional ao pct) — base do filtro de equipe
+          for (const c of cons) {
+            const parcela = ent.valor_meta * (c.pct / totalPct);
+            metaPorConsultor[c.id] = (metaPorConsultor[c.id]||0) + parcela;
+            metaPorMesEq[c.equipe] = metaPorMesEq[c.equipe] || {};
+            metaPorMesEq[c.equipe][m] = (metaPorMesEq[c.equipe][m]||0) + parcela;
+          }
         }
-        if (metaEmpresa > 0) {
-          metaApuradaTotal += metaEmpresa;
-          naMeta++;
-          metaPorConsultor[consId] = (metaPorConsultor[consId]||0) + metaEmpresa;
-        }
+        if (metaEmpresa > 0) { metaApuradaTotal += metaEmpresa; naMeta++; }
       }
 
       // ── 11. metaTotal — igual ao Vendedor ────────────────────────────────
@@ -302,10 +321,14 @@ export default function HomePage() {
         comMovAtual:   comMovUltimoMes,
         semMovAtual:   semMovUltimoMes,
         semMovCritico: semMovDoisMeses,
+        semMovPorEquipe,
         variacao,
         metaTotal,
         metaApurada:   metaApuradaTotal,
         metaPorConsultor,
+        metaPorMes,
+        metaPorMesEq,
+        equipesDisponiveis: [...new Set(consultores.map(c => c.equipe).filter(Boolean))].sort(),
         mesesDisp,
         mesesComLib,
         naMeta,
@@ -350,6 +373,29 @@ export default function HomePage() {
   const bdPerf  = perf==='verde'?'rgba(22,163,74,0.2)':perf==='amarelo'?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)';
   const corPct  = (p) => p>=80?'#16a34a':p>=60?'#d97706':'#dc2626';
 
+  // ── Filtro de equipe (Melhoria 2): deriva as métricas da equipe selecionada ──
+  const equipes      = dados.equipesDisponiveis || [];
+  const equipeAtiva  = (filtroEquipe !== 'Geral' && equipes.includes(filtroEquipe)) ? filtroEquipe : null;
+  const consEscopo   = equipeAtiva ? consultores.filter(c => c.equipe === equipeAtiva) : consultores;
+  const metaPorMesView = equipeAtiva ? (dados.metaPorMesEq?.[equipeAtiva] || {}) : (dados.metaPorMes || {});
+  const metaApuradaView = equipeAtiva
+    ? Object.values(metaPorMesView).reduce((s,v) => s + v, 0)
+    : metaApurada;
+  const metaTotalView = equipeAtiva
+    ? consEscopo.reduce((t, c) => {
+        const mm = c.meta_mensal || 0; if (!mm) return t;
+        const vm = (c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01');
+        const valida = vm > '2026-01' ? vm : '2026-01';
+        const qtd = (mesesComLib || []).filter(m => m >= valida).length;
+        return qtd === 0 ? t : t + mm * qtd;
+      }, 0)
+    : metaTotal;
+  const pctMetaView      = metaTotalView > 0 ? (metaApuradaView / metaTotalView) * 100 : 0;
+  const mesesComMetaView = Object.entries(metaPorMesView).sort((a,b) => a[0].localeCompare(b[0])).slice(-5);
+  const top3View         = consEscopo.map(c => ({ ...c, metaApurada: (metaPorConsultor?.[c.id]) || 0 }))
+    .sort((a,b) => b.metaApurada - a.metaApurada).slice(0, 3);
+  const semMovCriticoView = equipeAtiva ? ((dados.semMovPorEquipe?.[equipeAtiva]) || 0) : semMovCritico;
+
   return (
     <div style={{maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'}}>
       <style>{`
@@ -366,6 +412,22 @@ export default function HomePage() {
         <p style={{color:'#8b92b0',fontSize:'0.9rem',margin:0}}>
           Resumo da sua equipe
         </p>
+
+        {/* Filtro de equipe (Melhoria 2) — só aparece se houver mais de uma equipe */}
+        {equipes.length > 1 && (
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
+            {['Geral', ...equipes].map(eq => {
+              const ativo = filtroEquipe === eq;
+              return (
+                <button key={eq} onClick={() => setFiltroEquipe(eq)}
+                  style={{padding:'6px 14px',borderRadius:8,fontSize:'0.8rem',fontWeight:ativo?700:500,cursor:'pointer',fontFamily:'inherit',
+                    border:`1px solid ${ativo?'#f0b429':'#e4e7ef'}`,background:ativo?'#fff8e6':'#ffffff',color:ativo?'#b45309':'#6b7280'}}>
+                  {eq === 'Geral' ? '🌐 Geral' : `👥 ${eq}`}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Banner de performance */}
@@ -438,14 +500,14 @@ export default function HomePage() {
           <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e',marginBottom:16}}>🎯 Meta da Equipe</div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
             <span style={{fontSize:'0.8rem',color:'#6b7280'}}>Apurado vs Meta mensal</span>
-            <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctMeta)}}>{fmtPct(pctMeta)}</span>
+            <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctMetaView)}}>{fmtPct(pctMetaView)}</span>
           </div>
           <div style={{background:'#f0f2f8',borderRadius:8,height:14,overflow:'hidden',marginBottom:12}}>
-            <div style={{height:'100%',borderRadius:8,transition:'width 1s ease',width:`${Math.min(pctMeta,100)}%`,background:corPct(pctMeta)}}></div>
+            <div style={{height:'100%',borderRadius:8,transition:'width 1s ease',width:`${Math.min(pctMetaView,100)}%`,background:corPct(pctMetaView)}}></div>
           </div>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem',marginBottom:16}}>
-            <span style={{color:corPct(pctMeta),fontWeight:700}}>{fmt(metaApurada)} apurado</span>
-            <span style={{color:'#9ca3af'}}>{fmt(metaTotal)}/mês</span>
+            <span style={{color:corPct(pctMetaView),fontWeight:700}}>{fmt(metaApuradaView)} apurado</span>
+            <span style={{color:'#9ca3af'}}>{fmt(metaTotalView)}/mês</span>
           </div>
           <div style={{paddingTop:14,borderTop:'1px solid #f0f2f8'}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
@@ -461,12 +523,12 @@ export default function HomePage() {
         {/* Meta por mês */}
         <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'20px 24px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
           <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e',marginBottom:16}}>📅 Meta Apurada por Mês</div>
-          {mesesComMeta.length === 0 ? (
+          {mesesComMetaView.length === 0 ? (
             <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'24px 0'}}>Nenhuma meta apurada ainda</div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              {mesesComMeta.map(([mes, val]) => {
-                const maxVal = Math.max(...mesesComMeta.map(([,v])=>v), 1);
+              {mesesComMetaView.map(([mes, val]) => {
+                const maxVal = Math.max(...mesesComMetaView.map(([,v])=>v), 1);
                 const pct    = (val/maxVal)*100;
                 // Destaca o mês com a MAIOR meta apurada (verde forte); os demais em verde claro.
                 const isMax  = val >= maxVal;
@@ -497,11 +559,11 @@ export default function HomePage() {
           <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>🏆 Top Vendedores — Meta Apurada</div>
           <Link href="/vendedor" style={{color:'#b45309',fontSize:'0.78rem',fontWeight:600,textDecoration:'none'}}>Ver ranking completo →</Link>
         </div>
-        {top3.length === 0 ? (
+        {top3View.length === 0 ? (
           <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'16px 0'}}>Nenhum dado ainda</div>
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {top3.map((vend,i) => {
+            {top3View.map((vend,i) => {
               const medal      = i===0?'🥇':i===1?'🥈':'🥉';
               const validaMesV = (vend.meta_inicio ? String(vend.meta_inicio).substring(0,7) : '2026-01');
               const validaV    = validaMesV > '2026-01' ? validaMesV : '2026-01';
@@ -538,8 +600,8 @@ export default function HomePage() {
       {(() => {
         if (!metaPorConsultor) return null;
 
-        // Só considera consultores COM meta_mensal cadastrada
-        const comMeta = consultores.filter(cons => (cons.meta_mensal||0) > 0);
+        // Só considera consultores COM meta_mensal cadastrada (e da equipe filtrada)
+        const comMeta = consEscopo.filter(cons => (cons.meta_mensal||0) > 0);
         if (!comMeta.length) return null;
 
         const todos = comMeta.map(cons => {
@@ -557,8 +619,8 @@ export default function HomePage() {
         const ok       = todos.filter(cons => cons.pct >= 80).length;
         const criticos = abaixo.filter(cons => cons.pct < 50).length;
 
-        // Vendedores SEM meta mas que existem na equipe
-        const semMeta  = consultores.filter(cons => !(cons.meta_mensal > 0));
+        // Vendedores SEM meta mas que existem na equipe (filtrada)
+        const semMeta  = consEscopo.filter(cons => !(cons.meta_mensal > 0));
 
         // Só mostra o card se tiver alguém abaixo OU sem meta
         if (abaixo.length === 0 && semMeta.length === 0) return null;
@@ -600,7 +662,7 @@ export default function HomePage() {
                   ✅ Todos os vendedores com meta estão acima de 80%
                 </div>
               )}
-              {abaixo.slice(0,6).map((cons,i) => {
+              {abaixo.map((cons,i) => {
                 const cor = cons.pct < 50 ? '#dc2626' : cons.pct < 65 ? '#ea580c' : '#d97706';
                 const bgBar = cons.pct < 50 ? 'rgba(220,38,38,0.08)' : cons.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
                 return (
@@ -663,12 +725,12 @@ export default function HomePage() {
       })()}
 
       {/* Alerta empresas sem movimentação */}
-      {semMovCritico > 0 && (
+      {semMovCriticoView > 0 && (
         <div style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:12,padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14}}>
           <div style={{fontSize:'1.8rem'}}>⚠️</div>
           <div style={{flex:1}}>
             <div style={{fontWeight:700,color:'#dc2626',marginBottom:2}}>
-              {semMovCritico} empresa{semMovCritico>1?'s':''} nunca movimentaram desde o início
+              {semMovCriticoView} empresa{semMovCriticoView>1?'s':''} nunca movimentaram desde o início
             </div>
             <div style={{color:'#6b7280',fontSize:'0.82rem'}}>Revise a carteira e entre em contato com essas empresas.</div>
           </div>
