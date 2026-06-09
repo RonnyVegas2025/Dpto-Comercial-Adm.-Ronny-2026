@@ -213,9 +213,9 @@ function PaginaVendedores({ equipesDB = [] }) {
     setSalvando(true); setErro('');
     const dirNome  = (diretoresList.find(d => d.id === form.diretor_id))?.nome || form.diretor || null;
     const gestNome = (gestoresList.find(g => g.id === form.gestor_id))?.nome || form.gestor_intermediario || null;
-    const { error } = await supabase.from('consultores').insert({
+    const payload = {
       nome:                 form.nome.trim(),
-      gestor:               dirNome,
+      gestor:               gestNome || dirNome,   // nome do GESTOR (gestor_id); cai p/ diretor se não houver gestor
       diretor:              dirNome,
       diretor_id:           form.diretor_id || null,
       gestor_intermediario: gestNome,
@@ -224,13 +224,19 @@ function PaginaVendedores({ equipesDB = [] }) {
       setor:                form.setor  || null,
       meta_mensal:          parseFloat(form.meta_mensal) || 0,
       meta_inicio:          form.meta_inicio || null,
-      data_admissao:        form.data_admissao || null, // ✅ NOVO
+      data_admissao:        form.data_admissao || null,
       telefone:             form.telefone || null,
       email:                form.email    || null,
       ativo:                form.ativo,
-    });
-    if (error) { setErro('Erro: ' + error.message); }
-    else { setSucesso('Vendedor cadastrado!'); setForm(formVazio); setAdicionando(false); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    };
+    const { data, error } = await supabase.from('consultores').insert(payload).select();
+    console.log('[adm-comercial][salvarNovo] payload:', payload, '| data:', data, '| error:', error);
+    if (error) { setErro('Erro ao salvar: ' + error.message); }
+    else if (!data || data.length === 0) {
+      setErro('Nada foi inserido — provável bloqueio de permissão (RLS) na tabela consultores.');
+    } else {
+      setSucesso('Vendedor cadastrado!'); setForm(formVazio); setAdicionando(false); await carregar(); setTimeout(() => setSucesso(''), 3000);
+    }
     setSalvando(false);
   }
 
@@ -239,9 +245,9 @@ function PaginaVendedores({ equipesDB = [] }) {
     setSalvando(true); setErro('');
     const dirNome  = (diretoresList.find(d => d.id === editando.diretor_id))?.nome || editando.diretor || null;
     const gestNome = (gestoresList.find(g => g.id === editando.gestor_id))?.nome || editando.gestor_intermediario || null;
-    const { error } = await supabase.from('consultores').update({
+    const payload = {
       nome:                 editando.nome.trim(),
-      gestor:               dirNome,
+      gestor:               gestNome || dirNome,   // nome do GESTOR (gestor_id); cai p/ diretor se não houver gestor
       diretor:              dirNome,
       diretor_id:           editando.diretor_id || null,
       gestor_intermediario: gestNome,
@@ -250,13 +256,19 @@ function PaginaVendedores({ equipesDB = [] }) {
       setor:                editando.setor   || null,
       meta_mensal:          parseFloat(editando.meta_mensal) || 0,
       meta_inicio:          editando.meta_inicio || null,
-      data_admissao:        editando.data_admissao || null, // ✅ NOVO
+      data_admissao:        editando.data_admissao || null,
       telefone:             editando.telefone || null,
       email:                editando.email    || null,
       ativo:                editando.ativo,
-    }).eq('id', editando.id);
-    if (error) { setErro('Erro: ' + error.message); }
-    else { setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000); }
+    };
+    const { data, error } = await supabase.from('consultores').update(payload).eq('id', editando.id).select();
+    console.log('[adm-comercial][salvarEdicao] id:', editando.id, '| payload:', payload, '| data:', data, '| error:', error);
+    if (error) { setErro('Erro ao salvar: ' + error.message); }
+    else if (!data || data.length === 0) {
+      setErro('Nada foi atualizado — provável bloqueio de permissão (RLS) na tabela consultores (ou id não encontrado).');
+    } else {
+      setSucesso('Salvo!'); setEditando(null); await carregar(); setTimeout(() => setSucesso(''), 3000);
+    }
     setSalvando(false);
   }
 
