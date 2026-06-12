@@ -709,10 +709,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       </div>
                     </div>
                   </div>
+                  {podeEditar && (
                   <button onClick={()=>removerMeta(metaAuto.comp)} disabled={removendoMeta}
                     style={{background:'rgba(220,38,38,0.07)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:8,padding:'7px 16px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',fontWeight:600}}>
                     {removendoMeta?'Removendo...':'🗑 Desmarcar meta principal'}
                   </button>
+                  )}
                 </div>
               )}
               {!metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(()=>{
@@ -765,6 +767,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             ✕ Desfazer
                           </button>
                         )}
+                        {podeEditar && (
                         <button
                           onClick={async () => {
                             setAplicandoAuto(true); setErroMeta('');
@@ -791,6 +794,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
                           {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
                         </button>
+                        )}
                       </div>
                     </div>
                     {trocandoMes && (
@@ -1063,6 +1067,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             </td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                                {podeEditar && (<>
                                 {/* Botão Ajustar — disponível em TODOS os meses */}
                                 <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:(m.total_liberado||''),motivo:ajuste?.motivo||'correcao',observacao:ajuste?.observacao||''});setMetaMes(null);}}
                                   style={{background:eEditando?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${eEditando?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'#f0b429':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
@@ -1111,6 +1116,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     🗑️
                                   </button>
                                 )}
+                                </>)}
                               </div>
                             </td>
                           </tr>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,6 +14,7 @@ const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', c
 
 export default function GestaoEmpresas() {
   const router = useRouter();
+  const { profile } = useAuth();
   const [empresasCartao,   setEmpresasCartao]   = useState([]);
   const [empresasAgregado, setEmpresasAgregado] = useState([]);
   const [loading,          setLoading]          = useState(true);
@@ -22,11 +24,25 @@ export default function GestaoEmpresas() {
   const [filtroProduto,    setFiltroProduto]    = useState('');
   const [categorias,       setCategorias]       = useState([]);
 
-  useEffect(() => { carregar(); }, [filtroStatus]);
+  useEffect(() => { carregar(); }, [filtroStatus, profile]);
 
   async function carregar() {
     setLoading(true);
     try {
+      // Busca visibilidade do usuário
+      const perfisLivres = ['diretoria', 'gestor_master', 'supervisor_adm_master'];
+      let consultorIds = null;
+      if (profile && !perfisLivres.includes(profile.perfil)) {
+        const { data: vis } = await supabase
+          .from('user_visibilidade')
+          .select('tipo, consultor_ids')
+          .eq('user_id', profile.id)
+          .maybeSingle();
+        if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
+          consultorIds = vis.consultor_ids;
+        }
+      }
+
       let q = supabase
         .from('empresas')
         .select(`
@@ -37,6 +53,9 @@ export default function GestaoEmpresas() {
           parceiro:parceiro_id (nome)
         `)
         .order('nome');
+      if (consultorIds && consultorIds.length > 0) {
+        q = q.or(`consultor_principal_id.in.(${consultorIds.join(',')}),consultor_agregado_id.in.(${consultorIds.join(',')})`);
+      }
       if (filtroStatus === 'ativas')   q = q.eq('ativo', true);
       if (filtroStatus === 'inativas') q = q.eq('ativo', false);
       const { data: cartoes } = await q;
