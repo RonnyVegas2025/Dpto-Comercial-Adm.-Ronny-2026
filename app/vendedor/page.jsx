@@ -234,7 +234,7 @@ export default function DashboardVendedor() {
         ]);
         prof = profData;
         setPerfilUsuario(profData);
-        const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor'];
+        const perfisRestritos = ['gestor_comercial','supervisor_comercial','vendedor','administrativo'];
         if (prof && perfisRestritos.includes(prof.perfil)) {
           if (vis?.tipo === 'especificos' && vis.consultor_ids?.length > 0) {
             consultorIdsPermitidos = vis.consultor_ids;
@@ -266,7 +266,7 @@ export default function DashboardVendedor() {
 
     // Gestor fixo: perfis NÃO livres ficam travados no gestor vinculado (gestor_vinculado).
     // Esse usuário enxerga APENAS a própria equipe — não existe "Geral" (todas as equipes).
-    const perfisLivres = ['gestor_master','supervisor_adm_master','diretoria','supervisor_comercial'];
+    const perfisLivres = ['gestor_master','supervisor_adm_master','diretoria','supervisor_comercial','administrativo'];
     const gestorFixo = (prof && !perfisLivres.includes(prof.perfil))
       ? ((prof.gestor_vinculado || prof.nome || '').trim() || null)
       : null;

@@ -24,7 +24,7 @@ export default function AppShell({ children }) {
     // Logado e está na página de login → redireciona para home correta
     if (user && isLoginPage) {
       const perfil = profile?.perfil;
-      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor'];
+      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor', 'administrativo'];
       if (perfil && perfisRestritos.includes(perfil)) {
         router.replace('/inicio');
       } else {
@@ -36,7 +36,7 @@ export default function AppShell({ children }) {
     // ✅ Logado e está na raiz "/" → redireciona para home correta
     if (user && pathname === '/') {
       const perfil = profile?.perfil;
-      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor'];
+      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor', 'administrativo'];
       if (perfil && perfisRestritos.includes(perfil)) {
         router.replace('/inicio');
       } else {
