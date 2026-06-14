@@ -51,6 +51,7 @@ export default function AppShell({ children }) {
     if (loading || !user || isLoginPage) return;
     if (pathname === '/') return; // raiz é tratada acima
     const pagina = pathname.split('/')[1] || 'inicio';
+    if (!pagina || pagina === 'sem-acesso') return;
     if (profile && !podeVer(pagina) && profile.perfil !== 'gestor_master') {
       router.replace('/sem-acesso');
     }
