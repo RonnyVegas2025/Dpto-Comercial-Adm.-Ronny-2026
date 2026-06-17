@@ -8,6 +8,20 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Pagina os resultados de 1000 em 1000 (Supabase trunca em 1000 por padrão).
+// Mesmo padrão usado no app/vendedor/page.jsx.
+async function fetchAll(query) {
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await query.range(from, from+999);
+    if (error || !data || !data.length) break;
+    all = [...all, ...data];
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return all;
+}
+
 const fmt    = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtMes = (d) => {
   if (!d) return '—';
@@ -747,16 +761,16 @@ export default function Evolucao() {
   async function recarregar() {
     setRecarregando(true);
     try {
-      const [{ data: emps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
+      const [{ data: emps }, libsData, { data: ajustesData }, libsTodasData] = await Promise.all([
         supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
          consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
           consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
           consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true),
-        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
-        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
       ]);
       setMeses([...new Set((libsData || []).map(l => l.competencia))].sort());
       setEmpresas(emps || []);
@@ -784,7 +798,7 @@ export default function Evolucao() {
   async function carregar() {
     setLoading(true);
     try {
-      const [{ data: emps, error: errEmps }, { data: libsData }, { data: ajustesData }, { data: libsTodasData }] = await Promise.all([
+      const [{ data: emps, error: errEmps }, libsData, { data: ajustesData }, libsTodasData] = await Promise.all([
         supabase
           .from('empresas')
           .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
@@ -793,9 +807,9 @@ export default function Evolucao() {
             consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
             consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true),
-        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
-        supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia'),
+        fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
       ]);
 
       if (errEmps) console.error('[carregar] erro empresas:', errEmps);
