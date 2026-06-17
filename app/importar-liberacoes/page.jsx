@@ -48,13 +48,13 @@ function cleanNum(v) {
 }
 
 // Parseia uma aba e retorna registros já somados por empresa/mês
-function parseAba(rows, competencia) {
+function parseAba(rows, competencia, abaNome) {
   const map = {}; // key: produto_id
   for (const row of rows) {
     const prodId = parseInt(findCol(row, ['Produto ID', 'Produto Id', 'produto_id']));
     if (!prodId) continue;
     const nome   = String(findCol(row, ['Empresa', 'empresa']) || '').trim();
-    const valor  = cleanNum(findCol(row, ['Total Liberado', 'total_liberado', 'Valor']));
+    const valor  = cleanNum(findCol(row, ['Total Liberado', 'total_liberado', 'Valor', abaNome]));
     if (!nome) continue;
 
     if (!map[prodId]) {
@@ -101,7 +101,7 @@ export default function ImportarLiberacoes() {
           }
           const ws   = wb.Sheets[sheetName];
           const raw  = xlsxLib.utils.sheet_to_json(ws, { raw: true, defval: '' });
-          const regs = parseAba(raw, competencia);
+          const regs = parseAba(raw, competencia, sheetName);
           if (regs.length > 0) resultado.push({ sheetName, competencia, registros: regs });
         }
 
