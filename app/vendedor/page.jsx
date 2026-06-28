@@ -1085,7 +1085,7 @@ export default function DashboardVendedor() {
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
                     <thead>
                       <tr style={{borderBottom:'2px solid #e4e7ef'}}>
-                        {['Empresa','Data Cad.','Produto','Mês Meta','Regra','Valor Esperado/mês','Meta Considerada'].map(h=>(
+                        {['Empresa','Data Cad.','Produto','Vendedor','Mês Meta','Regra','Valor Esperado/mês','Meta Considerada'].map(h=>(
                           <th key={h} style={{padding:'8px 12px',textAlign:h==='Valor Esperado/mês'||h==='Meta Considerada'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                         ))}
                       </tr>
@@ -1109,6 +1109,7 @@ export default function DashboardVendedor() {
                               <td style={{padding:'10px 12px',fontWeight:600}}><span style={{color:'#1a1d2e',fontWeight:600}}>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>
                               <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem'}}>{e.data_cadastro?fmtMes(e.data_cadastro.substring(0,7)+'-01'):'—'}</td>
                               <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                              <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>{e.consultor_principal?.nome||'—'}</td>
                               <td style={{padding:'10px 12px'}}><span style={{color:'#9ca3af',fontSize:'0.72rem'}}>sem meta</span></td>
                               <td style={{padding:'10px 12px',color:'#9ca3af',fontSize:'0.72rem'}}>—</td>
                               <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
@@ -1120,6 +1121,7 @@ export default function DashboardVendedor() {
                               <td style={{padding:'10px 12px',fontWeight:600}}><span style={{fontWeight:600,color:'#1a1d2e'}}>{e.nome}</span><div style={{color:'#8b92b0',fontSize:'0.65rem'}}>ID {e.produto_id}</div></td>
                               <td style={{padding:'10px 12px',color:'#60a5fa',fontSize:'0.75rem',whiteSpace:'nowrap'}}>{e.data_cadastro?fmtMes(e.data_cadastro.substring(0,7)+'-01'):'—'}</td>
                               <td style={{padding:'10px 12px',color:'#6b7280'}}>{e.produto_contratado||'—'}</td>
+                              <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>{entrada.consultor_nome||e.consultor_principal?.nome||'—'}</td>
                               <td style={{padding:'10px 12px'}}><span style={{background:entrada.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',color:entrada.regra==='upsell'?'#d97706':'#16a34a',borderRadius:5,padding:'2px 8px',fontWeight:700,fontSize:'0.72rem'}}>{fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}</span></td>
                               <td style={{padding:'10px 12px',color:'#6b7280',whiteSpace:'nowrap'}}>{entrada.regra==='upsell'?'📈 Upsell':entrada.regra==='beneficio'?'1ª recarga':entrada.regra==='convenio'?'3º mês':'Manual'}</td>
                               <td style={{padding:'10px 12px',textAlign:'right',color:'#4a5068'}}>{fmt(e.esperadoMes||0)}</td>
@@ -1131,7 +1133,7 @@ export default function DashboardVendedor() {
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e4e7ef',background:'#f8f9fa'}}>
-                        <td colSpan={5} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
+                        <td colSpan={6} style={{padding:'10px 12px',fontWeight:700,color:'#4a5068',fontSize:'0.8rem'}}>
                           {(()=>{
                             const base = filtroMetaCadastro ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)) : empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});
                             const totalPgsM2=Math.ceil(base.length/metaPorPag);const pgAtualM2=Math.min(metaPagina,totalPgsM2||1);
