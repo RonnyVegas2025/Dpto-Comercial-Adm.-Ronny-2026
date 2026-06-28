@@ -245,9 +245,9 @@ export default function DashboardVendedor() {
       }
     } catch(_) {}
 
-    const [{ data: cons }, { data: libs }] = await Promise.all([
+    const [{ data: cons }, libs] = await Promise.all([
       supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio').eq('ativo',true).order('nome'),
-      supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false}),
+      fetchAll(supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false})),
     ]);
 
     let consComValidade = (cons||[]).map(c => ({
