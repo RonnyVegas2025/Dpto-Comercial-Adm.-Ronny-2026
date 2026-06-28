@@ -634,12 +634,17 @@ export default function DashboardVendedor() {
       const metasGestor = empresasEscopoMeta.map(ep => {
         const pct  = ep._pctGestor;     // pct cheio do gestor na empresa
         const frac = ep._fracEquipe;    // fração da equipe filtrada (1 quando "Todas")
-        // Banco: TODAS as metas gravadas da empresa (valor cheio). O recorte por equipe
-        // é feito pela FRAÇÃO (× frac) — empresas mistas entram com a parte da equipe.
+        // Banco: cada linha gravada já é a FATIA PROPORCIONAL de UM consultor (valor_meta =
+        // valor × peso × pct_consultor/100) e traz consultor_id. Então NÃO se multiplica por
+        // frac (isso dividiria duas vezes). O recorte por equipe é feito por DONO da linha:
+        // sob filtro de equipe, só entram as linhas cujo consultor pertence àquela equipe.
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
         let _metaEntradas;
         if (banco.length > 0) {
-          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: (v.valor_meta || 0) * frac, regra: v.regra, consultor_nome: v.consultores?.nome || null }));
+          const entradasEquipe = filtroEquipeTopo
+            ? banco.filter(v => equipeDoCons(v.consultor_id) === filtroEquipeTopo)
+            : banco;
+          _metaEntradas = entradasEquipe.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra, consultor_nome: v.consultores?.nome || null }));
         } else {
           // Cálculo automático IGUAL à página de Evolução: usa a MESMA função calcularMeta
           // (benefício = 1ª liberação; convênio/mobilidade = 3º mês corrido; valor com
