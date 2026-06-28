@@ -44,7 +44,7 @@ async function fetchVmetasPorEmpresa(empIds) {
     const slice = empIds.slice(i, i + CHUNK);
     const rows = await fetchAll(
       supabase.from('valor_meta_empresa')
-        .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
+        .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor,consultores:consultor_id(nome)')
         .in('empresa_id', slice).order('empresa_id')
     );
     out.push(...rows);
@@ -639,7 +639,7 @@ export default function DashboardVendedor() {
         const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
         let _metaEntradas;
         if (banco.length > 0) {
-          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: (v.valor_meta || 0) * frac, regra: v.regra }));
+          _metaEntradas = banco.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: (v.valor_meta || 0) * frac, regra: v.regra, consultor_nome: v.consultores?.nome || null }));
         } else {
           // Cálculo automático IGUAL à página de Evolução: usa a MESMA função calcularMeta
           // (benefício = 1ª liberação; convênio/mobilidade = 3º mês corrido; valor com
@@ -1093,7 +1093,7 @@ export default function DashboardVendedor() {
                     <tbody>
                       {(()=>{
                         const baseEmpresas = filtroMetaCadastro
-                          ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).filter(e=>!filtroMetaProduto||e.produto_contratado===filtroMetaProduto).map(e=>({...e,_metaEntradas:(vmetasRows||[]).filter(v=>v.empresa_id===e.id)}))
+                          ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).filter(e=>!filtroMetaProduto||e.produto_contratado===filtroMetaProduto).map(e=>({...e,_metaEntradas:(vmetasRows||[]).filter(v=>v.empresa_id===e.id).map(v=>({...v,consultor_nome:v.consultores?.nome||null}))}))
                           : empresasNaMeta.filter(e=>{
                               if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
                               if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
