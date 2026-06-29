@@ -26,9 +26,9 @@ const NORM_PRODUTO = {
   'vidalink auxilio r$ 150': 'Vidalink Auxilio R$ 150',
 };
 function normProduto(s) {
-  if (!s) return null;
-  const k = s.trim().toLowerCase().replace(/\s+/g,' ');
-  return NORM_PRODUTO[k] || s.trim();
+  if (s === null || s === undefined) return null;
+  const k = String(s).trim().toLowerCase().replace(/\s+/g,' ');
+  return NORM_PRODUTO[k] || String(s).trim();
 }
 function normText(s) {
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -48,7 +48,11 @@ const NORM_CONSULTOR = {
   'Rosimeire Aparecida Do Nascimento':  'Rosimeire Aparecida do Nascimento',
   'J\u00e9ssica Taino':                      'Jessica Taino',
 };
-const aliasConsultor = (nome) => NORM_CONSULTOR[String(nome||'').trim()] || nome;
+function aliasConsultor(s) {
+  if (!s) return '';
+  const t = String(s).trim();
+  return NORM_CONSULTOR[t] || t;
+}
 function cleanDate(v) {
   if (!v) return null;
   if (v instanceof Date) {
