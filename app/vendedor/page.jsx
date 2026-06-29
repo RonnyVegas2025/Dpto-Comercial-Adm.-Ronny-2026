@@ -638,7 +638,10 @@ export default function DashboardVendedor() {
         // valor × peso × pct_consultor/100) e traz consultor_id. Então NÃO se multiplica por
         // frac (isso dividiria duas vezes). O recorte por equipe é feito por DONO da linha:
         // sob filtro de equipe, só entram as linhas cujo consultor pertence àquela equipe.
-        const banco = (vmetasRows||[]).filter(v => v.empresa_id === ep.id);
+        const banco = (vmetasRows||[]).filter(v =>
+          v.empresa_id === ep.id &&
+          (!consultorId || v.consultor_id === consultorId)
+        );
         let _metaEntradas;
         if (banco.length > 0) {
           const entradasEquipe = filtroEquipeTopo
