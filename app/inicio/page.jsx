@@ -175,6 +175,7 @@ export default function HomePage() {
       let movUltimoMes = 0, movPenultimoMes = 0;
       let comMovUltimoMes = 0, semMovUltimoMes = 0, semMovDoisMeses = 0;
       const semMovPorEquipe = {};   // { equipe: nº de empresas que nunca movimentaram }
+      const movAtualPorEquipe = {}; // { equipe: movimentação do mês atual (equipe do principal) }
 
       for (const e of empresasMov) {
         const vUlt = meses.filter(m => m.substring(0,7) === ultimoMesYM)
@@ -183,6 +184,8 @@ export default function HomePage() {
           .reduce((s,m) => s+(libMap[`${e.produto_id}__${m}`]||0), 0);
         movUltimoMes    += vUlt;
         movPenultimoMes += vPen;
+        const eqPrincMov = equipeDe(e.consultor_principal_id);
+        movAtualPorEquipe[eqPrincMov] = (movAtualPorEquipe[eqPrincMov]||0) + vUlt;
         if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
         // "Nunca movimentou" = zero em TODOS os meses disponíveis (igual ao filtro Carteira do Vendedor)
         const nuncaMovimentou = meses.every(m => (libMap[`${e.produto_id}__${m}`]||0) === 0);
@@ -331,9 +334,13 @@ export default function HomePage() {
       }, 0);
 
       // ── 12. Demais cálculos ──────────────────────────────────────────────
+      const esperadoPorEquipe = {};
       const esperadoTotal = empresasMov.reduce((s,e) => {
         const fator = (e.pct_principal??100)/100;
-        return s + (e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
+        const val = (e.potencial_movimentacao||0)*(e.peso_categoria||1)*fator;
+        const eqPrincEsp = equipeDe(e.consultor_principal_id);
+        esperadoPorEquipe[eqPrincEsp] = (esperadoPorEquipe[eqPrincEsp]||0) + val;
+        return s + val;
       }, 0);
 
       const pctAderencia = esperadoTotal > 0 ? (movUltimoMes/esperadoTotal)*100 : 0;
@@ -358,6 +365,17 @@ export default function HomePage() {
       const novasEsteMes = todasEmpresas.filter(e =>
         e.data_cadastro?.substring(0,7) === ultimoMesYM
       ).length;
+
+      // Por equipe (membership pela equipe do consultor principal) — p/ filtro de equipe nos KPIs
+      const empresasPorEquipe = {};
+      const novasPorEquipe = {};
+      for (const e of todasEmpresas) {
+        const eqPrinc = equipeDe(e.consultor_principal_id);
+        empresasPorEquipe[eqPrinc] = (empresasPorEquipe[eqPrinc]||0) + 1;
+        if (e.data_cadastro?.substring(0,7) === ultimoMesYM) {
+          novasPorEquipe[eqPrinc] = (novasPorEquipe[eqPrinc]||0) + 1;
+        }
+      }
 
       const variacao = movPenultimoMes > 0
         ? ((movUltimoMes - movPenultimoMes) / movPenultimoMes) * 100
@@ -384,6 +402,7 @@ export default function HomePage() {
         mesesComLib,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
+        empresasPorEquipe, movAtualPorEquipe, esperadoPorEquipe, novasPorEquipe,
         perf, perfMsg, top3,
         mesesComMeta, novasEsteMes,
         mesAtual:    ultimoMesYM,
@@ -425,6 +444,11 @@ export default function HomePage() {
   const equipes      = dados.equipesDisponiveis || [];
   const equipeAtiva  = (filtroEquipe !== 'Geral' && equipes.includes(filtroEquipe)) ? filtroEquipe : null;
   const consEscopo   = equipeAtiva ? consultores.filter(c => c.equipe === equipeAtiva) : consultores;
+  // KPIs do topo (Empresas Ativas, Mov. mês, Esperado/mês, Novos Contratos) — filtram por equipe
+  const totalEmpresasView = equipeAtiva ? (dados.empresasPorEquipe?.[equipeAtiva] || 0)  : totalEmpresas;
+  const movAtualView      = equipeAtiva ? (dados.movAtualPorEquipe?.[equipeAtiva] || 0)  : movAtual;
+  const esperadoView      = equipeAtiva ? (dados.esperadoPorEquipe?.[equipeAtiva] || 0)  : esperadoTotal;
+  const novasView         = equipeAtiva ? (dados.novasPorEquipe?.[equipeAtiva] || 0)     : novasEsteMes;
   const metaPorMesView = equipeAtiva ? (dados.metaPorMesEq?.[equipeAtiva] || {}) : (dados.metaPorMes || {});
   const metaApuradaView = equipeAtiva
     ? Object.values(metaPorMesView).reduce((s,v) => s + v, 0)
@@ -510,13 +534,13 @@ export default function HomePage() {
         {[
           {
             label: 'Empresas Ativas',
-            val:   totalEmpresas,
+            val:   totalEmpresasView,
             sub:   `${comMovAtual} movimentando em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
             subCor:'#16a34a',
           },
           {
             label: `Mov. ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
-            val:   fmt(movAtual),
+            val:   fmt(movAtualView),
             sub:   movAnterior > 0
               ? `${variacao>=0?'▲':'▼'} ${fmtPct(Math.abs(variacao))} vs ${fmtMes(mesAnterior ? mesAnterior+'-01' : null)}`
               : '—',
@@ -524,7 +548,7 @@ export default function HomePage() {
           },
           {
             label: 'Esperado/mês',
-            val:   fmt(esperadoTotal),
+            val:   fmt(esperadoView),
             sub:   `${fmtPct(pctAderencia)} realizado`,
             subCor: corPct(pctAderencia),
           },
@@ -542,7 +566,7 @@ export default function HomePage() {
           },
           {
             label: 'Novos Contratos',
-            val:   novasEsteMes,
+            val:   novasView,
             sub:   `em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
             subCor:'#60a5fa',
           },
