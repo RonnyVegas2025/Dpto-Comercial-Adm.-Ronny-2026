@@ -47,12 +47,11 @@ export default function AgregadoDetalhe({ params }) {
         .from('empresas_agregadas')
         .select(`
           id, cnpj, nome, data_cadastro, ativo,
-          consultor_principal:consultor_principal_id (id, nome),
+          consultor_principal:consultor_principal_id (id, nome, equipe, gestor),
           consultor_agregado:consultor_agregado_id (id, nome),
           contratos:contratos_agregados (
-            id, is_combo, combo_nome,
-            valor_cobrado_titular_p1, valor_cobrado_dependente_p1,
-            produto_1:produto_1_id (id, nome),
+            *,
+            produto_1:produto_1_id (id, nome, custo),
             produto_2:produto_2_id (id, nome),
             produto_3:produto_3_id (id, nome)
           )
@@ -129,6 +128,9 @@ export default function AgregadoDetalhe({ params }) {
     setFormCont({
       produto_id: contrato?.produto_1?.id || '',
       tipo: contrato?.is_combo ? 'Combo' : 'Individual',
+      tipo_contrato: contrato?.tipo_contrato || 'Venda Nova',
+      custo_unitario_manual: contrato?.custo_unitario_manual ?? '',
+      licencas_minimas: contrato?.licencas_minimas ?? '',
       valor_titular: contrato?.valor_cobrado_titular_p1 ?? '',
       valor_dependente: contrato?.valor_cobrado_dependente_p1 ?? '',
       consultor_principal_id: empresa?.consultor_principal?.id || '',
@@ -156,6 +158,17 @@ export default function AgregadoDetalhe({ params }) {
           valor_cobrado_dependente_p1: parseFloat(formCont.valor_dependente) || 0,
         }).eq('id', contrato.id);
         if (contErr) throw new Error(contErr.message);
+
+        // Campos extras — colunas podem não existir ainda. Update separado e defensivo
+        // para não bloquear o save principal caso a coluna falte.
+        try {
+          const { error: extraErr } = await supabase.from('contratos_agregados').update({
+            tipo_contrato: formCont.tipo_contrato || null,
+            custo_unitario_manual: formCont.custo_unitario_manual === '' ? null : (parseFloat(formCont.custo_unitario_manual) || 0),
+            licencas_minimas: formCont.licencas_minimas === '' ? null : (parseInt(formCont.licencas_minimas) || 0),
+          }).eq('id', contrato.id);
+          if (extraErr) console.warn('[contrato extras] colunas podem não existir:', extraErr.message);
+        } catch(_) { /* colunas tipo_contrato/custo_unitario_manual/licencas_minimas ainda não existem */ }
       }
       setEditCont(false); setSucesso('Contrato atualizado!'); await carregar(); setTimeout(()=>setSucesso(''),3000);
     } catch(err) { setErro('Erro: ' + err.message); }
@@ -194,6 +207,14 @@ export default function AgregadoDetalhe({ params }) {
     : '—';
 
   const maxRC = Math.max(1, ...fechamentos.map(f => Math.max(f.valor_boleto||0, f.custo_mes||0)));
+
+  // Custo unitário/vida: manual (se preenchido) tem prioridade sobre o custo do produto
+  const custoUnitario = (contrato?.custo_unitario_manual != null && contrato?.custo_unitario_manual !== '')
+    ? contrato.custo_unitario_manual
+    : (contrato?.produto_1?.custo || 0);
+  // Aviso de licenças: titulares do último fechamento < licenças mínimas contratadas
+  const titularesUltimo = fechamentos.length ? (fechamentos[fechamentos.length-1].titulares_mes || 0) : 0;
+  const avisoLicencas = (contrato?.licencas_minimas > 0) && (titularesUltimo < contrato.licencas_minimas);
 
   return (
     <div style={s.page}>
@@ -234,9 +255,25 @@ export default function AgregadoDetalhe({ params }) {
           <div style={s.grid4}>
             <Campo label="Produto" valor={prodLabel} cor="#a78bfa" />
             <Campo label="Tipo" valor={contrato.is_combo ? '🔗 Combo' : '📦 Individual'} />
+            <Campo label="Tipo de contrato" valor={contrato.tipo_contrato || '—'} />
             <Campo label="Valor Titular" valor={fmt(contrato.valor_cobrado_titular_p1)} />
             <Campo label="Valor Dependente" valor={fmt(contrato.valor_cobrado_dependente_p1)} />
+            <Campo label="Custo unitário/vida" valor={fmt(custoUnitario)} />
+            <div>
+              <div style={s.fLabel}>Licenças mínimas</div>
+              <div style={s.fVal}>
+                {contrato.licencas_minimas ?? '—'}
+                {avisoLicencas && (
+                  <span style={{ marginLeft:8, background:'rgba(248,113,113,0.12)', color:'#dc2626',
+                    borderRadius:5, padding:'2px 8px', fontSize:'0.66rem', fontWeight:700 }}>
+                    ⚠️ {titularesUltimo} titulares &lt; mínimo
+                  </span>
+                )}
+              </div>
+            </div>
             <Campo label="Consultor Principal" valor={empresa.consultor_principal?.nome || '—'} />
+            <Campo label="Equipe" valor={empresa.consultor_principal?.equipe || '—'} />
+            <Campo label="Gestor" valor={empresa.consultor_principal?.gestor || '—'} />
             <Campo label="Consultor Agregado" valor={empresa.consultor_agregado?.nome || '—'} />
             <Campo label="Parceiro" valor="—" />
           </div>
@@ -373,6 +410,14 @@ export default function AgregadoDetalhe({ params }) {
                 <select style={s.input} value={formCont.tipo} onChange={e=>setFormCont(f=>({ ...f, tipo:e.target.value }))}>
                   <option value="Individual">Individual</option><option value="Combo">Combo</option>
                 </select></div>
+              <div><label style={s.fLabel}>Tipo de contrato</label>
+                <select style={s.input} value={formCont.tipo_contrato} onChange={e=>setFormCont(f=>({ ...f, tipo_contrato:e.target.value }))}>
+                  <option value="Venda Nova">Venda Nova</option><option value="Retenção">Retenção</option>
+                </select></div>
+              <div><label style={s.fLabel}>Custo unitário/vida (manual)</label>
+                <input type="number" step="0.01" style={s.input} value={formCont.custo_unitario_manual} onChange={e=>setFormCont(f=>({ ...f, custo_unitario_manual:e.target.value }))} placeholder="0,00" /></div>
+              <div><label style={s.fLabel}>Licenças mínimas</label>
+                <input type="number" step="1" style={s.input} value={formCont.licencas_minimas} onChange={e=>setFormCont(f=>({ ...f, licencas_minimas:e.target.value }))} placeholder="0" /></div>
               <div><label style={s.fLabel}>Valor Titular</label>
                 <input type="number" step="0.01" style={s.input} value={formCont.valor_titular} onChange={e=>setFormCont(f=>({ ...f, valor_titular:e.target.value }))} /></div>
               <div><label style={s.fLabel}>Valor Dependente</label>
