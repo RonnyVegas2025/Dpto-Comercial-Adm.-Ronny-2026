@@ -164,9 +164,12 @@ export default function Agregados() {
 
     if (!nome || !cnpj || !p1) return null;
 
+    const tipoRaw = String(col('Contratação','Contratacao','Tipo','tipo')||'').trim();
+    const tipo = /combo/i.test(tipoRaw) ? 'Combo' : 'Individual';
+
     return { nome, cnpj, dt, vend, vend2, p1, tit1:0, dep1:0, vt1, vd1,
              p2:null, tit2:0, dep2:0, vt2:0, vd2:0, p3:null, tit3:0, dep3:0, vt3:0, vd3:0,
-             boleto:0, mesRef:null, isCombo:false, comboNome:null };
+             boleto:0, mesRef:null, tipo, isCombo: tipo === 'Combo', comboNome:null };
   }
 
   function handleFile(f) {
@@ -211,7 +214,33 @@ export default function Agregados() {
       console.log('Produtos no banco:', Object.keys(prodMap));
       console.log('Consultores no banco:', Object.keys(consultMap));
 
+      // Agrupa COMBOS (planilha nova parseRowNamed): mesmo CNPJ + Contratação='Combo' vêm em
+      // múltiplas linhas (uma por produto). Junta numa única linha com produto_1/2/3.
+      // Linhas Individuais (e o modelo original, que já vem com p1/p2/p3) passam direto.
+      const combos = {};
+      const registros = [];
       for (const r of preview) {
+        if (r.tipo === 'Combo') {
+          if (!combos[r.cnpj]) { combos[r.cnpj] = { ...r, _produtos: [] }; }
+          combos[r.cnpj]._produtos.push({ p:r.p1, vt:r.vt1, vd:r.vd1, tit:r.tit1, dep:r.dep1 });
+        } else {
+          registros.push(r);
+        }
+      }
+      for (const cnpj in combos) {
+        const g  = combos[cnpj];
+        const ps = g._produtos;
+        registros.push({
+          ...g,
+          p1: ps[0]?.p || g.p1, vt1: ps[0]?.vt||0, vd1: ps[0]?.vd||0, tit1: ps[0]?.tit||0, dep1: ps[0]?.dep||0,
+          p2: ps[1]?.p || null, vt2: ps[1]?.vt||0, vd2: ps[1]?.vd||0, tit2: ps[1]?.tit||0, dep2: ps[1]?.dep||0,
+          p3: ps[2]?.p || null, vt3: ps[2]?.vt||0, vd3: ps[2]?.vd||0, tit3: ps[2]?.tit||0, dep3: ps[2]?.dep||0,
+          isCombo: true,
+          comboNome: ps.map(x => x.p).filter(Boolean).join(' + '),
+        });
+      }
+
+      for (const r of registros) {
         try {
           const consultId  = consultMap[normText(aliasConsultor(r.vend))]  || null;
           const consultId2 = consultMap[normText(aliasConsultor(r.vend2))] || null;
