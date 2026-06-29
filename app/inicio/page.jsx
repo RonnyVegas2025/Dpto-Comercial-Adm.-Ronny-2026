@@ -601,10 +601,10 @@ export default function HomePage() {
           <div style={{paddingTop:14,borderTop:'1px solid #f0f2f8'}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
               <span style={{fontSize:'0.8rem',color:'#6b7280'}}>Mov. real vs esperada ({fmtMes(mesAtual ? mesAtual+'-01' : null)})</span>
-              <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctAderencia)}}>{fmtPct(pctAderencia)}</span>
+              <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctAderenciaView)}}>{fmtPct(pctAderenciaView)}</span>
             </div>
             <div style={{background:'#f0f2f8',borderRadius:8,height:10,overflow:'hidden'}}>
-              <div style={{height:'100%',borderRadius:8,width:`${Math.min(pctAderencia,100)}%`,background:corPct(pctAderencia)}}></div>
+              <div style={{height:'100%',borderRadius:8,width:`${Math.min(pctAderenciaView,100)}%`,background:corPct(pctAderenciaView)}}></div>
             </div>
           </div>
         </div>
