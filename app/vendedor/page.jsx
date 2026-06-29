@@ -645,7 +645,7 @@ export default function DashboardVendedor() {
         let _metaEntradas;
         if (banco.length > 0) {
           const entradasEquipe = filtroEquipeTopo
-            ? banco.filter(v => equipeDoCons(v.consultor_id) === filtroEquipeTopo)
+            ? banco.filter(v => v.regra === 'upsell' || equipeDoCons(v.consultor_id) === filtroEquipeTopo)
             : banco;
           _metaEntradas = entradasEquipe.map(v => ({ competencia_meta: v.competencia_meta, valor_meta: v.valor_meta || 0, regra: v.regra, consultor_nome: v.consultores?.nome || null }));
         } else {
