@@ -24,6 +24,7 @@ const NORM_PRODUTO = {
   'vidalink auxilio r$ 50':  'Vidalink Auxilio R$ 50',
   'vidalink auxilio r$ 100': 'Vidalink Auxilio R$ 100',
   'vidalink auxilio r$ 150': 'Vidalink Auxilio R$ 150',
+  'seguro':                  'Seguro MAC + Residencial Premium',
 };
 function normProduto(s) {
   if (s === null || s === undefined) return null;
