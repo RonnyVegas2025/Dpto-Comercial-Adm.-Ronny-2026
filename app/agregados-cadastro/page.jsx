@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -20,12 +21,18 @@ const FORM_VAZIO = {
   consultor_principal_id: '', consultor_agregado_id: '',
 };
 
+const PRODUTOS_FILTRO = ['WellHub', 'Telemedicina', 'Total Pass', 'Vidalink', 'Seguro'];
+
 export default function AgregadosCadastro() {
+  const router = useRouter();
   const [empresas,    setEmpresas]    = useState([]);
   const [consultores, setConsultores] = useState([]);
   const [produtos,    setProdutos]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [busca,       setBusca]       = useState('');
+  const [filtroProduto, setFiltroProduto] = useState('');
+  const [filtroGestor,  setFiltroGestor]  = useState('');
+  const [filtroStatus,  setFiltroStatus]  = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [form,        setForm]        = useState(FORM_VAZIO);
   const [salvando,    setSalvando]    = useState(false);
@@ -40,7 +47,7 @@ export default function AgregadosCadastro() {
       const [{ data: emps }, { data: cons }, { data: prods }] = await Promise.all([
         supabase.from('empresas_agregadas').select(`
           id, cnpj, nome, data_cadastro, ativo,
-          consultor_principal:consultor_principal_id (id, nome),
+          consultor_principal:consultor_principal_id (id, nome, gestor),
           consultor_agregado:consultor_agregado_id (id, nome),
           contratos:contratos_agregados (
             id, is_combo, combo_nome,
@@ -124,12 +131,22 @@ export default function AgregadosCadastro() {
     return [...new Set(nomes)].join(' · ') || '—';
   };
 
-  const empresasFiltradas = empresas.filter(e =>
-    !busca ||
-    e.nome?.toLowerCase().includes(busca.toLowerCase()) ||
-    e.cnpj?.includes(soDigitos(busca)) ||
-    e.consultor_principal?.nome?.toLowerCase().includes(busca.toLowerCase())
-  );
+  const gestoresUnicos = [...new Set(empresas.map(e => e.consultor_principal?.gestor).filter(Boolean))].sort();
+
+  const empresasFiltradas = empresas.filter(e => {
+    if (busca) {
+      const q = busca.toLowerCase();
+      const ok = e.nome?.toLowerCase().includes(q) ||
+                 e.cnpj?.includes(soDigitos(busca)) ||
+                 e.consultor_principal?.nome?.toLowerCase().includes(q);
+      if (!ok) return false;
+    }
+    if (filtroProduto && !produtosDaEmpresa(e).toLowerCase().includes(filtroProduto.toLowerCase())) return false;
+    if (filtroGestor && e.consultor_principal?.gestor !== filtroGestor) return false;
+    if (filtroStatus === 'ativa'   && !e.ativo) return false;
+    if (filtroStatus === 'inativa' &&  e.ativo) return false;
+    return true;
+  });
 
   return (
     <div style={s.page}>
@@ -147,11 +164,28 @@ export default function AgregadosCadastro() {
         </div>
       </div>
 
-      {/* Busca */}
+      {/* Filtros */}
       <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap', alignItems:'center' }}>
         <input placeholder="🔍 Buscar empresa, CNPJ ou consultor..."
           value={busca} onChange={e=>setBusca(e.target.value)}
           style={{ flex:2, minWidth:220, ...s.inputFiltro }} />
+        <select value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)} style={{ ...s.inputFiltro, minWidth:140 }}>
+          <option value="">Todos os produtos</option>
+          {PRODUTOS_FILTRO.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select value={filtroGestor} onChange={e=>setFiltroGestor(e.target.value)} style={{ ...s.inputFiltro, minWidth:140 }}>
+          <option value="">Todos os gestores</option>
+          {gestoresUnicos.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)} style={{ ...s.inputFiltro, minWidth:120 }}>
+          <option value="">Todos os status</option>
+          <option value="ativa">● Ativa</option>
+          <option value="inativa">● Inativa</option>
+        </select>
+        {(busca||filtroProduto||filtroGestor||filtroStatus) && (
+          <button onClick={()=>{ setBusca(''); setFiltroProduto(''); setFiltroGestor(''); setFiltroStatus(''); }}
+            style={{ ...s.btnSec, padding:'7px 14px', fontSize:'0.8rem' }}>✕ Limpar</button>
+        )}
         <span style={{ color:'#8b92b0', fontSize:'0.75rem', marginLeft:'auto' }}>
           {empresasFiltradas.length} empresas
         </span>
@@ -175,8 +209,11 @@ export default function AgregadosCadastro() {
               </tr></thead>
               <tbody>
                 {empresasFiltradas.map((e,i) => (
-                  <tr key={e.id} style={i%2===0?{background:'#f9fafb'}:{}}>
-                    <td style={{ ...s.td, fontWeight:600, minWidth:180 }}>{e.nome}</td>
+                  <tr key={e.id} onClick={()=>router.push(`/agregados-cadastro/${e.id}`)}
+                    style={{ ...(i%2===0?{background:'#f9fafb'}:{}), cursor:'pointer' }}
+                    onMouseEnter={ev=>ev.currentTarget.style.background='rgba(240,180,41,0.06)'}
+                    onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'#f9fafb':'#ffffff'}>
+                    <td style={{ ...s.td, fontWeight:600, minWidth:180, color:'#1a1d2e' }}>{e.nome}</td>
                     <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.72rem' }}>{e.cnpj||'—'}</td>
                     <td style={{ ...s.td, color:'#a78bfa', fontSize:'0.78rem' }}>{produtosDaEmpresa(e)}</td>
                     <td style={s.td}>{e.consultor_principal?.nome||'—'}</td>
