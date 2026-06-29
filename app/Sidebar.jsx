@@ -14,6 +14,7 @@ const nav = [
   { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
   { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
+  { href: '/agregados-cadastro', icon: '📝', label: 'Cadastro Agregados', pagina: 'agregados-cadastro' },
   { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
 ];
 

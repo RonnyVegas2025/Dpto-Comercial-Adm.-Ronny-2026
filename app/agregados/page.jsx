@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -32,6 +33,22 @@ function normProduto(s) {
 function normText(s) {
   return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 }
+
+// De/para de nomes de consultores (varia\u00e7\u00f5es da planilha \u2192 nome can\u00f4nico no banco)
+const NORM_CONSULTOR = {
+  'Andressa Lohaine De Oliveira Cezar': 'Andressa Lohaine de Oliveira Cezar',
+  'Brayon Luanrdi':                     'Brayon Lunardi Faleiro',
+  'Camila Pataricia Segaritelli':       'Camila Patricia Rosa Segatelli',
+  'Douglas Santos':                     'Douglas Willian Santos',
+  'Douglas santos':                     'Douglas Willian Santos',
+  'Lanna Nogueira':                     'Lanna Marta Martins Nogueira',
+  'Nex7 Particapacoes':                 'Nex7',
+  'Rafaela Barbosa Morell':             'Rafaela Barbosa Morelli',
+  'Ronny Peterson':                     'Ronny Peterson Izidorio',
+  'Rosimeire Aparecida Do Nascimento':  'Rosimeire Aparecida do Nascimento',
+  'J\u00e9ssica Taino':                      'Jessica Taino',
+};
+const aliasConsultor = (nome) => NORM_CONSULTOR[String(nome||'').trim()] || nome;
 function cleanDate(v) {
   if (!v) return null;
   if (v instanceof Date) {
@@ -158,8 +175,8 @@ export default function Agregados() {
 
       for (const r of preview) {
         try {
-          const consultId  = consultMap[normText(r.vend)]  || null;
-          const consultId2 = consultMap[normText(r.vend2)] || null;
+          const consultId  = consultMap[normText(aliasConsultor(r.vend))]  || null;
+          const consultId2 = consultMap[normText(aliasConsultor(r.vend2))] || null;
 
           // 1. Upsert empresa_agregada
           const { data: empData, error: empErr } = await supabase
@@ -431,6 +448,9 @@ export default function Agregados() {
             style={{ ...s.btnTab, ...(abaPrinc==='importar'?s.btnTabAtivo:{}) }}>
             📥 Importar
           </button>
+          <Link href="/agregados-cadastro" style={{ ...s.btnTab, textDecoration:'none' }}>
+            📝 Cadastro
+          </Link>
         </div>
       </div>
 
