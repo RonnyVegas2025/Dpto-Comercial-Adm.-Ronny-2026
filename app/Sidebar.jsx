@@ -13,7 +13,7 @@ const nav = [
   { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
   { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
-  { href: '/agregados',          icon: '📦', label: 'Agregados',     pagina: 'agregados'          },
+  { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
   { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
 ];
 
