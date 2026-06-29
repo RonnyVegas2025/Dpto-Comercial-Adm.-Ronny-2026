@@ -237,57 +237,35 @@ export default function HomePage() {
         const totalPct = cons.reduce((s,c) => s + c.pct, 0);
         if (totalPct <= 0) continue;
 
-        // Meta gravada no banco (PRIORIDADE). Modelo IGUAL ao Vendedor: cada linha já é a
-        // fatia de UM consultor (consultor_id) — então é ATRIBUÍDA à equipe do dono da linha,
-        // sem rateio por pct. Upsell (consultor_id=null) e linhas sem dono caem no rateio.
-        // Sem nenhuma linha no banco → cálculo automático com o pct cheio do escopo (rateio).
         const banco = vmetasRows.filter(v => v.empresa_id === e.id);
-        let metaEmpresa = 0;
-
-        // Rateio proporcional pelo pct (usado p/ cálculo automático, upsell e fallback sem dono)
-        const rateia = (valor, m) => {
-          for (const c of cons) {
-            const parcela = valor * (c.pct / totalPct);
-            metaPorConsultor[c.id] = (metaPorConsultor[c.id]||0) + parcela;
-            metaPorMesEq[c.equipe] = metaPorMesEq[c.equipe] || {};
-            metaPorMesEq[c.equipe][m] = (metaPorMesEq[c.equipe][m]||0) + parcela;
-          }
-        };
-
-        if (banco.length === 0) {
-          const calc = calcularValorMeta(e, totalPct, '2026-01');
-          if (calc && calc.valor_meta > 0) {
-            const m = calc.competencia_meta?.substring(0,7);
-            if (m) {
-              metaEmpresa += calc.valor_meta;
-              metaPorMes[m] = (metaPorMes[m]||0) + calc.valor_meta;
-              rateia(calc.valor_meta, m);
-            }
-          }
+        let entradas = [];
+        if (banco.length > 0) {
+          entradas = banco;
         } else {
-          for (const v of banco) {
-            if (!(v.valor_meta > 0)) continue;
-            const m = v.competencia_meta?.substring(0,7);
-            if (!m) continue;
-            metaPorMes[m] = (metaPorMes[m]||0) + v.valor_meta;   // Geral: valor cheio da entrada
-            if (v.regra === 'upsell') {
-              // upsell (consultor_id=null): rateia entre as equipes da empresa
-              rateia(v.valor_meta, m);
-            } else {
-              // entrada normal: vai INTEIRA p/ a equipe do dono do consultor_id
-              const dono = v.consultor_id ? consultores.find(c => c.id === v.consultor_id) : null;
-              if (dono) {
-                metaPorConsultor[dono.id] = (metaPorConsultor[dono.id]||0) + v.valor_meta;
-                if (dono.equipe) {
-                  metaPorMesEq[dono.equipe] = metaPorMesEq[dono.equipe] || {};
-                  metaPorMesEq[dono.equipe][m] = (metaPorMesEq[dono.equipe][m]||0) + v.valor_meta;
-                }
-              } else {
-                // sem consultor_id no escopo → fallback proporcional
-                rateia(v.valor_meta, m);
-              }
+          const calc = calcularValorMeta(e, totalPct, '2026-01');
+          if (calc) entradas = [{ valor_meta: calc.valor_meta, competencia_meta: calc.competencia_meta, consultor_id: null, regra: 'auto' }];
+        }
+        let metaEmpresa = 0;
+        for (const v of entradas) {
+          if (!(v.valor_meta > 0)) continue;
+          const m = (v.competencia_meta || v.comp)?.substring(0,7);
+          if (!m) continue;
+          metaPorMes[m] = (metaPorMes[m]||0) + v.valor_meta;
+          metaEmpresa += v.valor_meta;
+          if (v.regra === 'upsell' || !v.consultor_id) {
+            for (const c of cons) {
+              const parcela = v.valor_meta * (c.pct / totalPct);
+              metaPorConsultor[c.id] = (metaPorConsultor[c.id]||0) + parcela;
+              metaPorMesEq[c.equipe] = metaPorMesEq[c.equipe] || {};
+              metaPorMesEq[c.equipe][m] = (metaPorMesEq[c.equipe][m]||0) + parcela;
             }
-            metaEmpresa += v.valor_meta;
+          } else {
+            const dono = consultores.find(c => c.id === v.consultor_id);
+            if (dono) {
+              metaPorConsultor[dono.id] = (metaPorConsultor[dono.id]||0) + v.valor_meta;
+              metaPorMesEq[dono.equipe] = metaPorMesEq[dono.equipe] || {};
+              metaPorMesEq[dono.equipe][m] = (metaPorMesEq[dono.equipe][m]||0) + v.valor_meta;
+            }
           }
         }
         if (metaEmpresa > 0) { metaApuradaTotal += metaEmpresa; naMeta++; }
