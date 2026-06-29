@@ -176,6 +176,7 @@ export default function HomePage() {
       let comMovUltimoMes = 0, semMovUltimoMes = 0, semMovDoisMeses = 0;
       const semMovPorEquipe = {};   // { equipe: nº de empresas que nunca movimentaram }
       const movAtualPorEquipe = {}; // { equipe: movimentação do mês atual (equipe do principal) }
+      const comMovPorEquipe = {};   // { equipe: nº de empresas com movimentação no mês atual }
 
       for (const e of empresasMov) {
         const vUlt = meses.filter(m => m.substring(0,7) === ultimoMesYM)
@@ -186,7 +187,7 @@ export default function HomePage() {
         movPenultimoMes += vPen;
         const eqPrincMov = equipeDe(e.consultor_principal_id);
         movAtualPorEquipe[eqPrincMov] = (movAtualPorEquipe[eqPrincMov]||0) + vUlt;
-        if (vUlt > 0) comMovUltimoMes++; else semMovUltimoMes++;
+        if (vUlt > 0) { comMovUltimoMes++; comMovPorEquipe[eqPrincMov] = (comMovPorEquipe[eqPrincMov]||0) + 1; } else semMovUltimoMes++;
         // "Nunca movimentou" = zero em TODOS os meses disponíveis (igual ao filtro Carteira do Vendedor)
         const nuncaMovimentou = meses.every(m => (libMap[`${e.produto_id}__${m}`]||0) === 0);
         if (nuncaMovimentou) {
@@ -402,7 +403,7 @@ export default function HomePage() {
         mesesComLib,
         naMeta,
         esperadoTotal, pctAderencia, pctMeta,
-        empresasPorEquipe, movAtualPorEquipe, esperadoPorEquipe, novasPorEquipe,
+        empresasPorEquipe, movAtualPorEquipe, esperadoPorEquipe, novasPorEquipe, comMovPorEquipe,
         perf, perfMsg, top3,
         mesesComMeta, novasEsteMes,
         mesAtual:    ultimoMesYM,
@@ -449,6 +450,8 @@ export default function HomePage() {
   const movAtualView      = equipeAtiva ? (dados.movAtualPorEquipe?.[equipeAtiva] || 0)  : movAtual;
   const esperadoView      = equipeAtiva ? (dados.esperadoPorEquipe?.[equipeAtiva] || 0)  : esperadoTotal;
   const novasView         = equipeAtiva ? (dados.novasPorEquipe?.[equipeAtiva] || 0)     : novasEsteMes;
+  const comMovView        = equipeAtiva ? (dados.comMovPorEquipe?.[equipeAtiva] || 0)    : comMovAtual;
+  const pctAderenciaView  = esperadoView > 0 ? (movAtualView / esperadoView) * 100       : 0;
   const metaPorMesView = equipeAtiva ? (dados.metaPorMesEq?.[equipeAtiva] || {}) : (dados.metaPorMes || {});
   const metaApuradaView = equipeAtiva
     ? Object.values(metaPorMesView).reduce((s,v) => s + v, 0)
@@ -535,7 +538,7 @@ export default function HomePage() {
           {
             label: 'Empresas Ativas',
             val:   totalEmpresasView,
-            sub:   `${comMovAtual} movimentando em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
+            sub:   `${comMovView} movimentando em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
             subCor:'#16a34a',
           },
           {
@@ -549,8 +552,8 @@ export default function HomePage() {
           {
             label: 'Esperado/mês',
             val:   fmt(esperadoView),
-            sub:   `${fmtPct(pctAderencia)} realizado`,
-            subCor: corPct(pctAderencia),
+            sub:   `${fmtPct(pctAderenciaView)} realizado`,
+            subCor: corPct(pctAderenciaView),
           },
           {
             label: 'Meta Apurada',
