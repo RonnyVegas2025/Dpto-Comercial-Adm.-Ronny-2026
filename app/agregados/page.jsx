@@ -143,6 +143,31 @@ export default function Agregados() {
              boleto, mesRef, isCombo, comboNome };
   }
 
+  // Leitura por NOME de coluna (planilha nova "corrigida": header já na 1ª linha).
+  // Independente da ordem das colunas; aceita variações de rótulo via aliases.
+  function parseRowNamed(row) {
+    const col = (...names) => {
+      for (const n of names) {
+        if (row[n] !== undefined && row[n] !== null && String(row[n]).trim() !== '') return row[n];
+      }
+      return '';
+    };
+    const nome  = String(col('Empresa','empresa','Nome','nome')||'').trim();
+    const cnpj  = String(col('CNPJ','cnpj','Cnpj')||'').trim().replace(/\D/g,'');
+    const dt    = cleanDate(col('Data_Implantacao','Data Implantacao','Data_Implantação','Data Implantação','Data Cadastro','Data_Cadastro'));
+    const vend  = String(col('Consultor Principal','Consultor_Principal','Consultor')||'').trim();
+    const vend2 = String(col('Consultor Agregado 1','Consultor Agregado','Consultor_Agregado_1','Consultor Agregado 2')||'').trim();
+    const p1    = normProduto(col('Produto','produto'));
+    const vt1   = parseFloat(col('Valor_Titular','Valor Titular','Valor_Titular_1'))||0;
+    const vd1   = parseFloat(col('Valor_Dependente','Valor Dependente','Valor_Dependente_1'))||0;
+
+    if (!nome || !cnpj || !p1) return null;
+
+    return { nome, cnpj, dt, vend, vend2, p1, tit1:0, dep1:0, vt1, vd1,
+             p2:null, tit2:0, dep2:0, vt2:0, vd2:0, p3:null, tit3:0, dep3:0, vt3:0, vd3:0,
+             boleto:0, mesRef:null, isCombo:false, comboNome:null };
+  }
+
   function handleFile(f) {
     if (!f || !xlsxLib) return;
     setStatus('parsing');
@@ -151,9 +176,17 @@ export default function Agregados() {
       try {
         const wb  = xlsxLib.read(e.target.result, { type:'array', cellDates:true });
         const ws  = wb.Sheets[wb.SheetNames[0]];
-        const raw = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'', header:1 });
-        // Pula linhas 0,1,2 (grupos, headers, instruções)
-        const parsed = raw.slice(3).map(parseRow).filter(Boolean);
+        const matrix = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'', header:1 });
+        const primeiraCelula = String(matrix?.[0]?.[0] || '').trim().toLowerCase();
+        let parsed;
+        if (primeiraCelula === 'produto') {
+          // Planilha nova: header direto na 1ª linha → leitura por nome de coluna
+          const linhas = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'' });
+          parsed = linhas.map(parseRowNamed).filter(Boolean);
+        } else {
+          // Modelo original: linhas 0,1,2 = grupos/headers/instruções → leitura por índice
+          parsed = matrix.slice(3).map(parseRow).filter(Boolean);
+        }
         setPreview(parsed);
         setStatus('confirming');
       } catch(err) { setStatus('error'); setResult({ ok:0, erros:['Erro ao ler: '+err.message] }); }
