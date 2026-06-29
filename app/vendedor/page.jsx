@@ -640,7 +640,7 @@ export default function DashboardVendedor() {
         // sob filtro de equipe, só entram as linhas cujo consultor pertence àquela equipe.
         const banco = (vmetasRows||[]).filter(v =>
           v.empresa_id === ep.id &&
-          (!consultorId || v.consultor_id === consultorId)
+          (!consultorId || v.consultor_id === consultorId || v.regra === 'upsell')
         );
         let _metaEntradas;
         if (banco.length > 0) {
