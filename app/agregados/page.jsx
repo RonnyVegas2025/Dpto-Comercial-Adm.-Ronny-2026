@@ -102,6 +102,11 @@ export default function Agregados() {
   const [meses,      setMeses]      = useState([]);
   const [busca,      setBusca]      = useState('');
   const [filtroGrupo,setFiltroGrupo]= useState('');
+  // Fechamento mensal — estados próprios (não interferem no fluxo de cadastro)
+  const [statusFech,  setStatusFech]  = useState('idle');
+  const [previewFech, setPreviewFech] = useState([]);
+  const [resultFech,  setResultFech]  = useState({ ok:0, erros:[] });
+  const [isDragFech,  setIsDragFech]  = useState(false);
 
   useEffect(() => { import('xlsx').then(m => setXlsxLib(m)); carregarDash(); }, []);
   useEffect(() => { if (mesFiltro !== undefined) carregarDash(); }, [mesFiltro]);
@@ -428,6 +433,99 @@ export default function Agregados() {
     setLoadDash(false);
   }
 
+  // ── Fechamento mensal ───────────────────────────────────────
+  function parseRowFech(row) {
+    const col = (...names) => {
+      for (const n of names) {
+        if (row[n] !== undefined && row[n] !== null && String(row[n]).trim() !== '') return row[n];
+      }
+      return '';
+    };
+    const nome        = String(col('Empresa','empresa')||'').trim();
+    const cnpj        = String(col('CNPJ','cnpj')||'').trim().replace(/\D/g,'');
+    const p1          = normProduto(col('Produto','produto'));
+    const competencia = cleanMesRef(col('Mes_Ano','Mês_Ano','Mes Ano','Mês Ano','Competencia','Competência'));
+    const titulares   = parseInt(col('Qtde_Titulares','Qtd_Titulares','Titulares'))||0;
+    const dependentes = parseInt(col('Qtde_Dependentes','Qtd_Dependentes','Dependentes'))||0;
+    const receita     = parseFloat(col('Receita','Valor_Boleto','Boleto'))||0;
+    const custo       = parseFloat(col('Custo','Custo_Mes'))||0;
+    const lucroCol    = col('Lucro');
+    const lucro       = lucroCol !== '' ? (parseFloat(lucroCol)||0) : (receita - custo);
+    const statusTxt   = String(col('Status','status')||'').trim();
+
+    if (!cnpj || !p1 || !competencia) return null;
+    return { nome, cnpj, p1, competencia, titulares, dependentes, receita, custo, lucro, statusTxt };
+  }
+
+  function handleFileFech(f) {
+    if (!f || !xlsxLib) return;
+    setStatusFech('parsing');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb  = xlsxLib.read(e.target.result, { type:'array', cellDates:true });
+        const ws  = wb.Sheets[wb.SheetNames[0]];
+        const linhas = xlsxLib.utils.sheet_to_json(ws, { raw:true, defval:'' });
+        const parsed = linhas.map(parseRowFech).filter(Boolean);
+        setPreviewFech(parsed);
+        setStatusFech('confirming');
+      } catch(err) { setStatusFech('error'); setResultFech({ ok:0, erros:['Erro ao ler: '+err.message] }); }
+    };
+    reader.readAsArrayBuffer(f);
+  }
+
+  async function handleImportFech() {
+    setStatusFech('importing');
+    const erros = []; let ok = 0;
+    try {
+      const { data: prods } = await supabase.from('produtos').select('id, nome').eq('ativo', true);
+      const prodMap = Object.fromEntries((prods||[]).map(p => [normText(p.nome), p.id]));
+
+      for (const r of previewFech) {
+        try {
+          // 1. Empresa pelo CNPJ
+          const { data: emp } = await supabase
+            .from('empresas_agregadas').select('id').eq('cnpj', r.cnpj).maybeSingle();
+          if (!emp) throw new Error(`Empresa não encontrada (CNPJ ${r.cnpj})`);
+
+          // 2. Contrato cujo produto bate com p1/p2/p3
+          const prodId = prodMap[normText(r.p1)] || null;
+          if (!prodId) throw new Error(`Produto não encontrado: "${r.p1}"`);
+          const { data: conts } = await supabase
+            .from('contratos_agregados')
+            .select('id, produto_1_id, produto_2_id, produto_3_id')
+            .eq('empresa_agregada_id', emp.id);
+          const cont = (conts||[]).find(c =>
+            c.produto_1_id === prodId || c.produto_2_id === prodId || c.produto_3_id === prodId
+          ) || (conts||[])[0];
+          if (!cont) throw new Error(`Contrato não encontrado para ${r.nome || r.cnpj}`);
+
+          // 3. Upsert fechamento. lucro_mes pode ser coluna GERADA — tenta com, faz fallback sem.
+          const base = {
+            contrato_id: cont.id, competencia: r.competencia,
+            titulares_mes: r.titulares, dependentes_mes: r.dependentes,
+            valor_boleto: r.receita, custo_mes: r.custo,
+          };
+          let { error: fechErr } = await supabase.from('fechamentos_agregados')
+            .upsert({ ...base, lucro_mes: r.lucro }, { onConflict: 'contrato_id,competencia' });
+          if (fechErr) {
+            const retry = await supabase.from('fechamentos_agregados')
+              .upsert(base, { onConflict: 'contrato_id,competencia' });
+            fechErr = retry.error;
+          }
+          if (fechErr) throw new Error(fechErr.message);
+          ok++;
+        } catch(err) {
+          erros.push(`${r.nome || r.cnpj}: ${err.message}`);
+        }
+      }
+      setResultFech({ ok, erros }); setStatusFech('done');
+      carregarDash();
+    } catch(err) { setResultFech({ ok:0, erros:[err.message] }); setStatusFech('error'); }
+  }
+
+  const resetFech = () => { setStatusFech('idle'); setPreviewFech([]); setResultFech({ok:0,erros:[]}); };
+
   const reset = () => { setStatus('idle'); setPreview([]); setResult({ok:0,erros:[]}); };
 
   // ── Cálculos do dashboard ───────────────────────────────────
@@ -524,7 +622,7 @@ export default function Agregados() {
       {/* ── IMPORTAÇÃO ─────────────────────────────────────── */}
       {abaPrinc === 'importar' && (
         <div>
-          {status === 'idle' && (
+          {status === 'idle' && statusFech === 'idle' && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:24 }}>
               {/* Card Cadastro */}
               <div
@@ -549,16 +647,24 @@ export default function Agregados() {
               </div>
 
               {/* Card Fechamento */}
-              <div style={{ ...s.importCard, borderColor:'rgba(52,211,153,0.2)',
-                background:'rgba(52,211,153,0.02)', cursor:'not-allowed', opacity:0.5 }}>
+              <div
+                style={{ ...s.importCard, borderColor: isDragFech?'rgba(52,211,153,0.6)':'rgba(52,211,153,0.25)',
+                  background: isDragFech?'rgba(52,211,153,0.06)':'rgba(52,211,153,0.02)' }}
+                onDragOver={e=>{e.preventDefault();setIsDragFech(true)}}
+                onDragLeave={()=>setIsDragFech(false)}
+                onDrop={e=>{e.preventDefault();setIsDragFech(false);handleFileFech(e.dataTransfer.files[0])}}
+                onClick={()=>document.getElementById('fi-fech').click()}
+              >
                 <div style={{ fontSize:'2.5rem', marginBottom:12 }}>📊</div>
                 <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:6 }}>Fechamento Mensal</div>
                 <div style={{ color:'#8b92b0', fontSize:'0.82rem', lineHeight:1.6 }}>
-                  Atualiza titulares e boleto do mês para<br/>empresas já cadastradas
+                  Atualiza titulares, receita e custo do mês<br/>para empresas já cadastradas
                 </div>
                 <div style={{ marginTop:14, color:'#34d399', fontSize:'0.75rem', fontWeight:600 }}>
-                  Em breve
+                  .xlsx — modelo_fechamento_mensal
                 </div>
+                <input id="fi-fech" type="file" accept=".xlsx,.xls" style={{display:'none'}}
+                  onChange={e=>handleFileFech(e.target.files[0])} />
               </div>
             </div>
           )}
@@ -657,6 +763,92 @@ export default function Agregados() {
               <div style={{ fontSize:'2.5rem', marginBottom:12 }}>❌</div>
               {result.erros.map((e,i)=><div key={i} style={{ color:'#f87171', fontSize:'0.85rem' }}>{e}</div>)}
               <button style={{ ...s.btnSec, marginTop:20 }} onClick={reset}>Tentar novamente</button>
+            </div>
+          )}
+
+          {/* ── FECHAMENTO MENSAL ──────────────────────────────── */}
+          {statusFech === 'parsing' && (
+            <div style={s.stCard}><div style={s.spin}></div>Lendo arquivo de fechamento...</div>
+          )}
+
+          {statusFech === 'confirming' && (
+            <div style={s.card}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12 }}>
+                <div>
+                  <div style={s.cardTitle}>📊 {previewFech.length} fechamentos encontrados</div>
+                  <div style={{ color:'#8b92b0', fontSize:'0.8rem', marginTop:4 }}>
+                    {previewFech.filter(r=>r.receita===0).length} retenções · {[...new Set(previewFech.map(r=>r.competencia))].length} competências
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <button style={s.btnSec} onClick={resetFech}>Cancelar</button>
+                  <button style={s.btnPri} onClick={handleImportFech}>
+                    Importar {previewFech.length} fechamentos →
+                  </button>
+                </div>
+              </div>
+              <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:420, border:'1px solid #f0f2f8', borderRadius:8 }}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      {['Empresa','CNPJ','Produto','Competência','Titulares','Receita','Custo','Lucro','Status'].map(h =>
+                        <th key={h} style={{ ...s.th, background:'#f9fafb', position:'sticky', top:0 }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewFech.map((r,i) => (
+                      <tr key={i} style={i%2===0?{background:'#f9fafb'}:{}}>
+                        <td style={{ ...s.td, fontWeight:600 }}>{r.nome}</td>
+                        <td style={{ ...s.td, color:'#8b92b0', fontSize:'0.72rem' }}>{r.cnpj}</td>
+                        <td style={{ ...s.td, color:'#60a5fa', fontWeight:600 }}>{r.p1}</td>
+                        <td style={{ ...s.td, color:'#8b92b0' }}>{fmtMes(r.competencia)}</td>
+                        <td style={{ ...s.td, textAlign:'center' }}>{r.titulares}</td>
+                        <td style={{ ...s.td, color: r.receita>0?'#34d399':'#6b7280' }}>{fmt(r.receita)}</td>
+                        <td style={{ ...s.td, color:'#f87171' }}>{fmt(r.custo)}</td>
+                        <td style={{ ...s.td, color: r.lucro>=0?'#34d399':'#f87171', fontWeight:700 }}>{fmt(r.lucro)}</td>
+                        <td style={{ ...s.td, color:'#8b92b0' }}>{r.statusTxt||'—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {statusFech === 'importing' && (
+            <div style={s.stCard}><div style={s.spin}></div>
+              <div style={{ fontWeight:600, marginBottom:8 }}>Importando {previewFech.length} fechamentos...</div>
+              <div style={{ color:'#8b92b0', fontSize:'0.85rem' }}>Aguarde alguns segundos</div>
+            </div>
+          )}
+
+          {statusFech === 'done' && (
+            <div style={{ ...s.card, textAlign:'center' }}>
+              <div style={{ fontSize:'3rem', marginBottom:12 }}>✅</div>
+              <div style={s.cardTitle}>Fechamento importado!</div>
+              <div style={{ fontSize:'2rem', fontWeight:800, color:'#34d399', margin:'16px 0' }}>
+                {resultFech.ok} fechamentos
+              </div>
+              {resultFech.erros.length>0 && (
+                <div style={{ background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)',
+                  borderRadius:10, padding:16, marginBottom:20, color:'#f87171', fontSize:'0.82rem', textAlign:'left' }}>
+                  {resultFech.erros.map((e,i)=><div key={i}>• {e}</div>)}
+                </div>
+              )}
+              <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+                <button style={s.btnSec} onClick={resetFech}>Importar outro arquivo</button>
+                <button style={s.btnPri} onClick={()=>{ resetFech(); setAbaPrinc('dashboard'); }}>
+                  Ver Dashboard →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {statusFech === 'error' && (
+            <div style={{ ...s.stCard, borderColor:'#f87171' }}>
+              <div style={{ fontSize:'2.5rem', marginBottom:12 }}>❌</div>
+              {resultFech.erros.map((e,i)=><div key={i} style={{ color:'#f87171', fontSize:'0.85rem' }}>{e}</div>)}
+              <button style={{ ...s.btnSec, marginTop:20 }} onClick={resetFech}>Tentar novamente</button>
             </div>
           )}
         </div>
