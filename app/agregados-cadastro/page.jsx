@@ -13,6 +13,7 @@ const supabase = createClient(
 const fmt    = (v) => Number(v||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
 const fmtData = (d) => { if (!d) return '—'; const [y,m,dd] = String(d).substring(0,10).split('-'); return `${dd}/${m}/${y}`; };
 const soDigitos = (v) => String(v||'').replace(/\D/g,'');
+const normText  = (v) => String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
 
 const FORM_VAZIO = {
   nome: '', cnpj: '', data_cadastro: '',
@@ -135,10 +136,11 @@ export default function AgregadosCadastro() {
 
   const empresasFiltradas = empresas.filter(e => {
     if (busca) {
-      const q = busca.toLowerCase();
-      const ok = e.nome?.toLowerCase().includes(q) ||
-                 e.cnpj?.includes(soDigitos(busca)) ||
-                 e.consultor_principal?.nome?.toLowerCase().includes(q);
+      const q    = normText(busca);
+      const qDig = soDigitos(busca);
+      const ok = normText(e.nome).includes(q) ||
+                 (qDig && (e.cnpj||'').includes(qDig)) ||
+                 normText(e.consultor_principal?.nome).includes(q);
       if (!ok) return false;
     }
     if (filtroProduto && !produtosDaEmpresa(e).toLowerCase().includes(filtroProduto.toLowerCase())) return false;

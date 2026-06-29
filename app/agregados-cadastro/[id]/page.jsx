@@ -68,14 +68,13 @@ export default function AgregadoDetalhe({ params }) {
       setConsultores(cons || []);
       setProdutos(prods || []);
 
-      // Fechamentos (histórico financeiro) — por contrato_id
-      const contIds = (emp?.contratos || []).map(c => c.id);
-      if (contIds.length) {
+      // Fechamentos (histórico financeiro) — APENAS do contrato atual (cont.id), em ordem crescente
+      if (cont?.id) {
         const { data: fech } = await supabase
           .from('fechamentos_agregados')
           .select('competencia, titulares_mes, dependentes_mes, valor_boleto, custo_mes, lucro_mes, grupo')
-          .in('contrato_id', contIds)
-          .order('competencia');
+          .eq('contrato_id', cont.id)
+          .order('competencia', { ascending: true });
         setFechamentos(fech || []);
       } else {
         setFechamentos([]);
