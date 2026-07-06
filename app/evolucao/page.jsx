@@ -236,9 +236,30 @@ const bb = {
   limpar: { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '4px 12px', color: '#f87171', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
 
+// ID da empresa com destaque + botão copiar (✅ por 1.5s ao copiar)
+function IdCopiavel({ id }) {
+  const [copiado, setCopiado] = useState(false);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#a0a8c0', fontSize: '0.7rem' }}>
+      <span>ID {id}</span>
+      <span
+        title="Copiar ID"
+        onClick={(ev) => {
+          ev.preventDefault(); ev.stopPropagation();
+          try { navigator.clipboard?.writeText(String(id)); } catch (_) {}
+          setCopiado(true); setTimeout(() => setCopiado(false), 1500);
+        }}
+        style={{ cursor: 'pointer', userSelect: 'none', fontSize: '0.72rem' }}>
+        {copiado ? '✅' : '📋'}
+      </span>
+    </div>
+  );
+}
+
 function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
-  metasGravadas = {}, onSalvarMeta, onRemoverMeta, filtroMesMeta = 'todos',
+  metasGravadas = {}, onSalvarMeta, onRemoverMeta, filtroMesMeta = 'todos', mesesVisiveis = null,
 }) {
+  const mostraMes = (m) => !mesesVisiveis || mesesVisiveis.includes(m);
   const [pagina,       setPagina]       = useState(1);
   const [modalMeta,    setModalMeta]    = useState(null);
   const [metaForm,     setMetaForm]     = useState({ valor: '', regra: 'beneficio', mesAlvoOverride: null });
@@ -329,7 +350,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               {col('vendedor')     && <th style={s.th}>Vendedor</th>}
               {col('gestor')       && <th style={s.th}>Gestor</th>}
               {col('diretor')      && <th style={s.th}>Diretor</th>}
-              {col('meses')   && meses.map(m => <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th>)}
+              {col('meses')   && meses.map(m => mostraMes(m) ? <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th> : null)}
               {col('previsto') && <th style={{ ...s.th, textAlign: 'right', color: '#a78bfa' }}>Previsto/mês</th>}
               {col('total')    && <th style={{ ...s.th, textAlign: 'right' }}>Movimentado</th>}
               {col('status')   && <th style={{ ...s.th, textAlign: 'center' }}>Status</th>}
@@ -374,7 +395,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
                           {e.nome} ↗
                         </a>
-                        <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>ID {e.produto_id}</div>
+                        <IdCopiavel id={e.produto_id} />
                       </div>
                     </div>
                   </td>
@@ -392,6 +413,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   {col('gestor')   && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>}
                   {col('diretor')  && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.diretor||'—'}</td>}
                   {col('meses') && meses.map(m => {
+                    if (!mostraMes(m)) return null;
                     const mi = meses.indexOf(m);
                     const v  = (e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0);
                     // Verifica se este mês foi considerado meta (pode ter múltiplas entradas)
@@ -593,11 +615,11 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               } style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
                 TOTAL ({lista.length} empresas)
               </td>
-              {col('meses') && totaisMes.map((t, i) => (
+              {col('meses') && totaisMes.map((t, i) => mostraMes(meses[i]) ? (
                 <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
                   {t > 0 ? fmt(t) : <span style={{ color: '#374151' }}>—</span>}
                 </td>
-              ))}
+              ) : null)}
               {col('previsto') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#a78bfa', paddingTop: 14 }}>
                 {fmt(lista.reduce((s,e)=>s+(e.previsto||0),0))}
               </td>}
@@ -653,7 +675,7 @@ function TabelaCruzamento({ lista, meses }) {
                       onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
                       {e.nome}
                     </a>
-                    <div style={{ color: '#4b5563', fontSize: '0.7rem' }}>ID {e.produto_id}</div>
+                    <IdCopiavel id={e.produto_id} />
                   </td>
                   <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
                   <td style={{ ...s.td, fontSize: '0.78rem' }}>
@@ -722,6 +744,8 @@ export default function Evolucao() {
   const [filtroMesCadastro, setFiltroMesCadastro] = useState('todos'); // NOVO: filtro por mês de cadastro
   const [ordenar, setOrdenar]                 = useState('ultimo');
   const [porPagina, setPorPagina]             = useState(12);
+  const [mesesOcultos, setMesesOcultos]       = useState(() => new Set()); // colunas de mês desmarcadas
+  const [mesesDrop, setMesesDrop]             = useState(false);           // dropdown "Meses" aberto
 
   // ── Modal de meta inline ──────────────────────────────────────────────────
   // Mapa de metas gravadas: empresa_id__consultor_id → valor_meta
@@ -1461,6 +1485,44 @@ export default function Evolucao() {
               );
             })()}
 
+            {/* Colunas de meses — dropdown compacto com checkboxes */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMesesDrop(v => !v)}
+                style={{ ...s.sel, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  borderColor: mesesOcultos.size > 0 ? 'rgba(240,180,41,0.5)' : 'rgba(255,255,255,0.12)',
+                  color: mesesOcultos.size > 0 ? '#f0b429' : '#e8eaf0', whiteSpace: 'nowrap' }}>
+                📅 Meses ({meses.length - mesesOcultos.size}/{meses.length}) ▾
+              </button>
+              {mesesDrop && (
+                <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 50, minWidth: 180,
+                  background: '#12151c', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10,
+                  padding: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                    <button onClick={() => setMesesOcultos(new Set())}
+                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: '#34d399' }}>Todos</button>
+                    <button onClick={() => setMesesOcultos(new Set(meses))}
+                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: '#f87171' }}>Nenhum</button>
+                  </div>
+                  {meses.map(m => {
+                    const marcado = !mesesOcultos.has(m);
+                    return (
+                      <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px',
+                        cursor: 'pointer', fontSize: '0.78rem', color: '#e8eaf0' }}>
+                        <input type="checkbox" checked={marcado}
+                          onChange={() => setMesesOcultos(prev => {
+                            const n = new Set(prev);
+                            if (n.has(m)) n.delete(m); else n.add(m);
+                            return n;
+                          })} />
+                        {fmtMes(m)}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             </div>{/* fecha div filtros de mês */}
             {/* Seletor de colunas + por página */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1537,6 +1599,7 @@ export default function Evolucao() {
             colunas={colunasVisiveis} porPagina={porPagina}
             metasGravadas={metasGravadas}
             filtroMesMeta={filtroMesMeta}
+            mesesVisiveis={meses.filter(m => !mesesOcultos.has(m))}
             onSalvarMeta={async (empresa, form) => {
               // Para upsell usa mesAlvoOverride; senão usa mesAlvo da meta normal
               const comp = form.mesAlvoOverride
@@ -1686,7 +1749,7 @@ const ps = {
 };
 
 const s = {
-  page:         { maxWidth: 1400, margin: '0 auto', padding: '32px 24px', fontFamily: "'DM Sans', sans-serif", color: '#e8eaf0', background: '#0a0c10', minHeight: '100vh' },
+  page:         { maxWidth: '100%', margin: '0 auto', padding: '24px 16px', fontFamily: "'DM Sans', sans-serif", color: '#e8eaf0', background: '#0a0c10', minHeight: '100vh' },
   header:       { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 16 },
   tag:          { color: '#34d399', fontWeight: 800, fontSize: '0.9rem', letterSpacing: 2, marginBottom: 12, textTransform: 'uppercase' },
   title:        { fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px' },
