@@ -28,6 +28,21 @@ function norm(s) {
   return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+// Reconhece a compet\u00eancia a partir do nome da aba, em QUALQUER capitaliza\u00e7\u00e3o/formato:
+// "Jun-26", "jun-26", "JUN-26", "Jun-2026", "jun/26", "jun 26", "Junho de 2026"...
+const MESES_ABREV = { jan:'01', fev:'02', mar:'03', abr:'04', mai:'05', jun:'06', jul:'07', ago:'08', set:'09', out:'10', nov:'11', dez:'12' };
+function competenciaDaAba(sheetName) {
+  const s = norm(sheetName); // min\u00fasculas, sem acento, trim
+  const m = s.match(/(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\D*?(\d{2,4})/);
+  if (m) {
+    const mes = MESES_ABREV[m[1]];
+    let ano = m[2];
+    if (ano.length === 2) ano = '20' + ano;
+    if (ano.length === 4) return `${ano}-${mes}-01`;
+  }
+  return ABA_COMPETENCIA[s] || null; // fallback ao mapa fixo
+}
+
 function findCol(obj, targets) {
   for (const t of targets) {
     if (obj[t] !== undefined) return obj[t];
@@ -94,7 +109,7 @@ export default function ImportarLiberacoes() {
         const resultado = [];
 
         for (const sheetName of wb.SheetNames) {
-          const competencia = ABA_COMPETENCIA[norm(sheetName)];
+          const competencia = competenciaDaAba(sheetName);
           if (!competencia) {
             console.warn('Aba ignorada (sem mapeamento):', sheetName);
             continue;
