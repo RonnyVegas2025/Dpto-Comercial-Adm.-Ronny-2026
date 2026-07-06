@@ -81,6 +81,59 @@ function parseAba(rows, competencia, abaNome) {
   return Object.values(map);
 }
 
+// Converte um valor de HEADER (Date do xlsx com cellDates, ou serial Excel) em competência YYYY-MM-01.
+// Retorna null se o header não for uma data.
+function headerParaCompetencia(h) {
+  if (h instanceof Date && !isNaN(h.getTime())) {
+    return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;
+  }
+  if (typeof h === 'number' && h > 1000) {
+    const base = new Date(Math.round((h - 25569) * 86400 * 1000)); // meia-noite UTC da data
+    if (!isNaN(base.getTime())) return `${base.getUTCFullYear()}-${String(base.getUTCMonth()+1).padStart(2,'0')}-01`;
+  }
+  return null;
+}
+
+// Formato B: ID Produto · Empresa · [uma ou mais colunas cujo HEADER é uma data].
+// Cada coluna-data vira uma competência; o valor da célula é o total_liberado.
+// Retorna [] se a aba não tiver nenhum header de data (→ cai no Formato A).
+function parseFormatoB(ws, xlsxLib) {
+  const matrix = xlsxLib.utils.sheet_to_json(ws, { raw: true, defval: '', header: 1 });
+  if (!matrix.length) return [];
+  const header = matrix[0] || [];
+
+  let idxProd = header.findIndex(h => /produto/i.test(String(h)));
+  let idxEmp  = header.findIndex(h => /empresa/i.test(String(h)));
+  if (idxProd < 0) idxProd = 0;
+  if (idxEmp  < 0) idxEmp  = 1;
+
+  const colsData = [];
+  header.forEach((h, i) => {
+    if (i === idxProd || i === idxEmp) return;
+    const comp = headerParaCompetencia(h);
+    if (comp) colsData.push({ i, competencia: comp });
+  });
+  if (!colsData.length) return [];
+
+  const porComp = {}; // competencia → { produto_id → registro }
+  for (let r = 1; r < matrix.length; r++) {
+    const row = matrix[r] || [];
+    const prodId = parseInt(row[idxProd]);
+    if (!prodId) continue;
+    const nome = String(row[idxEmp] || '').trim();
+    if (!nome) continue;
+    for (const dc of colsData) {
+      const valor = cleanNum(row[dc.i]);
+      if (!porComp[dc.competencia]) porComp[dc.competencia] = {};
+      const map = porComp[dc.competencia];
+      if (!map[prodId]) map[prodId] = { produto_id: prodId, empresa_nome: nome, competencia: dc.competencia, total_liberado: 0, creditos: 0 };
+      map[prodId].total_liberado += valor;
+      map[prodId].creditos += 1;
+    }
+  }
+  return Object.entries(porComp).map(([competencia, map]) => ({ competencia, registros: Object.values(map) }));
+}
+
 const fmt   = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtMes = (d) => {
   if (!d) return '—';
@@ -109,12 +162,23 @@ export default function ImportarLiberacoes() {
         const resultado = [];
 
         for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName];
+
+          // Formato B: coluna(s) cujo HEADER é uma data → competência vem do header
+          const blocosB = parseFormatoB(ws, xlsxLib);
+          if (blocosB.length > 0) {
+            for (const b of blocosB) {
+              if (b.registros.length > 0) resultado.push({ sheetName, competencia: b.competencia, registros: b.registros });
+            }
+            continue;
+          }
+
+          // Formato A: aba nomeada por mês, coluna "Total Liberado"
           const competencia = competenciaDaAba(sheetName);
           if (!competencia) {
             console.warn('Aba ignorada (sem mapeamento):', sheetName);
             continue;
           }
-          const ws   = wb.Sheets[sheetName];
           const raw  = xlsxLib.utils.sheet_to_json(ws, { raw: true, defval: '' });
           const regs = parseAba(raw, competencia, sheetName);
           if (regs.length > 0) resultado.push({ sheetName, competencia, registros: regs });
