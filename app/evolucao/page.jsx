@@ -1331,11 +1331,6 @@ export default function Evolucao() {
           <span style={{ ...s.kpiVal, color: '#34d399' }}>{kpis.naMeta}</span>
           <span style={{ ...s.kpiSub, color: '#34d399' }}>{fmt(kpis.totalMetaApurado)}</span>
         </div>
-        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
-          <span style={s.kpiLabel}>⏳ Pendente Meta</span>
-          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{kpis.pendenteMeta}</span>
-          <span style={s.kpiSub}>aguardando elegibilidade</span>
-        </div>
         {/* KPI Upsell */}
         <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.2)', cursor: 'pointer', background: filtroUpsell ? 'rgba(251,191,36,0.08)' : '#161a26' }}
           onClick={() => { setFiltroUpsell(f => !f); setAba('evolucao'); }}>
@@ -1345,6 +1340,11 @@ export default function Evolucao() {
             {kpis.totalUpsell > 0 ? `≥45% acima da meta` : 'nenhum detectado'}
             {filtroUpsell && <span style={{color:'#fbbf24',marginLeft:4,fontWeight:700}}>· ativo</span>}
           </span>
+        </div>
+        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
+          <span style={s.kpiLabel}>⏳ Pendente Meta</span>
+          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{kpis.pendenteMeta}</span>
+          <span style={s.kpiSub}>aguardando elegibilidade</span>
         </div>
       </div>
 
@@ -1755,10 +1755,10 @@ const s = {
   title:        { fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px' },
   sub:          { color: '#6b7280', fontSize: '0.9rem' },
   linkBtnGreen: { background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 10, padding: '10px 20px', color: '#34d399', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 },
-  kpis:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 20 },
-  kpi:          { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 4 },
+  kpis:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 },
+  kpi:          { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 3 },
   kpiLabel:     { color: '#6b7280', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1 },
-  kpiVal:       { fontSize: '1.4rem', fontWeight: 700 },
+  kpiVal:       { fontSize: '1.2rem', fontWeight: 700 },
   kpiSub:       { color: '#4b5563', fontSize: '0.72rem' },
   tabs:         { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   tab:          { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 16px', color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
