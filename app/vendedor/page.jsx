@@ -358,7 +358,7 @@ export default function DashboardVendedor() {
       const equipeDoCons = (id) => consultores.find(c => c.id === id)?.equipe;
       const noEscopo = (cons) => consultorId
         ? cons.id === consultorId
-        : (gestorFiltro !== 'Geral' ? cons.gestor === gestorFiltro : true);
+        : (gestoresSel.size > 0 ? gestoresSel.has(cons.gestor) : gestorFiltro !== 'Geral' ? cons.gestor === gestorFiltro : true);
       const naEquipe = (cons) => !filtroEquipeTopo || equipeDoCons(cons.id) === filtroEquipeTopo;
       const pctSoma = (ep, pred) => {
         let p = 0;
@@ -444,7 +444,7 @@ export default function DashboardVendedor() {
       const consultor = consultorId ? consultores.find(c=>c.id===consultorId) : null;
       const consultoresDaVisao = consultorId ? [consultor].filter(Boolean)
         : (() => {
-            let base = gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
+            let base = gestoresSel.size > 0 ? consultores.filter(c=>gestoresSel.has(c.gestor)) : gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
             if (equipeTopoFiltro) base = base.filter(c => c.equipe === equipeTopoFiltro);
             return base;
           })();
@@ -464,9 +464,11 @@ export default function DashboardVendedor() {
 
         for (const { cons, pct } of consultoresEmpresa) {
           if (consultorId && cons.id !== consultorId) continue;
-          if (gestorFiltro !== 'Geral' && !consultorId) {
+          if ((gestoresSel.size > 0 || gestorFiltro !== 'Geral') && !consultorId) {
             const consCompleto = consultores.find(c=>c.id===cons.id);
-            if (!consCompleto || consCompleto.gestor !== gestorFiltro) continue;
+            if (!consCompleto) continue;
+            if (gestoresSel.size > 0 && !gestoresSel.has(consCompleto.gestor)) continue;
+            if (gestoresSel.size === 0 && gestorFiltro !== 'Geral' && consCompleto.gestor !== gestorFiltro) continue;
           }
           // Filtro por equipe no topo
           if (equipeTopoFiltro) {
@@ -783,13 +785,37 @@ export default function DashboardVendedor() {
               return (
                 <button key={g} style={{...s.gestorBtn,...(ativo?s.gestorBtnAtivo:{})}}
                   onClick={() => {
-                    setGestorFiltro('Geral');
                     setConsultorId(''); setFiltroEquipeTopo('');
-                    setGestoresSel(prev => {
-                      const next = new Set(prev);
-                      if (next.has(g)) next.delete(g); else next.add(g);
-                      return next;
-                    });
+                    // Se já tem 1 gestor ativo (único ou multi), adiciona ao multi
+                    const jaTemAtivo = gestorFiltro !== 'Geral' || gestoresSel.size > 0;
+                    if (jaTemAtivo) {
+                      // Monta o novo Set a partir do estado atual
+                      const base = gestoresSel.size > 0
+                        ? new Set(gestoresSel)
+                        : new Set([gestorFiltro]); // converte seleção única em multi
+                      if (base.has(g)) {
+                        base.delete(g);
+                        // Se sobrou só 1, volta para seleção única
+                        if (base.size === 1) {
+                          setGestorFiltro([...base][0]);
+                          setGestoresSel(new Set());
+                        } else if (base.size === 0) {
+                          setGestorFiltro('Geral');
+                          setGestoresSel(new Set());
+                        } else {
+                          setGestorFiltro('Geral');
+                          setGestoresSel(base);
+                        }
+                      } else {
+                        base.add(g);
+                        setGestorFiltro('Geral');
+                        setGestoresSel(base);
+                      }
+                    } else {
+                      // Primeiro clique: seleção única normal
+                      setGestorFiltro(g);
+                      setGestoresSel(new Set());
+                    }
                   }}>
                   👔 {g.split(' ')[0]}
                 </button>
