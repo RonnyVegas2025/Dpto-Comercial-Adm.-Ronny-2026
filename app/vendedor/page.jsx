@@ -885,7 +885,6 @@ export default function DashboardVendedor() {
               );
             })}
           </div>
-          </div>
           {mesesSelecionados.size > 0 && (
             <div style={{fontSize:'0.68rem',color:'#b45309',marginTop:4}}>
               💡 Clique nos meses para selecionar/deselecionar múltiplos
