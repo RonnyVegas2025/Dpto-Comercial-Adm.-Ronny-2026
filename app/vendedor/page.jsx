@@ -193,6 +193,7 @@ export default function DashboardVendedor() {
   const [consultorId,    setConsultorId]    = useState('');
   const [gestorFiltro,   setGestorFiltro]   = useState('Geral');
   const [gestores,       setGestores]       = useState(['Geral']);
+  const [gestoresSel,    setGestoresSel]    = useState(new Set()); // multi-select gestores
   const [perfilUsuario,  setPerfilUsuario]  = useState(null);
   const [dados,          setDados]          = useState(null);
   const [loading,        setLoading]        = useState(false);
@@ -220,7 +221,7 @@ export default function DashboardVendedor() {
   const [filtroStatus,   setFiltroStatus]   = useState('');
 
   useEffect(() => { carregarBase(); }, []);
-  useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, mesSelecionado, mesesSelecionados, filtroEquipeTopo, consultores]);
+  useEffect(() => { if (consultores.length) carregarDados(); }, [consultorId, gestorFiltro, gestoresSel, mesSelecionado, mesesSelecionados, filtroEquipeTopo, consultores]);
 
  async function carregarBase() {
     let consultorIdsPermitidos = null;
@@ -312,7 +313,9 @@ export default function DashboardVendedor() {
         empQuery = empQuery.or(`consultor_principal_id.eq.${consultorId},consultor_agregado_id.eq.${consultorId},consultor_agregado_2_id.eq.${consultorId}`);
       } else {
         // Visão da equipe: principal da equipe + empresas onde são agregados MAS o principal também é da equipe
-        const ids = gestorFiltro !== 'Geral'
+        const ids = gestoresSel.size > 0
+          ? consultores.filter(c=>gestoresSel.has(c.gestor)).map(c=>c.id)
+          : gestorFiltro !== 'Geral'
           ? consultores.filter(c=>c.gestor===gestorFiltro).map(c=>c.id)
           : consultores.map(c=>c.id);
         if (!ids.length) { setLoading(false); setDados(buildEmpty()); return; }
@@ -392,7 +395,9 @@ export default function DashboardVendedor() {
       // filtro de equipe do topo (PROBLEMA 2).
       const consIdsGestor = consultorId
         ? [consultorId]
-        : (gestorFiltro !== 'Geral'
+        : (gestoresSel.size > 0
+            ? consultores.filter(c => gestoresSel.has(c.gestor))
+            : gestorFiltro !== 'Geral'
             ? consultores.filter(c => c.gestor === gestorFiltro)
             : consultores
           ).filter(c => !filtroEquipeTopo || c.equipe === filtroEquipeTopo).map(c => c.id);
@@ -737,7 +742,7 @@ export default function DashboardVendedor() {
     return { consultor:null, consultoresDaVisao:[], mesesDisp:[], lista:[], kpis:{}, porProduto:[], ranking:[] };
   }
 
-  const consultsFiltrados = gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
+  const consultsFiltrados = gestoresSel.size > 0 ? consultores.filter(c=>gestoresSel.has(c.gestor)) : gestorFiltro === 'Geral' ? consultores : consultores.filter(c=>c.gestor===gestorFiltro);
 
   const listaFiltrada = useMemo(() => {
     if (!dados) return [];
@@ -764,15 +769,38 @@ export default function DashboardVendedor() {
 
       <div style={s.filtrosCard}>
         <div style={s.filtroGrupo}>
-          <label style={s.filtroLabel}>GESTOR</label>
+          <label style={s.filtroLabel}>GESTOR {gestoresSel.size > 0 && <span style={{color:'#f0b429',marginLeft:4}}>({gestoresSel.size} sel.)</span>}</label>
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {gestores.map(g => (
-              <button key={g} style={{...s.gestorBtn,...(gestorFiltro===g?s.gestorBtnAtivo:{})}}
-                onClick={() => { setGestorFiltro(g); setConsultorId(''); setFiltroEquipeTopo(''); }}>
-                {g==='Geral' ? '🌐 Geral' : `👔 ${g.split(' ')[0]}`}
-              </button>
-            ))}
+            {/* Geral = limpa tudo */}
+            <button style={{...s.gestorBtn,...(gestorFiltro==='Geral'&&gestoresSel.size===0?s.gestorBtnAtivo:{})}}
+              onClick={() => { setGestorFiltro('Geral'); setGestoresSel(new Set()); setConsultorId(''); setFiltroEquipeTopo(''); }}>
+              🌐 Geral
+            </button>
+            {gestores.filter(g=>g!=='Geral').map(g => {
+              const ativoMulti  = gestoresSel.has(g);
+              const ativoUnico  = gestorFiltro===g && gestoresSel.size===0;
+              const ativo       = ativoMulti || ativoUnico;
+              return (
+                <button key={g} style={{...s.gestorBtn,...(ativo?s.gestorBtnAtivo:{})}}
+                  onClick={() => {
+                    setGestorFiltro('Geral');
+                    setConsultorId(''); setFiltroEquipeTopo('');
+                    setGestoresSel(prev => {
+                      const next = new Set(prev);
+                      if (next.has(g)) next.delete(g); else next.add(g);
+                      return next;
+                    });
+                  }}>
+                  👔 {g.split(' ')[0]}
+                </button>
+              );
+            })}
           </div>
+          {gestoresSel.size > 0 && (
+            <div style={{fontSize:'0.68rem',color:'#b45309',marginTop:4}}>
+              💡 Clique nos gestores para selecionar/deselecionar múltiplos
+            </div>
+          )}
         </div>
         {/* ✅ NOVO: Filtro por Equipe */}
         {(() => {
@@ -805,12 +833,33 @@ export default function DashboardVendedor() {
         </div>
         <div style={s.filtroGrupo}>
           <label style={s.filtroLabel}>MÊS {mesesSelecionados.size > 0 && <span style={{color:'#f0b429',marginLeft:4}}>({mesesSelecionados.size} sel.)</span>}</label>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
             {/* Todos = limpa seleção múltipla E seleção única */}
             <button style={{...s.gestorBtn,...(mesSelecionado===''&&mesesSelecionados.size===0?s.gestorBtnAtivo:{})}}
               onClick={() => { setMesSelecionado(''); setMesesSelecionados(new Set()); }}>
               🌐 Todos
             </button>
+            {/* Atalhos de período */}
+            {meses.length >= 3 && (() => {
+              const ultimos3 = meses.slice(-3);
+              const ultimos6 = meses.slice(-6);
+              const ativ3 = mesesSelecionados.size===3 && ultimos3.every(m=>mesesSelecionados.has(m));
+              const ativ6 = mesesSelecionados.size===6 && ultimos6.every(m=>mesesSelecionados.has(m));
+              return (<>
+                <button style={{...s.gestorBtn,...(ativ3?{...s.gestorBtnAtivo,borderColor:'rgba(167,139,250,0.6)',color:'#a78bfa'}:{color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)'})}}
+                  onClick={() => { setMesSelecionado(''); setMesesSelecionados(new Set(ultimos3)); }}>
+                  📆 Trimestre
+                </button>
+                {meses.length >= 6 && (
+                  <button style={{...s.gestorBtn,...(ativ6?{...s.gestorBtnAtivo,borderColor:'rgba(96,165,250,0.6)',color:'#60a5fa'}:{color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)'})}}
+                    onClick={() => { setMesSelecionado(''); setMesesSelecionados(new Set(ultimos6)); }}>
+                    📆 Semestre
+                  </button>
+                )}
+              </>);
+            })()}
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             {meses.map(m => {
               const selMulti  = mesesSelecionados.has(m);
               const selUnico  = mesSelecionado === m && mesesSelecionados.size === 0;
@@ -835,6 +884,7 @@ export default function DashboardVendedor() {
                 </button>
               );
             })}
+          </div>
           </div>
           {mesesSelecionados.size > 0 && (
             <div style={{fontSize:'0.68rem',color:'#b45309',marginTop:4}}>
