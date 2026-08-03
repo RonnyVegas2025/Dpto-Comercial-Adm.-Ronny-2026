@@ -8,6 +8,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Pagina os resultados de 1000 em 1000 (Supabase trunca em 1000 por padrão).
+async function fetchAll(query) {
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await query.range(from, from+999);
+    if (error || !data || !data.length) break;
+    all = [...all, ...data];
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return all;
+}
+
 const fmt     = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct  = (v) => v != null ? `${Number(v * 100).toFixed(2)}%` : '—';
 const fmtDate = (d) => { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
@@ -75,7 +88,7 @@ export default function RelatorioEmpresas() {
 
   async function carregarEmpresas() {
     setLoading(true);
-    const { data } = await supabase
+    const data = await fetchAll(supabase
       .from('empresas')
       .select(`
         id, produto_id, nome, cnpj, produto_contratado, categoria,
@@ -87,8 +100,8 @@ export default function RelatorioEmpresas() {
         consultor_agregado_2:consultor_agregado_2_id (id, nome),
         parceiro:parceiro_id (nome)
       `)
-      .order('nome');
-    setEmpresas(data || []);
+      .order('id'));
+    setEmpresas((data || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')));
     setLoading(false);
   }
 
