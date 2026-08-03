@@ -14,11 +14,14 @@ async function fetchAll(query) {
   let all = [], from = 0;
   while (true) {
     const { data, error } = await query.range(from, from+999);
-    if (error || !data || !data.length) break;
+    if (error) { console.error('[fetchAll] ERRO na página from=' + from, error); break; }
+    if (!data || !data.length) { console.log('[fetchAll] página from=' + from + ' vazia — fim'); break; }
     all = [...all, ...data];
+    console.log('[fetchAll] página from=' + from + ' → ' + data.length + ' linhas (acumulado ' + all.length + ')');
     if (data.length < 1000) break;
     from += 1000;
   }
+  console.log('[fetchAll] TOTAL retornado: ' + all.length);
   return all;
 }
 
