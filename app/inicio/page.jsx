@@ -132,8 +132,8 @@ export default function HomePage() {
             .select('empresa_id,competencia,valor_considerado')
             .in('empresa_id', empIds)
         ) : Promise.resolve([]),
-        supabase.from('liberacoes').select('competencia').order('competencia', { ascending: false })
-          .then(r => [...new Set((r.data||[]).map(l => l.competencia?.substring(0,7)).filter(Boolean))].sort()),
+        fetchAll(supabase.from('liberacoes').select('competencia').order('competencia', { ascending: false }))
+          .then(rows => [...new Set((rows||[]).map(l => l.competencia?.substring(0,7)).filter(Boolean))].sort()),
       ]);
 
       // ── 6. Mapas ─────────────────────────────────────────────────────────
