@@ -198,14 +198,21 @@ export default function ImportarMovimentacao() {
       }
 
       for (const [comp, batch] of Object.entries(porCompetencia)) {
-        const empIds = batch.map(r => r.empresa_id);
-        // Remove registros existentes desses empresa_ids nessa competência
-        const { error: delErr } = await supabase
-          .from('liberacoes')
-          .delete()
-          .eq('competencia', comp)
-          .in('empresa_id', empIds);
-        if (delErr) { errors.push('Delete ' + comp + ': ' + delErr.message); continue; }
+        const prodIdsBatch = [...new Set(batch.map(r => r.produto_id))];
+        // Remove registros existentes desses PRODUTO_IDs nessa competência.
+        // Chave = produto_id (mesma das leituras e do importar-liberacoes) → evita dupla contagem.
+        // Delete FATIADO (100 ids/lote) p/ não estourar o tamanho da URL em volumes grandes.
+        let delOk = true;
+        for (let i = 0; i < prodIdsBatch.length; i += 100) {
+          const idsSlice = prodIdsBatch.slice(i, i + 100);
+          const { error: delErr } = await supabase
+            .from('liberacoes')
+            .delete()
+            .eq('competencia', comp)
+            .in('produto_id', idsSlice);
+          if (delErr) { errors.push('Delete ' + comp + ': ' + delErr.message); delOk = false; break; }
+        }
+        if (!delOk) continue;
         // Insere em fatias de 50
         for (let i = 0; i < batch.length; i += 50) {
           const slice = batch.slice(i, i+50);
