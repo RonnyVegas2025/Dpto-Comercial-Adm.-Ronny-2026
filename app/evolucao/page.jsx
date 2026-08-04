@@ -463,7 +463,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         {/* Mostra TODAS as entradas de meta da empresa */}
                         {(() => {
                           // Junta: entradas gravadas no banco + meta calculada inline (se não gravada ainda)
-                          const gravadas = metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : []);
+                          const todasGravadas = metasGravadas[`all__${e.id}`] || (metaFinal ? [metaFinal] : []);
+                          const gravadas = todasGravadas.filter(v =>
+                            !v.consultor_id || v.consultor_id === e._consId
+                          );
                           const mesesBanco = gravadas.map(x => x.competencia_meta?.substring(0,7));
                           const calculada = meta?.elegivel && meta?.mesAlvo && !mesesBanco.includes(meta.mesAlvo.substring(0,7))
                             ? [{ competencia_meta: meta.mesAlvo.substring(0,10), valor_meta: meta.valorMeta, regra: meta.regra }]
@@ -814,7 +817,7 @@ export default function Evolucao() {
           map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
           const keyAll = 'all__' + String(v.empresa_id);
           if (!map[keyAll]) map[keyAll] = [];
-          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
+          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra, consultor_id: v.consultor_id });
         }
         setMetasGravadas(map);
       }
@@ -860,7 +863,7 @@ export default function Evolucao() {
           map[key] = { valor_meta: v.valor_meta, regra: v.regra, competencia_meta: comp };
           const keyAll = `all__${v.empresa_id}`;
           if (!map[keyAll]) map[keyAll] = [];
-          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra });
+          map[keyAll].push({ competencia_meta: comp, valor_meta: v.valor_meta, regra: v.regra, consultor_id: v.consultor_id });
         }
         setMetasGravadas(map);
       }
@@ -995,6 +998,7 @@ export default function Evolucao() {
         expanded.push({
           ...e,
           _key:   `${e.id}__${cons.id}`,
+          _consId: cons.id,
           _meta:  metaInfo,
           _upsell: upsellInfo,   // ← info de upsell detectado
           vals, totalCreditado, tend,
