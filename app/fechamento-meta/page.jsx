@@ -217,7 +217,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 3 }}>
                 <tr style={{ background: '#0f1218' }}>
-                  {['Empresa','Produto','Vendedor','Regra','Mês Meta','Valor Meta','✓ ADM','✓ Conferência','Questionamento'].map(h => (
+                  {['ID','Empresa','%','Produto','Vendedor','Regra','Mês Meta','Valor Meta','✓ ADM','✓ Conferência','Questionamento'].map(h => (
                     <th key={h} style={{ padding: '10px 12px', textAlign: h.includes('✓') || h === 'Questionamento' ? 'center' : 'left', color: '#4b5563', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
@@ -229,8 +229,14 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                   return (
                     <>
                       <tr key={emp.id} style={{ background: rowBg }}>
+                        <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#6b7280', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{emp.produto_id}</td>
                         <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontWeight: 600, whiteSpace: 'nowrap', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {emp.empresa_nome}
+                        </td>
+                        <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' }}>
+                          {(emp.pct_consultor ?? 100) < 100
+                            ? <span style={{ background: 'rgba(240,180,41,0.15)', border: '1px solid rgba(240,180,41,0.4)', color: '#f0b429', borderRadius: 5, padding: '1px 7px', fontSize: '0.68rem', fontWeight: 700 }}>{emp.pct_consultor}%</span>
+                            : <span style={{ color: '#6b7280', fontSize: '0.72rem' }}>{emp.pct_consultor ?? 100}%</span>}
                         </td>
                         <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#a78bfa', whiteSpace: 'nowrap' }}>{emp.produto}</td>
                         <td style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>{emp.consultor_nome}</td>
@@ -276,7 +282,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                       {/* Linha de questionamento expandida */}
                       {obsModal.id === emp.id && (
                         <tr key={emp.id + '-obs'} style={{ background: 'rgba(248,113,113,0.04)' }}>
-                          <td colSpan={9} style={{ padding: '8px 12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                          <td colSpan={11} style={{ padding: '8px 12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                               <div style={{ flex: 1 }}>
                                 {emp.questionamento && (
@@ -316,7 +322,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
               </tbody>
               <tfoot>
                 <tr style={{ background: 'rgba(240,180,41,0.05)', borderTop: '2px solid rgba(255,255,255,0.1)' }}>
-                  <td colSpan={5} style={{ padding: '10px 12px', fontWeight: 700, color: '#f0b429', fontSize: '0.82rem' }}>
+                  <td colSpan={7} style={{ padding: '10px 12px', fontWeight: 700, color: '#f0b429', fontSize: '0.82rem' }}>
                     TOTAL ({empresasFiltradas.length} empresas)
                   </td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: '#34d399', textAlign: 'right' }}>
