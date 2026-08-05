@@ -120,7 +120,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
     onClose();
   }
 
-  const podeConferir  = (perfil === 'administrativo' || perfil === 'gestor_master') && fechamento.status === 'em_conferencia';
+  const podeConferir  = (perfil === 'administrativo' || perfil === 'gestor_master') && (fechamento.status === 'em_conferencia' || fechamento.status === 'apurando');
   const podeAprovar   = (perfil === 'gestor_master' || perfil === 'supervisor_comercial') && fechamento.status === 'conferido';
 
   const totalApurado     = empresas.reduce((s, e) => s + (e.valor_meta || 0), 0);
