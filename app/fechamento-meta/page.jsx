@@ -45,6 +45,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
   const [obsFechamento, setObsFechamento] = useState('');
   const [salvandoFech, setSalvandoFech]   = useState(false);
   const [filtro, setFiltro]               = useState('todos'); // todos | pendentes | conferidos | questionamentos
+  const [filtroVend, setFiltroVend]       = useState(''); // filtro por vendedor (consultor_nome)
 
   useEffect(() => { carregarEmpresas(); }, [fechamento.id]);
 
@@ -119,7 +120,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
     onClose();
   }
 
-  const podeConferir  = perfil === 'administrativo' && fechamento.status === 'em_conferencia';
+  const podeConferir  = (perfil === 'administrativo' || perfil === 'gestor_master') && fechamento.status === 'em_conferencia';
   const podeAprovar   = (perfil === 'gestor_master' || perfil === 'supervisor_comercial') && fechamento.status === 'conferido';
 
   const totalApurado     = empresas.reduce((s, e) => s + (e.valor_meta || 0), 0);
@@ -128,16 +129,23 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
   const comQuestao       = empresas.filter(e => e.questionamento && !e.questionamento_resolvido).length;
   const todasConferidas  = confADM === empresas.length && confMarina === empresas.length;
 
+  const vendedores = useMemo(
+    () => [...new Set(empresas.map(e => e.consultor_nome).filter(Boolean))].sort(),
+    [empresas]
+  );
+
   const empresasFiltradas = useMemo(() => {
-    if (filtro === 'pendentes')      return empresas.filter(e => !e.conferido_adm || !e.conferido_marina);
-    if (filtro === 'conferidos')     return empresas.filter(e => e.conferido_adm && e.conferido_marina);
-    if (filtro === 'questionamentos') return empresas.filter(e => e.questionamento && !e.questionamento_resolvido);
-    return empresas;
-  }, [empresas, filtro]);
+    let arr = empresas;
+    if (filtro === 'pendentes')            arr = arr.filter(e => !e.conferido_adm || !e.conferido_marina);
+    else if (filtro === 'conferidos')      arr = arr.filter(e => e.conferido_adm && e.conferido_marina);
+    else if (filtro === 'questionamentos') arr = arr.filter(e => e.questionamento && !e.questionamento_resolvido);
+    if (filtroVend) arr = arr.filter(e => e.consultor_nome === filtroVend);
+    return arr;
+  }, [empresas, filtro, filtroVend]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: 0 }}>
-      <div style={{ background: '#0f1218', width: '100%', maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', maxHeight: '100vh' }}>
+      <div style={{ background: '#0f1218', width: '100%', maxWidth: 'none', margin: 0, display: 'flex', flexDirection: 'column', height: '100vh', maxHeight: '100vh' }}>
         
         {/* Header fixo */}
         <div style={{ background: '#161a26', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '20px 28px', flexShrink: 0 }}>
@@ -198,7 +206,12 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
               )}
             </div>
             {/* Filtros */}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select value={filtroVend} onChange={e => setFiltroVend(e.target.value)}
+                style={{ background: filtroVend ? 'rgba(240,180,41,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${filtroVend ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 7, padding: '5px 12px', color: filtroVend ? '#f0b429' : '#9ca3af', fontSize: '0.75rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none', maxWidth: 200 }}>
+                <option value="">👤 Todos os vendedores</option>
+                {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
               {[['todos','Todos'],['pendentes','Pendentes'],['conferidos','Conferidos'],['questionamentos','⚠️ Questões']].map(([k,l]) => (
                 <button key={k} onClick={() => setFiltro(k)}
                   style={{ background: filtro === k ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${filtro === k ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 7, padding: '5px 12px', color: filtro === k ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontWeight: filtro === k ? 700 : 400, fontFamily: 'inherit' }}>
