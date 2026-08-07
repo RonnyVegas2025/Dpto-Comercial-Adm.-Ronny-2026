@@ -163,6 +163,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
   const [filtro, setFiltro]             = useState('todos');
   const [filtroVendedor, setFiltroVendedor] = useState('todos');
   const [aba, setAba]                   = useState('meta'); // meta | sem_mov
+  const [busca, setBusca]               = useState('');
 
   useEffect(() => { carregarDados(); }, [fechamento.id]);
 
@@ -253,12 +254,16 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
 
   const empresasFiltradas = useMemo(() => {
     let arr = [...empresas];
+    if (busca.trim()) {
+      const b = busca.trim().toLowerCase();
+      arr = arr.filter(e => e.empresa_nome?.toLowerCase().includes(b) || String(e.produto_id || '').includes(b));
+    }
     if (filtroVendedor !== 'todos') arr = arr.filter(e => e.consultor_nome === filtroVendedor);
     if (filtro === 'pendentes')       arr = arr.filter(e => !e.conferido_adm || !e.conferido_marina);
     if (filtro === 'conferidos')      arr = arr.filter(e => e.conferido_adm && e.conferido_marina);
     if (filtro === 'questionamentos') arr = arr.filter(e => e.questionamento && !e.questionamento_resolvido);
     return arr;
-  }, [empresas, filtro, filtroVendedor]);
+  }, [empresas, filtro, filtroVendedor, busca]);
 
   const diretor = DIRETOR_POR_GESTOR[fechamento.gestor_nome] || 'Diretor';
 
@@ -331,6 +336,9 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="🔍 Buscar empresa ou ID..."
+                  style={{ background: '#1e2435', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 12px', color: '#e8eaf0', fontSize: '0.78rem', fontFamily: 'inherit', outline: 'none', minWidth: 200 }} />
                 <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}
                   style={{ background: '#1e2435', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 10px', color: '#e8eaf0', fontSize: '0.78rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
                   <option value="todos">👤 Todos os vendedores</option>
@@ -414,6 +422,11 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
             </table>
           ) : (
             // Aba sem movimentação
+            (() => {
+              const semMovFiltradas = busca.trim()
+                ? semMov.filter(e => e.nome?.toLowerCase().includes(busca.trim().toLowerCase()) || String(e.produto_id || '').includes(busca.trim()))
+                : semMov;
+              return (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: '#0f1218' }}>
                 <tr>
@@ -423,7 +436,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                 </tr>
               </thead>
               <tbody>
-                {semMov.map((emp, i) => (
+                {semMovFiltradas.map((emp, i) => (
                   <tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', opacity: 0.7 }}>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#6b7280', fontSize: '0.72rem' }}>{emp.produto_id}</td>
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontWeight: 600 }}>{emp.nome}</td>
@@ -432,11 +445,13 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                     <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', textAlign: 'right', color: '#9ca3af' }}>{emp.potencial_movimentacao > 0 ? fmt(emp.potencial_movimentacao) : '—'}</td>
                   </tr>
                 ))}
-                {semMov.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#4b5563' }}>Todas as empresas da equipe estão na meta 🎉</td></tr>
+                {semMovFiltradas.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#4b5563' }}>{busca.trim() ? 'Nenhuma empresa encontrada.' : 'Todas as empresas da equipe estão na meta 🎉'}</td></tr>
                 )}
               </tbody>
             </table>
+              );
+            })()
           )}
         </div>
 
