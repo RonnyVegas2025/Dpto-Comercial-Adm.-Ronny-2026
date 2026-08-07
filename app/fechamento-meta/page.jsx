@@ -571,7 +571,11 @@ export default function RelatorioFechamento() {
 
   const fechamentosFiltrados = useMemo(() => {
     if (perfil === 'gestor_master') return fechamentos;
-    if (perfil === 'administrativo') return fechamentos;
+    if (perfil === 'administrativo') {
+      // Gislaine vê tudo; Marina vê só equipes do Rossi
+      if (nomeUser?.toLowerCase().includes('gislaine')) return fechamentos;
+      return fechamentos.filter(f => DIRETOR_POR_GESTOR[f.gestor_nome] === 'Rossi');
+    }
     if (perfil === 'supervisor_comercial') {
       return fechamentos.filter(f => DIRETOR_POR_GESTOR[f.gestor_nome] === 'Rossi');
     }
