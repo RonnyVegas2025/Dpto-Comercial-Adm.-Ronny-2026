@@ -239,7 +239,10 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
     onClose();
   }
 
-  const podeConferir = (perfil === 'administrativo' || perfil === 'gestor_master') &&
+  const podeMarcarADM = (perfil === 'administrativo' || perfil === 'gestor_master') &&
+    (fechamento.status === 'em_conferencia' || fechamento.status === 'apurando');
+  const podeConferir = podeMarcarADM;
+  const podeMarcarConferencia = (perfil === 'administrativo' || perfil === 'supervisor_comercial' || perfil === 'gestor_master') &&
     (fechamento.status === 'em_conferencia' || fechamento.status === 'apurando');
   const podeAprovar  = (perfil === 'gestor_master' || perfil === 'supervisor_comercial') &&
     fechamento.status === 'conferido';
@@ -389,16 +392,16 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#60a5fa', whiteSpace: 'nowrap' }}>{fmtMes(emp.competencia_meta)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#34d399', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(emp.valor_meta)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', textAlign: 'center' }}>
-                        <button onClick={() => podeConferir && conferirEmpresa(emp, 'adm')} disabled={salvando[emp.id] || !podeConferir}
-                          title={emp.conferido_adm ? `${emp.conferido_adm_por} · ${fmtDate(emp.conferido_adm_em)}` : 'Marcar ADM'}
-                          style={{ background: emp.conferido_adm ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${emp.conferido_adm ? 'rgba(240,180,41,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: emp.conferido_adm ? '#f0b429' : '#4b5563', cursor: podeConferir ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit' }}>
+                        <button onClick={() => podeMarcarADM && conferirEmpresa(emp, 'adm')} disabled={salvando[emp.id] || !podeMarcarADM}
+                          title={emp.conferido_adm ? `${emp.conferido_adm_por} · ${fmtDate(emp.conferido_adm_em)}` : 'Marcar ADM (Gislaine)'}
+                          style={{ background: emp.conferido_adm ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${emp.conferido_adm ? 'rgba(240,180,41,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: emp.conferido_adm ? '#f0b429' : '#4b5563', cursor: podeMarcarADM ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit' }}>
                           {emp.conferido_adm ? '✓' : '○'}
                         </button>
                       </td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', textAlign: 'center' }}>
-                        <button onClick={() => podeConferir && conferirEmpresa(emp, 'marina')} disabled={salvando[emp.id] || !podeConferir}
-                          title={emp.conferido_marina ? `${emp.conferido_marina_por} · ${fmtDate(emp.conferido_marina_em)}` : 'Marcar Conferência'}
-                          style={{ background: emp.conferido_marina ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${emp.conferido_marina ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: emp.conferido_marina ? '#60a5fa' : '#4b5563', cursor: podeConferir ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit' }}>
+                        <button onClick={() => (podeMarcarConferencia && emp.conferido_adm) && conferirEmpresa(emp, 'marina')} disabled={salvando[emp.id] || !podeMarcarConferencia || !emp.conferido_adm}
+                          title={!emp.conferido_adm ? 'Aguardando confirmação ADM' : emp.conferido_marina ? `${emp.conferido_marina_por} · ${fmtDate(emp.conferido_marina_em)}` : 'Marcar Conferência'}
+                          style={{ background: emp.conferido_marina ? 'rgba(96,165,250,0.15)' : !emp.conferido_adm ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)', border: `1px solid ${emp.conferido_marina ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: emp.conferido_marina ? '#60a5fa' : !emp.conferido_adm ? '#1f2937' : '#4b5563', cursor: (podeMarcarConferencia && emp.conferido_adm) ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit' }}>
                           {emp.conferido_marina ? '✓' : '○'}
                         </button>
                       </td>
@@ -567,9 +570,13 @@ export default function RelatorioFechamento() {
   }
 
   const fechamentosFiltrados = useMemo(() => {
-    if (perfil === 'gestor_master' || perfil === 'administrativo' || perfil === 'supervisor_comercial') return fechamentos;
+    if (perfil === 'gestor_master') return fechamentos;
+    if (perfil === 'administrativo') return fechamentos;
+    if (perfil === 'supervisor_comercial') {
+      return fechamentos.filter(f => DIRETOR_POR_GESTOR[f.gestor_nome] === 'Rossi');
+    }
     return fechamentos.filter(f => f.gestor_nome === gestorUser || f.gestor_nome?.includes(gestorUser?.split(' ')[0]));
-  }, [fechamentos, perfil, gestorUser]);
+  }, [fechamentos, perfil, gestorUser, nomeUser]);
 
   const totalGeral   = fechamentosFiltrados.reduce((s, f) => s + (f.valor_total_meta || 0), 0);
   const totalAprov   = fechamentosFiltrados.filter(f => f.status === 'aprovado').length;
