@@ -414,8 +414,8 @@ export default function RelatorioFechamento() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: prof } = await supabase.from('user_profiles').select('perfil, nome, gestor').eq('id', user.id).single();
-        if (prof) { setPerfil(prof.perfil); setNomeUser(prof.nome); setGestorUser(prof.gestor || ''); }
+        const { data: prof } = await supabase.from('user_profiles').select('perfil, nome, gestor_vinculado').eq('id', user.id).single();
+        if (prof) { setPerfil(prof.perfil); setNomeUser(prof.nome); setGestorUser(prof.gestor_vinculado || ''); }
       }
       const { data: meses } = await supabase.from('fechamento_meta').select('competencia').order('competencia', { ascending: false });
       const unicos = [...new Set((meses || []).map(m => String(m.competencia).substring(0, 7)))];
