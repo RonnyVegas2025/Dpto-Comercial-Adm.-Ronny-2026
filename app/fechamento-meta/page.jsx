@@ -329,10 +329,14 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
           {aba === 'meta' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {podeConferir && (
+                {podeMarcarADM && (
                   <>
                     <button onClick={() => conferirTudo('adm', true)} disabled={salvandoFech} style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 7, padding: '6px 12px', color: '#f0b429', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>✓ Marcar todos ADM</button>
                     <button onClick={() => conferirTudo('adm', false)} disabled={salvandoFech} style={{ background: 'rgba(107,114,128,0.1)', border: '1px solid rgba(107,114,128,0.3)', borderRadius: 7, padding: '6px 12px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>○ Desmarcar ADM</button>
+                  </>
+                )}
+                {podeMarcarConferencia && (
+                  <>
                     <button onClick={() => conferirTudo('marina', true)} disabled={salvandoFech} style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 7, padding: '6px 12px', color: '#60a5fa', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>✓ Marcar todos Conferência</button>
                     <button onClick={() => conferirTudo('marina', false)} disabled={salvandoFech} style={{ background: 'rgba(107,114,128,0.1)', border: '1px solid rgba(107,114,128,0.3)', borderRadius: 7, padding: '6px 12px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>○ Desmarcar Conferência</button>
                   </>
@@ -426,10 +430,24 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
           ) : (
             // Aba sem movimentação
             (() => {
-              const semMovFiltradas = busca.trim()
-                ? semMov.filter(e => e.nome?.toLowerCase().includes(busca.trim().toLowerCase()) || String(e.produto_id || '').includes(busca.trim()))
-                : semMov;
+              const vendedoresSemMov = ['todos', ...new Set(semMov.map(e => e.consultor_principal?.nome).filter(Boolean))].sort();
+              const semMovFiltradas = semMov.filter(e => {
+                const b = busca.trim().toLowerCase();
+                const bateNome = !b || e.nome?.toLowerCase().includes(b) || String(e.produto_id || '').includes(busca.trim());
+                const bateVend = filtroVendedor === 'todos' || e.consultor_principal?.nome === filtroVendedor;
+                return bateNome && bateVend;
+              });
               return (
+            <>
+            <div style={{ display: 'flex', gap: 8, padding: '10px 16px', background: '#0f1218', borderBottom: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar empresa ou ID..."
+                style={{ background: '#1e2435', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 12px', color: '#e8eaf0', fontSize: '0.78rem', fontFamily: 'inherit', outline: 'none', minWidth: 200, flex: 1 }} />
+              <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}
+                style={{ background: '#1e2435', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 10px', color: '#e8eaf0', fontSize: '0.78rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
+                <option value="todos">👤 Todos os vendedores</option>
+                {vendedoresSemMov.filter(v => v !== 'todos').map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: '#0f1218' }}>
                 <tr>
@@ -453,6 +471,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                 )}
               </tbody>
             </table>
+            </>
               );
             })()
           )}
