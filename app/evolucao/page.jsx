@@ -274,8 +274,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const totaisMes    = meses.map((m, mi) => lista.reduce((s, e) => s + ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0)), 0));
   const totalGeral   = lista.reduce((s, e) => s + e.totalCreditado, 0);
   const totalMetaApurado = lista.reduce((s, e) => {
-    // Soma entradas do banco filtradas pelo mês quando filtroMesMeta está ativo
-    const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+    // Soma entradas do banco filtradas pelo mês quando filtroMesMeta está ativo.
+    // Filtra pelo consultor da linha (empresa multi-consultor não conta a meta N vezes).
+    const todasEntradas = (metasGravadas[`all__${e.id}`] || [])
+      .filter(v => !v.consultor_id || v.consultor_id === e._consId);
     if (todasEntradas.length > 0) {
       const filtradas = filtroMesMeta !== 'todos'
         ? todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === filtroMesMeta)
