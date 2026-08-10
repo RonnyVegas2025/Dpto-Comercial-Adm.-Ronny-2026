@@ -1478,7 +1478,8 @@ export default function Evolucao() {
                     <option value="todos">Todos os meses</option>
                     {mesesUnicos.map(m => {
                       const totalMes = listaCompleta.reduce((s, e) => {
-                        const todasEntradas = (metasGravadas[`all__${e.id}`] || []);
+                        const todasEntradas = (metasGravadas[`all__${e.id}`] || [])
+                          .filter(v => !v.consultor_id || v.consultor_id === e._consId);
                         const doMes = todasEntradas.filter(v => v.competencia_meta?.substring(0,7) === m);
                         if (doMes.length > 0) return s + doMes.reduce((sv, v) => sv + (v.valor_meta || 0), 0);
                         if (e._meta?.elegivel && e._meta?.mesAlvo?.substring(0,7) === m) return s + (e._meta.valorMeta || 0);
