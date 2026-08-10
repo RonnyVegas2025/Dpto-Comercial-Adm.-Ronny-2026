@@ -13,6 +13,7 @@ const nav = [
   { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
   { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
   { href: '/fechamento-meta',    icon: '🔒', label: 'Fechamento Meta', pagina: 'fechamento-meta'  },
+  { href: '/dashboard-diretor',  icon: '📊', label: 'Dashboard Diretor', pagina: 'dashboard-diretor' },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
   { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
   { href: '/agregados-cadastro', icon: '📝', label: 'Cadastro Agregados', pagina: 'agregados-cadastro' },
