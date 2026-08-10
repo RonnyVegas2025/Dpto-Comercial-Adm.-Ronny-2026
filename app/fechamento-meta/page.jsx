@@ -329,7 +329,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
           {aba === 'meta' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {podeMarcarADM && (
+                {(perfil === 'gestor_master' || (perfil === 'administrativo' && nomeUser?.toLowerCase().includes('gislaine'))) && (
                   <>
                     <button onClick={() => conferirTudo('adm', true)} disabled={salvandoFech} style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 7, padding: '6px 12px', color: '#f0b429', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>✓ Marcar todos ADM</button>
                     <button onClick={() => conferirTudo('adm', false)} disabled={salvandoFech} style={{ background: 'rgba(107,114,128,0.1)', border: '1px solid rgba(107,114,128,0.3)', borderRadius: 7, padding: '6px 12px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'inherit' }}>○ Desmarcar ADM</button>
@@ -396,7 +396,7 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#60a5fa', whiteSpace: 'nowrap' }}>{fmtMes(emp.competencia_meta)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#34d399', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(emp.valor_meta)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', textAlign: 'center' }}>
-                        <button onClick={() => podeMarcarADM && conferirEmpresa(emp, 'adm')} disabled={salvando[emp.id] || !podeMarcarADM}
+                        <button onClick={() => (perfil === 'gestor_master' || (perfil === 'administrativo' && nomeUser?.toLowerCase().includes('gislaine'))) && conferirEmpresa(emp, 'adm')} disabled={salvando[emp.id] || !(perfil === 'gestor_master' || (perfil === 'administrativo' && nomeUser?.toLowerCase().includes('gislaine')))}
                           title={emp.conferido_adm ? `${emp.conferido_adm_por} · ${fmtDate(emp.conferido_adm_em)}` : 'Marcar ADM (Gislaine)'}
                           style={{ background: emp.conferido_adm ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${emp.conferido_adm ? 'rgba(240,180,41,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: emp.conferido_adm ? '#f0b429' : '#4b5563', cursor: podeMarcarADM ? 'pointer' : 'default', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit' }}>
                           {emp.conferido_adm ? '✓' : '○'}
