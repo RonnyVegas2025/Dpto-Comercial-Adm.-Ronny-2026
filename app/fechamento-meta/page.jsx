@@ -227,7 +227,14 @@ function ModalDetalhe({ fechamento, onClose, onAcaoFechamento, perfil, nomeUser 
       updates.conferido_marina_por = marcar ? nomeUser : null;
       updates.conferido_marina_em  = marcar ? new Date().toISOString() : null;
     }
-    await supabase.from('fechamento_meta_empresas').update(updates).eq('fechamento_id', fechamento.id);
+    if (campo === 'marina' && marcar) {
+      // Só marca Conferência nas empresas que já têm ADM marcado
+      await supabase.from('fechamento_meta_empresas').update(updates)
+        .eq('fechamento_id', fechamento.id)
+        .eq('conferido_adm', true);
+    } else {
+      await supabase.from('fechamento_meta_empresas').update(updates).eq('fechamento_id', fechamento.id);
+    }
     await carregarDados();
     setSalvandoFech(false);
   }
