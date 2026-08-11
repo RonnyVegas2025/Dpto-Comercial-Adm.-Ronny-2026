@@ -112,8 +112,8 @@ export default function DashboardDiretor() {
           consultor_agregado_2:consultor_agregado_2_id(id,nome,gestor)
         `).eq('ativo',true)),
         fetchAll(supabase.from('liberacoes').select('produto_id,competencia,total_liberado').eq('competencia',comp)),
-        supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra').eq('competencia_meta',comp),
-        supabase.from('consultores').select('id,nome,gestor,diretor,equipe').eq('ativo',true),
+        fetchAll(supabase.from('valor_meta_empresa').select('empresa_id,consultor_id,competencia_meta,valor_meta,regra').eq('competencia_meta',comp)),
+        fetchAll(supabase.from('consultores').select('id,nome,gestor,diretor,equipe').eq('ativo',true)),
       ]);
 
       // Mapas
@@ -121,7 +121,7 @@ export default function DashboardDiretor() {
       for(const l of libs) { libMap[l.produto_id] = (libMap[l.produto_id]||0) + l.total_liberado; }
 
       const metaMap = {};
-      for(const v of (vmetas.data||[])) {
+      for(const v of (vmetas||[])) {
         const key = `${v.empresa_id}__${v.consultor_id||'null'}`;
         if(!metaMap[v.empresa_id]) metaMap[v.empresa_id] = [];
         metaMap[v.empresa_id].push(v);
