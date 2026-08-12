@@ -344,11 +344,16 @@ export default function DashboardDiretor() {
                   </div>
 
                   {/* Stats */}
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
                     <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
                       <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Meta Apurada</div>
-                      <div style={{ color:'#60a5fa', fontWeight:700, fontSize:'0.85rem' }}>{fmtK(g.totalMeta)}</div>
+                      <div style={{ color:'#60a5fa', fontWeight:700, fontSize:'0.85rem' }}>{fmt(g.totalMeta)}</div>
                       <div style={{ color:'#374151', fontSize:'0.62rem' }}>{g.naMeta} empresas</div>
+                    </div>
+                    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
+                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Potencial/mês</div>
+                      <div style={{ color:'#a78bfa', fontWeight:700, fontSize:'0.85rem' }}>{fmt(g.totalPrevisto)}</div>
+                      <div style={{ color:'#374151', fontSize:'0.62rem' }}>base contratos</div>
                     </div>
                     <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
                       <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Ativação</div>
