@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 const fmt    = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const fmtK   = (v) => { const n = Number(v||0); return n >= 1000000 ? `R$ ${(n/1000000).toFixed(1)}M` : n >= 1000 ? `R$ ${(n/1000).toFixed(0)}K` : fmt(n); };
+const fmtK   = (v) => fmt(v);
 const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
 const fmtMes = (d) => { if(!d) return '—'; const [y,m]=String(d).split('-'); const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return `${ms[parseInt(m)-1]}/${y}`; };
 
@@ -168,7 +168,7 @@ export default function DashboardDiretor() {
       }
 
       // Histórico últimos 6 meses
-      const ultimos6 = meses.slice(0, 6).reverse();
+      const ultimos6 = [...meses].reverse();
       const libsHist = await fetchAll(
         supabase.from('liberacoes').select('produto_id,competencia,total_liberado')
           .in('competencia', ultimos6.map(m => m+'-01'))
