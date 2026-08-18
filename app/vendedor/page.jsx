@@ -645,9 +645,19 @@ export default function DashboardVendedor() {
         // valor × peso × pct_consultor/100) e traz consultor_id. Então NÃO se multiplica por
         // frac (isso dividiria duas vezes). O recorte por equipe é feito por DONO da linha:
         // sob filtro de equipe, só entram as linhas cujo consultor pertence àquela equipe.
+        const consIdsEscopo = new Set(
+          consultorId
+            ? [consultorId]
+            : (gestoresSel.size > 0
+                ? consultores.filter(c => gestoresSel.has(c.gestor))
+                : gestorFiltro !== 'Geral'
+                ? consultores.filter(c => c.gestor === gestorFiltro)
+                : consultores
+              ).map(c => c.id)
+        );
         const banco = (vmetasRows||[]).filter(v =>
           v.empresa_id === ep.id &&
-          (!consultorId || v.consultor_id === consultorId || v.regra === 'upsell')
+          (v.regra === 'upsell' || !v.consultor_id || consIdsEscopo.has(v.consultor_id))
         );
         let _metaEntradas;
         if (banco.length > 0) {
