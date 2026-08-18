@@ -15,8 +15,10 @@ const nav = [
   { href: '/fechamento-meta',    icon: '🔒', label: 'Fechamento Meta', pagina: 'fechamento-meta'  },
   { href: '/dashboard-diretor',  icon: '📊', label: 'Dashboard Diretor', pagina: 'dashboard-diretor' },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
-  { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
-  { href: '/agregados-cadastro', icon: '📝', label: 'Cadastro Agregados', pagina: 'agregados-cadastro' },
+  // Agregados migrados para projeto separado — itens ocultos do menu.
+  // Rotas e arquivos preservados; reativar removendo o comentário.
+  // { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
+  // { href: '/agregados-cadastro', icon: '📝', label: 'Cadastro Agregados', pagina: 'agregados-cadastro' },
   { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
 ];
 
