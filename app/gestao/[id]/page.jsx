@@ -772,9 +772,9 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           onClick={async () => {
                             setAplicandoAuto(true); setErroMeta('');
                             if (isManual) {
-                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id);
+                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).neq('regra', 'upsell');
                             } else {
-                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo);
+                              await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).eq('competencia_meta', compEfetivo).neq('regra', 'upsell');
                             }
                             const { error } = await supabase.from('valor_meta_empresa').insert({
                               empresa_id: empresa.id, produto_id: empresa.produto_id,
@@ -979,7 +979,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <button disabled={salvandoInserir}
                                         onClick={async () => {
                                           setSalvandoInserir(true);
-                                          await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id);
+                                          await supabase.from('valor_meta_empresa').delete().eq('empresa_id', empresa.id).neq('regra', 'upsell');
                                           const { error } = await supabase.from('valor_meta_empresa').insert({
                                             empresa_id: empresa.id, produto_id: empresa.produto_id,
                                             consultor_id: empresa.consultor_principal_id || null,
@@ -1283,7 +1283,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       {excedente<=0&&<div style={{color:'#f87171',fontSize:'0.65rem',marginTop:3}}>Sem excedente automático — insira o valor</div>}
                                     </div>
                                     <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
-                                      {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell');await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
+                                      {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell').eq('competencia_meta',comp);await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
                                       <button disabled={salvandoUpsell} onClick={async()=>{
                                         // Usa valor manual se preenchido, senão usa excedente calculado
                                         const valorFinal = valorUpsellManual ? parseFloat(valorUpsellManual) : valorUpsell;
@@ -1296,7 +1296,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                           .eq('competencia_meta', comp)
                                           .eq('regra', 'upsell');
                                         const {error} = await supabase.from('valor_meta_empresa').insert({
-                                          empresa_id:empresa.id, produto_id:empresa.produto_id, consultor_id:null,
+                                          empresa_id:empresa.id, produto_id:empresa.produto_id, consultor_id: empresa.consultor_principal_id || null,
                                           competencia_meta:comp, valor_bruto:m.total_liberado,
                                           valor_considerado: valorUpsellManual ? valorFinal : excedente,
                                           valor_meta:valorFinal, pct_consultor:pctCons, regra:'upsell', mes_sequencia:0
