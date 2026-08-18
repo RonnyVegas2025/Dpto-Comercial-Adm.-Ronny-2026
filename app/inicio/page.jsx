@@ -286,7 +286,15 @@ export default function HomePage() {
         const totalPct = cons.reduce((s,c) => s + c.pct, 0);
         if (totalPct <= 0) continue;
 
-        const banco = vmetasRows.filter(v => v.empresa_id === e.id);
+        const banco = vmetasRows.filter(v => {
+          if (v.empresa_id !== e.id) return false;
+          if (v.regra === 'upsell' || !v.consultor_id) {
+            // upsell/legado: pertence ao principal — só entra se ele está no escopo
+            return consIdSet.has(e.consultor_principal_id);
+          }
+          return consIdSet.has(v.consultor_id);
+        });
+
         let entradas = [];
         if (banco.length > 0) {
           entradas = banco;
@@ -294,6 +302,7 @@ export default function HomePage() {
           const calc = calcularValorMeta(e, totalPct, '2026-01');
           if (calc) entradas = [{ valor_meta: calc.valor_meta, competencia_meta: calc.competencia_meta, consultor_id: null, regra: 'auto' }];
         }
+
         let metaEmpresa = 0;
         for (const v of entradas) {
           if (!(v.valor_meta > 0)) continue;
@@ -301,20 +310,15 @@ export default function HomePage() {
           if (!m) continue;
           metaPorMes[m] = (metaPorMes[m]||0) + v.valor_meta;
           metaEmpresa += v.valor_meta;
-          if (v.regra === 'upsell' || !v.consultor_id) {
-            for (const c of cons) {
-              const parcela = v.valor_meta * (c.pct / totalPct);
-              metaPorConsultor[c.id] = (metaPorConsultor[c.id]||0) + parcela;
-              metaPorMesEq[c.equipe] = metaPorMesEq[c.equipe] || {};
-              metaPorMesEq[c.equipe][m] = (metaPorMesEq[c.equipe][m]||0) + parcela;
-            }
-          } else {
-            const dono = consultores.find(c => c.id === v.consultor_id);
-            if (dono) {
-              metaPorConsultor[dono.id] = (metaPorConsultor[dono.id]||0) + v.valor_meta;
-              metaPorMesEq[dono.equipe] = metaPorMesEq[dono.equipe] || {};
-              metaPorMesEq[dono.equipe][m] = (metaPorMesEq[dono.equipe][m]||0) + v.valor_meta;
-            }
+
+          // Dono da linha: consultor_id quando existe; senão o principal da empresa.
+          // Valor INTEGRAL — valor_meta já vem dividido por consultor no banco.
+          const donoId = v.consultor_id || e.consultor_principal_id;
+          const dono   = consultores.find(c => c.id === donoId);
+          if (dono) {
+            metaPorConsultor[dono.id] = (metaPorConsultor[dono.id]||0) + v.valor_meta;
+            metaPorMesEq[dono.equipe] = metaPorMesEq[dono.equipe] || {};
+            metaPorMesEq[dono.equipe][m] = (metaPorMesEq[dono.equipe][m]||0) + v.valor_meta;
           }
         }
         if (metaEmpresa > 0) { metaApuradaTotal += metaEmpresa; naMeta++; }
