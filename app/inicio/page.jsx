@@ -17,6 +17,27 @@ const fmtMes = (d) => {
   return `${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m)-1]}/${y}`;
 };
 
+async function fetchAll(query) {
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await query.range(from, from + 999);
+    if (error || !data || !data.length) break;
+    all = [...all, ...data];
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return all;
+}
+
+async function fetchEmPartes(empIds, buildQuery, chunk = 300) {
+  if (!empIds?.length) return [];
+  const out = [];
+  for (let i = 0; i < empIds.length; i += chunk) {
+    out.push(...await fetchAll(buildQuery(empIds.slice(i, i + chunk))));
+  }
+  return out;
+}
+
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [dados,   setDados]   = useState(null);
@@ -62,19 +83,6 @@ export default function HomePage() {
       const consIds = consultores.map(c => c.id);
       if (!consIds.length) { setDados({ vazio: true }); setLoading(false); return; }
 
-      // ── 3. fetchAll (igual ao Vendedor) ──────────────────────────────────
-      async function fetchAll(query) {
-        let all = [], from = 0;
-        while (true) {
-          const { data, error } = await query.range(from, from + 999);
-          if (error || !data || !data.length) break;
-          all = [...all, ...data];
-          if (data.length < 1000) break;
-          from += 1000;
-        }
-        return all;
-      }
-
       // ── 4. Empresas ───────────────────────────────────────────────────────
       // empresasMov: categorias filtradas → para movimentação real
       // todasEmpresas: todas → para meta, total ativo, novos contratos
@@ -109,32 +117,23 @@ export default function HomePage() {
       const prodIds = todasEmpresas.map(e => e.produto_id);
 
       // ── 5. Busca em paralelo: libs filtradas + libs todas + metas + meses ──
-      const [libsFiltradas, libsTodas, vmetasRows, ajustesData, mesDispRaw] = await Promise.all([
-        prodIds.length ? fetchAll(
+      const [libsTodas, vmetasRows, ajustesData, mesDispRaw] = await Promise.all([
+        fetchEmPartes(prodIds, (ids) =>
           supabase.from('liberacoes')
             .select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds)
-            .order('competencia')
-        ) : Promise.resolve([]),
-        prodIds.length ? fetchAll(
-          supabase.from('liberacoes')
-            .select('produto_id,competencia,total_liberado')
-            .in('produto_id', prodIds)
-            .order('competencia')
-        ) : Promise.resolve([]),
-        empIds.length ? fetchAll(
+            .in('produto_id', ids).order('competencia'), 200),
+        fetchEmPartes(empIds, (ids) =>
           supabase.from('valor_meta_empresa')
             .select('empresa_id,consultor_id,competencia_meta,valor_meta,valor_considerado,valor_bruto,regra,pct_consultor')
-            .in('empresa_id', empIds)
-        ) : Promise.resolve([]),
-        empIds.length ? fetchAll(
+            .in('empresa_id', ids).order('empresa_id')),
+        fetchEmPartes(empIds, (ids) =>
           supabase.from('ajustes_movimentacao')
             .select('empresa_id,competencia,valor_considerado')
-            .in('empresa_id', empIds)
-        ) : Promise.resolve([]),
+            .in('empresa_id', ids)),
         fetchAll(supabase.from('liberacoes').select('competencia').order('competencia', { ascending: false }))
           .then(rows => [...new Set((rows||[]).map(l => l.competencia?.substring(0,7)).filter(Boolean))].sort()),
       ]);
+      const libsFiltradas = libsTodas;
 
       // ── 6. Mapas ─────────────────────────────────────────────────────────
       const libMap = {};
