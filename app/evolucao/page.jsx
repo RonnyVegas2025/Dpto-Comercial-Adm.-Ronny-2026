@@ -796,9 +796,9 @@ export default function Evolucao() {
       const [emps, libsData, { data: ajustesData }, libsTodasData] = await Promise.all([
         fetchAll(supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
-         consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
-          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
-          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome))`)
+         consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, diretorObj:diretor_id(id,nome)),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome)),
+          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true).order('id')),
         fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
@@ -835,9 +835,9 @@ export default function Evolucao() {
           .from('empresas')
           .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
             data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
-            consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, diretorObj:diretor_id(id,nome)),
-            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome)),
-            consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, diretorObj:diretor_id(id,nome))`)
+            consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, diretorObj:diretor_id(id,nome)),
+            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome)),
+            consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true).order('id')),
         fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
@@ -931,8 +931,8 @@ export default function Evolucao() {
         const vals  = valsBase.map(v => Math.round(v * fator * 100) / 100);
         const totalCreditado = vals.reduce((s, v) => s + v, 0);
 
-        // Calcula meta automática como base — respeitando meta_valida_desde do consultor
-        const validaDesdeMes = cons?.meta_valida_desde || null;
+        // Calcula meta automática como base — respeitando meta_inicio do consultor
+        const validaDesdeMes = cons?.meta_inicio || null;
         const metaInfoCalc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes);
 
         // Verifica se há meta GRAVADA no banco para esta empresa
@@ -1628,7 +1628,7 @@ export default function Evolucao() {
               const { error } = await supabase.from('valor_meta_empresa').insert({
                 empresa_id:        empresa.id,
                 produto_id:        empresa.produto_id,
-                consultor_id:      empresa._cons?.id || null,
+                consultor_id:      empresa._consId || null,
                 competencia_meta:  comp,
                 valor_bruto:       empresa._meta?.valorBruto || 0,
                 valor_considerado: empresa._meta?.valorConsid || 0,
