@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import {
+  Wallet, Target, BarChart3, CheckCircle2, TrendingUp, TrendingDown,
+  Building2, Globe, Users, CalendarDays, Trophy, ClipboardList, Scale,
+} from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -30,49 +34,56 @@ const DIRETOR_POR_GESTOR = {
   'Ronny Peterson':'Ronny','William':'Ronny',
 };
 
+// Paleta derivada da marca (VEGAS PLATFORM UI STANDARD v1.0)
 const CORES_GESTOR = {
-  'Fabiano':    '#60a5fa',
-  'Vago':       '#34d399',
-  'Wagner Fernandes': '#f0b429',
-  'Ronny Peterson':   '#a78bfa',
-  'William':    '#f97316',
+  'Fabiano':          '#4D56A1',
+  'Vago':             '#6E68AE',
+  'Wagner Fernandes': '#9E7A9C',
+  'Ronny Peterson':   '#7A5A78',
+  'William':          '#D69086',
 };
 
-function BarraProgresso({ valor, maximo, cor='#34d399', altura=8 }) {
+const ICON = { size:16, strokeWidth:1.75, color:'var(--vg-ink-secondary)' };
+const cardStyle = {
+  background:'var(--vg-surface)', border:'1px solid var(--vg-border)',
+  borderRadius:'var(--vg-radius-lg)', padding:24, boxShadow:'0 1px 2px rgba(28,31,59,0.04)',
+};
+const H_CARD = { fontFamily:"'Outfit', sans-serif", fontSize:16, lineHeight:'24px', fontWeight:600, color:'var(--vg-ink)' };
+const CAPTION = { fontSize:12, lineHeight:'18px', color:'var(--vg-muted)' };
+
+function BarraProgresso({ valor, maximo, cor='var(--vg-brand-500)', altura=8 }) {
   const pct = maximo > 0 ? Math.min((valor/maximo)*100, 100) : 0;
   return (
-    <div style={{ background:'rgba(255,255,255,0.07)', borderRadius:4, height:altura, overflow:'hidden' }}>
+    <div style={{ background:'var(--vg-neutral-bg)', borderRadius:4, height:altura, overflow:'hidden' }}>
       <div style={{ height:'100%', width:`${pct}%`, background:cor, borderRadius:4, transition:'width 0.5s' }} />
     </div>
   );
 }
 
-function CardKPI({ label, valor, sub, cor='#e8eaf0', borderColor='rgba(255,255,255,0.07)', icon }) {
+function CardKPI({ label, valor, sub, cor='var(--vg-ink)', icon, subCor='var(--vg-ink-secondary)' }) {
   return (
-    <div style={{ background:'#161a26', border:`1px solid ${borderColor}`, borderRadius:14, padding:'16px 20px', display:'flex', flexDirection:'column', gap:4 }}>
-      <div style={{ color:'#6b7280', fontSize:'0.68rem', textTransform:'uppercase', letterSpacing:1, display:'flex', alignItems:'center', gap:6 }}>
-        {icon && <span>{icon}</span>}{label}
+    <div style={{ ...cardStyle, display:'flex', flexDirection:'column', gap:6 }}>
+      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, display:'flex', alignItems:'center', gap:6 }}>
+        {icon}{label}
       </div>
-      <div style={{ fontSize:'1.4rem', fontWeight:700, color:cor }}>{valor}</div>
-      {sub && <div style={{ color:'#4b5563', fontSize:'0.72rem' }}>{sub}</div>}
+      <div className="vg-num" style={{ fontFamily:"'Outfit', sans-serif", fontSize:24, lineHeight:'32px', fontWeight:600, color:cor }}>{valor}</div>
+      {sub && <div style={{ fontSize:12, lineHeight:'18px', color:subCor, display:'flex', alignItems:'center', gap:5 }}>{sub}</div>}
     </div>
   );
 }
 
-function GraficoBarras({ dados, label, valorKey, corKey, height=120 }) {
+function GraficoBarras({ dados, valorKey, corKey, height=120 }) {
   const max = Math.max(...dados.map(d => d[valorKey]||0), 1);
   return (
     <div style={{ display:'flex', alignItems:'flex-end', gap:8, height, padding:'0 4px' }}>
       {dados.map((d, i) => {
         const pct = (d[valorKey]||0)/max*100;
-        const cor = d[corKey] || '#34d399';
+        const cor = d[corKey] || 'var(--vg-brand-500)';
         return (
           <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-            <div style={{ fontSize:'0.6rem', color:'#6b7280', fontWeight:600 }}>{fmtK(d[valorKey])}</div>
-            <div style={{ width:'100%', height:`${pct}%`, background:cor, borderRadius:'3px 3px 0 0', minHeight:4, transition:'height 0.5s' }} />
-            <div style={{ fontSize:'0.6rem', color:'#9ca3af', textAlign:'center', lineHeight:1.2, wordBreak:'break-word' }}>
-              {d.label?.split(' ')[0]}
-            </div>
+            <div className="vg-num" style={{ ...CAPTION, fontWeight:500 }}>{fmtK(d[valorKey])}</div>
+            <div style={{ width:'100%', height:`${pct}%`, background:cor, borderRadius:'4px 4px 0 0', minHeight:4, transition:'height 0.5s' }} />
+            <div style={{ ...CAPTION, textAlign:'center', wordBreak:'break-word' }}>{d.label?.split(' ')[0]}</div>
           </div>
         );
       })}
@@ -205,11 +216,15 @@ export default function DashboardDiretor() {
   const pctAtivacao = totais.empresas > 0 ? (totais.movimentaram/totais.empresas)*100 : 0;
   const pctMeta     = totais.previsto > 0 ? (totais.movimentado/totais.previsto)*100 : 0;
 
+  // ── Camada visual (VEGAS PLATFORM UI STANDARD v1.0) ──────────────────
+  const corAtiv = pctAtivacao>=70 ? 'var(--vg-success-fg)' : pctAtivacao>=50 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+  const corMeta = pctMeta>=80 ? 'var(--vg-success-fg)' : pctMeta>=60 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+
   if(loading && !dados) return (
     <div style={{ ...s.page, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
       <div style={{ textAlign:'center' }}>
         <div style={s.spin}/>
-        <div style={{ color:'#6b7280' }}>Carregando dashboard...</div>
+        <div style={{ color:'var(--vg-muted)', fontSize:14 }}>Carregando dashboard...</div>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -219,86 +234,106 @@ export default function DashboardDiretor() {
     <div style={s.page}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }`}</style>
 
-      {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28, flexWrap:'wrap', gap:16 }}>
+      {/* Faixa de gradiente no topo da página */}
+      <div style={{ height:3, background:'var(--vg-gradient)', margin:'-32px -24px 24px' }} />
+
+      {/* Cabeçalho */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:24, flexWrap:'wrap', gap:16 }}>
         <div>
-          <div style={{ color:'#f0b429', fontWeight:800, fontSize:'0.85rem', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>♠ Vegas Card</div>
-          <h1 style={{ fontSize:'1.8rem', fontWeight:700, margin:'0 0 6px' }}>Dashboard Executivo</h1>
-          <p style={{ color:'#6b7280', fontSize:'0.9rem' }}>Visão consolidada de resultados por diretoria</p>
+          <div style={{ ...CAPTION, marginBottom:6 }}>Vegas Card / Dashboard Executivo</div>
+          <h1 style={{ fontFamily:"'Outfit', sans-serif", fontSize:24, lineHeight:'32px', fontWeight:600, color:'var(--vg-ink)', margin:0 }}>Dashboard Executivo</h1>
+          <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'6px 0 0' }}>Visão consolidada de resultados por diretoria</p>
         </div>
-        <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
-          <select value={mesSel} onChange={e=>setMesSel(e.target.value)}
-            style={{ background:'#1e2435', border:'1px solid rgba(255,255,255,0.12)', borderRadius:10, padding:'9px 14px', color:'#e8eaf0', fontSize:'0.85rem', fontFamily:'inherit', cursor:'pointer', outline:'none' }}>
-            {meses.map(m=><option key={m} value={m}>{fmtMes(m+'-01')}</option>)}
-          </select>
-        </div>
+        <select value={mesSel} onChange={e=>setMesSel(e.target.value)}
+          style={{ background:'var(--vg-surface)', border:'1px solid var(--vg-border-field)', borderRadius:'var(--vg-radius)', padding:'9px 14px', color:'var(--vg-ink)', fontSize:14, fontFamily:"'Inter', sans-serif", cursor:'pointer', outline:'none' }}>
+          {meses.map(m=><option key={m} value={m}>{fmtMes(m+'-01')}</option>)}
+        </select>
       </div>
 
       {/* Abas de visão */}
-      <div style={{ display:'flex', gap:6, marginBottom:24 }}>
+      <div style={{ display:'flex', gap:8, marginBottom:24, flexWrap:'wrap' }}>
         {[
-          { key:'geral', label:'🌐 Visão Geral', sub:'Todas as diretorias' },
-          { key:'rossi', label:'👔 Diretoria Rossi', sub:'Fabiano · Vago · Wagner' },
-          { key:'ronny', label:'👔 Diretoria Ronny', sub:'Ronny Peterson · William' },
-        ].map(v => (
-          <button key={v.key} onClick={()=>setVisao(v.key)}
-            style={{ background: visao===v.key ? 'rgba(240,180,41,0.12)' : 'rgba(255,255,255,0.04)', border:`1px solid ${visao===v.key ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.08)'}`, borderRadius:12, padding:'10px 20px', color: visao===v.key ? '#f0b429' : '#6b7280', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
-            <div style={{ fontWeight:700, fontSize:'0.88rem' }}>{v.label}</div>
-            <div style={{ fontSize:'0.7rem', marginTop:2, opacity:0.7 }}>{v.sub}</div>
-          </button>
-        ))}
+          { key:'geral', label:'Visão Geral',    sub:'Todas as diretorias',      Icon:Globe },
+          { key:'rossi', label:'Diretoria Rossi', sub:'Fabiano · Vago · Wagner',  Icon:Users },
+          { key:'ronny', label:'Diretoria Ronny', sub:'Ronny Peterson · William', Icon:Users },
+        ].map(v => {
+          const ativa = visao===v.key;
+          return (
+            <button key={v.key} onClick={()=>setVisao(v.key)}
+              style={{ position:'relative', overflow:'hidden',
+                background: ativa ? 'var(--vg-brand-50)' : 'var(--vg-surface)',
+                border:`1px solid ${ativa ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`,
+                borderRadius:'var(--vg-radius)', padding:'12px 20px',
+                color: ativa ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)',
+                cursor:'pointer', fontFamily:"'Inter', sans-serif", textAlign:'left' }}>
+              {ativa && <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'var(--vg-gradient)' }} />}
+              <div style={{ display:'flex', alignItems:'center', gap:7, fontWeight:600, fontSize:14, lineHeight:'22px' }}>
+                <v.Icon size={16} strokeWidth={1.75} color={ativa ? 'var(--vg-brand-500)' : 'var(--vg-ink-secondary)'} />
+                {v.label}
+              </div>
+              <div style={{ ...CAPTION, marginTop:2 }}>{v.sub}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* KPIs principais */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:14, marginBottom:24 }}>
-        <CardKPI icon="💰" label="Total Movimentado" valor={fmtK(totais.movimentado)} sub={fmtMes(mesSel+'-01')} cor="#34d399" borderColor="rgba(52,211,153,0.3)" />
-        <CardKPI icon="🎯" label="Meta Apurada" valor={fmtK(totais.meta)} sub={`${totais.naMeta} empresas na meta`} cor="#60a5fa" borderColor="rgba(96,165,250,0.3)" />
-        <CardKPI icon="📊" label="Potencial/mês" valor={fmtK(totais.previsto)} sub="base dos contratos" cor="#a78bfa" borderColor="rgba(167,139,250,0.3)" />
-        <CardKPI icon="✅" label="% Ativação" valor={fmtPct(pctAtivacao)} sub={`${totais.movimentaram} de ${totais.empresas} movimentaram`} cor={pctAtivacao>=70?'#34d399':pctAtivacao>=50?'#f0b429':'#f87171'} borderColor={pctAtivacao>=70?'rgba(52,211,153,0.3)':pctAtivacao>=50?'rgba(240,180,41,0.3)':'rgba(248,113,113,0.3)'} />
-        <CardKPI icon="📈" label="Realizado vs Potencial" valor={fmtPct(pctMeta)} sub={totais.movimentado>totais.previsto?'🟢 Acima do potencial':'🔴 Abaixo do potencial'} cor={pctMeta>=80?'#34d399':pctMeta>=60?'#f0b429':'#f87171'} borderColor="rgba(255,255,255,0.07)" />
-        <CardKPI icon="🏢" label="Total Contratos" valor={totais.empresas.toLocaleString('pt-BR')} sub="empresas ativas" cor="#e8eaf0" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:14, marginBottom:24 }}>
+        <CardKPI icon={<Wallet {...ICON} />}   label="Total Movimentado" valor={fmtK(totais.movimentado)} sub={fmtMes(mesSel+'-01')} />
+        <CardKPI icon={<Target {...ICON} />}   label="Meta Apurada"      valor={fmtK(totais.meta)}        sub={`${totais.naMeta} empresas na meta`} />
+        <CardKPI icon={<BarChart3 {...ICON} />} label="Potencial/mês"     valor={fmtK(totais.previsto)}    sub="base dos contratos" />
+        <CardKPI icon={<CheckCircle2 {...ICON} />} label="% Ativação" valor={fmtPct(pctAtivacao)} cor={corAtiv} sub={`${totais.movimentaram} de ${totais.empresas} movimentaram`} />
+        <CardKPI icon={<TrendingUp {...ICON} />} label="Realizado vs Potencial" valor={fmtPct(pctMeta)} cor={corMeta}
+          sub={totais.movimentado>totais.previsto
+            ? <><TrendingUp size={13} strokeWidth={1.75} color="var(--vg-success-fg)" /> Acima do potencial</>
+            : <><TrendingDown size={13} strokeWidth={1.75} color="var(--vg-danger-fg)" /> Abaixo do potencial</>} />
+        <CardKPI icon={<Building2 {...ICON} />} label="Total Contratos" valor={totais.empresas.toLocaleString('pt-BR')} sub="empresas ativas" />
       </div>
 
-      {/* Grid principal: Gráfico histórico + Ranking gestores */}
+      {/* Grid principal: Histórico + Ranking gestores */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:24 }}>
 
-        {/* Histórico últimos meses */}
-        <div style={{ background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 }}>
-          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:6 }}>📅 Histórico de Movimentação</div>
-          <div style={{ color:'#6b7280', fontSize:'0.78rem', marginBottom:20 }}>Últimos {dados?.ultimos6?.length||6} meses · todas as categorias</div>
+        {/* Histórico */}
+        <div style={cardStyle}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+            <CalendarDays {...ICON} /> Histórico de Movimentação
+          </div>
+          <div style={{ ...CAPTION, marginBottom:20 }}>Últimos {dados?.ultimos6?.length||6} meses · todas as categorias</div>
           {dados && (
             <GraficoBarras
-              dados={dados.ultimos6.map(m=>({ label:fmtMes(m+'-01'), totalMovimentado:dados.histMap[m]||0, cor:'#34d399' }))}
+              dados={dados.ultimos6.map(m=>({ label:fmtMes(m+'-01'), totalMovimentado:dados.histMap[m]||0, cor:'var(--vg-brand-500)' }))}
               valorKey="totalMovimentado" corKey="cor" height={140}
             />
           )}
           <div style={{ marginTop:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <div style={{ color:'#4b5563', fontSize:'0.72rem' }}>Movimentação total da empresa</div>
-            <div style={{ color:'#34d399', fontWeight:700, fontSize:'0.85rem' }}>{fmtK(totais.movimentado)} este mês</div>
+            <div style={CAPTION}>Movimentação total da empresa</div>
+            <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmtK(totais.movimentado)} este mês</div>
           </div>
         </div>
 
         {/* Ranking por gestor */}
-        <div style={{ background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 }}>
-          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:6 }}>🏆 Performance por Gestor</div>
-          <div style={{ color:'#6b7280', fontSize:'0.78rem', marginBottom:16 }}>{fmtMes(mesSel+'-01')} · movimentação vs potencial</div>
+        <div style={cardStyle}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+            <Trophy {...ICON} /> Performance por Gestor
+          </div>
+          <div style={{ ...CAPTION, marginBottom:16 }}>{fmtMes(mesSel+'-01')} · movimentação vs potencial</div>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {gestoresFiltrados
               .sort((a,b)=>b.totalMovimentado-a.totalMovimentado)
               .map((g,i) => {
-                const cor = CORES_GESTOR[g.gestor] || '#34d399';
+                const cor = CORES_GESTOR[g.gestor] || 'var(--vg-brand-500)';
                 const pct = g.totalPrevisto>0 ? (g.totalMovimentado/g.totalPrevisto)*100 : 0;
                 return (
                   <div key={g.gestor}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ background:cor+'20', color:cor, borderRadius:6, padding:'2px 8px', fontSize:'0.7rem', fontWeight:700 }}>#{i+1}</span>
-                        <span style={{ fontWeight:600, fontSize:'0.85rem' }}>{g.gestor}</span>
-                        <span style={{ color:'#4b5563', fontSize:'0.7rem' }}>→ {g.diretor}</span>
+                        <span className="vg-num" style={{ background:cor+'20', color:cor, borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:600 }}>#{i+1}</span>
+                        <span style={{ fontWeight:500, fontSize:14, color:'var(--vg-ink)' }}>{g.gestor}</span>
+                        <span style={CAPTION}>→ {g.diretor}</span>
                       </div>
                       <div style={{ textAlign:'right' }}>
-                        <div style={{ color:cor, fontWeight:700, fontSize:'0.88rem' }}>{fmtK(g.totalMovimentado)}</div>
-                        <div style={{ color:'#4b5563', fontSize:'0.68rem' }}>{fmtPct(pct)} do potencial</div>
+                        <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmtK(g.totalMovimentado)}</div>
+                        <div className="vg-num" style={CAPTION}>{fmtPct(pct)} do potencial</div>
                       </div>
                     </div>
                     <BarraProgresso valor={g.totalMovimentado} maximo={g.totalPrevisto} cor={cor} />
@@ -311,66 +346,72 @@ export default function DashboardDiretor() {
 
       {/* Cards detalhados por gestor */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:16 }}>📋 Detalhamento por Equipe</div>
+        <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+          <ClipboardList {...ICON} /> Detalhamento por Equipe
+        </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:16 }}>
           {gestoresFiltrados
             .sort((a,b)=>b.totalMovimentado-a.totalMovimentado)
             .map(g => {
-              const cor = CORES_GESTOR[g.gestor] || '#34d399';
+              const cor = CORES_GESTOR[g.gestor] || 'var(--vg-brand-500)';
               const pctAtiv = g.empresas>0 ? (g.movimentaram/g.empresas)*100 : 0;
               const pctPot  = g.totalPrevisto>0 ? (g.totalMovimentado/g.totalPrevisto)*100 : 0;
+              const corPctPot  = pctPot>=80 ? 'var(--vg-success-fg)' : pctPot>=50 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+              const corPctAtiv = pctAtiv>=70 ? 'var(--vg-success-fg)' : pctAtiv>=50 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
               const cats = Object.entries(g.categorias).sort((a,b)=>b[1].mov-a[1].mov);
               return (
-                <div key={g.gestor} style={{ background:'#161a26', border:`1px solid ${cor}30`, borderRadius:16, padding:20 }}>
+                <div key={g.gestor} style={cardStyle}>
                   {/* Header */}
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
                     <div>
-                      <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:3 }}>👔 {g.gestor}</div>
-                      <div style={{ color:'#4b5563', fontSize:'0.7rem' }}>Diretoria {g.diretor}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:7, fontFamily:"'Outfit', sans-serif", fontWeight:600, fontSize:16, lineHeight:'24px', color:'var(--vg-ink)', marginBottom:3 }}>
+                        <Users size={16} strokeWidth={1.75} color={cor} /> {g.gestor}
+                      </div>
+                      <div style={CAPTION}>Diretoria {g.diretor}</div>
                     </div>
                     <div style={{ textAlign:'right' }}>
-                      <div style={{ color:cor, fontWeight:700, fontSize:'1.1rem' }}>{fmtK(g.totalMovimentado)}</div>
-                      <div style={{ color:'#4b5563', fontSize:'0.68rem' }}>{g.empresas} contratos</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:18, fontFamily:"'Outfit', sans-serif" }}>{fmtK(g.totalMovimentado)}</div>
+                      <div style={CAPTION}>{g.empresas} contratos</div>
                     </div>
                   </div>
 
                   {/* Barra principal */}
                   <div style={{ marginBottom:14 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                      <span style={{ color:'#6b7280', fontSize:'0.68rem' }}>Movimentado vs Potencial</span>
-                      <span style={{ color:pctPot>=80?'#34d399':pctPot>=50?'#f0b429':'#f87171', fontSize:'0.72rem', fontWeight:700 }}>{fmtPct(pctPot)}</span>
+                      <span style={CAPTION}>Movimentado vs Potencial</span>
+                      <span className="vg-num" style={{ color:corPctPot, fontSize:13, lineHeight:'20px', fontWeight:600 }}>{fmtPct(pctPot)}</span>
                     </div>
                     <BarraProgresso valor={g.totalMovimentado} maximo={g.totalPrevisto} cor={cor} altura={6} />
                   </div>
 
-                  {/* Stats */}
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
-                    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Meta Apurada</div>
-                      <div style={{ color:'#60a5fa', fontWeight:700, fontSize:'0.85rem' }}>{fmt(g.totalMeta)}</div>
-                      <div style={{ color:'#374151', fontSize:'0.62rem' }}>{g.naMeta} empresas</div>
+                  {/* Stats — sem card-dentro-de-card: divisor + grid 3 col */}
+                  <div style={{ borderTop:'1px solid var(--vg-border)', paddingTop:12, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+                    <div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Meta Apurada</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmt(g.totalMeta)}</div>
+                      <div style={CAPTION}>{g.naMeta} empresas</div>
                     </div>
-                    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Potencial/mês</div>
-                      <div style={{ color:'#a78bfa', fontWeight:700, fontSize:'0.85rem' }}>{fmt(g.totalPrevisto)}</div>
-                      <div style={{ color:'#374151', fontSize:'0.62rem' }}>base contratos</div>
+                    <div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Potencial/mês</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmt(g.totalPrevisto)}</div>
+                      <div style={CAPTION}>base contratos</div>
                     </div>
-                    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 10px' }}>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Ativação</div>
-                      <div style={{ color:pctAtiv>=70?'#34d399':pctAtiv>=50?'#f0b429':'#f87171', fontWeight:700, fontSize:'0.85rem' }}>{fmtPct(pctAtiv)}</div>
-                      <div style={{ color:'#374151', fontSize:'0.62rem' }}>{g.movimentaram}/{g.empresas} mov.</div>
+                    <div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Ativação</div>
+                      <div className="vg-num" style={{ color:corPctAtiv, fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmtPct(pctAtiv)}</div>
+                      <div style={CAPTION}>{g.movimentaram}/{g.empresas} mov.</div>
                     </div>
                   </div>
 
                   {/* Por categoria */}
                   {cats.length > 0 && (
                     <div>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Por Categoria</div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Por Categoria</div>
                       <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                         {cats.slice(0,3).map(([cat,val])=>(
                           <div key={cat} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                            <span style={{ color:'#9ca3af', fontSize:'0.72rem' }}>{cat}</span>
-                            <span style={{ color:'#e8eaf0', fontWeight:600, fontSize:'0.72rem' }}>{fmtK(val.mov)}</span>
+                            <span style={{ color:'var(--vg-ink-secondary)', fontSize:13, lineHeight:'20px' }}>{cat}</span>
+                            <span className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:13, lineHeight:'20px' }}>{fmtK(val.mov)}</span>
                           </div>
                         ))}
                       </div>
@@ -384,10 +425,12 @@ export default function DashboardDiretor() {
 
       {/* Comparativo diretorias (só na visão geral) */}
       {visao === 'geral' && (
-        <div style={{ background:'#161a26', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 }}>
-          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:16 }}>⚖️ Comparativo por Diretoria</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
-            {['Rossi','Ronny'].map(dir => {
+        <div style={cardStyle}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+            <Scale {...ICON} /> Comparativo por Diretoria
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
+            {['Rossi','Ronny'].map((dir, di) => {
               const gsDiretor = gestores.filter(g=>DIRETOR_POR_GESTOR[g.gestor]===dir);
               const movDir    = gsDiretor.reduce((s,g)=>s+g.totalMovimentado,0);
               const metaDir   = gsDiretor.reduce((s,g)=>s+g.totalMeta,0);
@@ -395,36 +438,39 @@ export default function DashboardDiretor() {
               const empDir    = gsDiretor.reduce((s,g)=>s+g.empresas,0);
               const movDir2   = gsDiretor.reduce((s,g)=>s+g.movimentaram,0);
               const pct       = prevDir>0?(movDir/prevDir)*100:0;
-              const cor       = dir==='Rossi'?'#60a5fa':'#a78bfa';
+              const corPct    = pct>=80 ? 'var(--vg-success-fg)' : pct>=50 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+              const cor       = dir==='Rossi' ? 'var(--vg-brand-500)' : 'var(--vg-rose-400)';
               return (
-                <div key={dir} style={{ background:'rgba(255,255,255,0.02)', borderRadius:12, padding:20, border:`1px solid ${cor}25` }}>
-                  <div style={{ color:cor, fontWeight:700, fontSize:'1rem', marginBottom:12 }}>👔 Diretoria {dir}</div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+                <div key={dir} style={{ paddingLeft: di===1 ? 24 : 0, borderLeft: di===1 ? '1px solid var(--vg-border)' : 'none' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7, color:cor, fontFamily:"'Outfit', sans-serif", fontWeight:600, fontSize:16, lineHeight:'24px', marginBottom:12 }}>
+                    <Users size={16} strokeWidth={1.75} color={cor} /> Diretoria {dir}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
                     <div>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Movimentado</div>
-                      <div style={{ color:'#34d399', fontWeight:700, fontSize:'1rem' }}>{fmtK(movDir)}</div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Movimentado</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:16, fontFamily:"'Outfit', sans-serif" }}>{fmtK(movDir)}</div>
                     </div>
                     <div>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Meta</div>
-                      <div style={{ color:'#60a5fa', fontWeight:700, fontSize:'1rem' }}>{fmtK(metaDir)}</div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Meta</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:16, fontFamily:"'Outfit', sans-serif" }}>{fmtK(metaDir)}</div>
                     </div>
                     <div>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Potencial</div>
-                      <div style={{ color:'#a78bfa', fontWeight:700, fontSize:'0.88rem' }}>{fmtK(prevDir)}</div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Potencial</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{fmtK(prevDir)}</div>
                     </div>
                     <div>
-                      <div style={{ color:'#4b5563', fontSize:'0.62rem', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Ativação</div>
-                      <div style={{ color:'#f0b429', fontWeight:700, fontSize:'0.88rem' }}>{empDir>0?fmtPct(movDir2/empDir*100):'—'}</div>
+                      <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Ativação</div>
+                      <div className="vg-num" style={{ color:'var(--vg-ink)', fontWeight:600, fontSize:14, fontFamily:"'Outfit', sans-serif" }}>{empDir>0?fmtPct(movDir2/empDir*100):'—'}</div>
                     </div>
                   </div>
                   <div style={{ marginBottom:6 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                      <span style={{ color:'#6b7280', fontSize:'0.68rem' }}>Realizado vs Potencial</span>
-                      <span style={{ color:pct>=80?'#34d399':pct>=50?'#f0b429':'#f87171', fontSize:'0.72rem', fontWeight:700 }}>{fmtPct(pct)}</span>
+                      <span style={CAPTION}>Realizado vs Potencial</span>
+                      <span className="vg-num" style={{ color:corPct, fontSize:13, lineHeight:'20px', fontWeight:600 }}>{fmtPct(pct)}</span>
                     </div>
                     <BarraProgresso valor={movDir} maximo={prevDir} cor={cor} altura={6} />
                   </div>
-                  <div style={{ color:'#4b5563', fontSize:'0.68rem', marginTop:8 }}>{gsDiretor.length} gestores · {empDir} contratos</div>
+                  <div style={{ ...CAPTION, marginTop:8 }}>{gsDiretor.length} gestores · {empDir} contratos</div>
                 </div>
               );
             })}
@@ -436,6 +482,6 @@ export default function DashboardDiretor() {
 }
 
 const s = {
-  page: { maxWidth:1400, margin:'0 auto', padding:'32px 24px', fontFamily:"'DM Sans', sans-serif", color:'#e8eaf0', background:'#0a0c10', minHeight:'100vh', boxSizing:'border-box' },
-  spin: { width:36, height:36, border:'3px solid rgba(255,255,255,0.1)', borderTop:'3px solid #f0b429', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
+  page: { maxWidth:1400, margin:'0 auto', padding:'32px 24px', fontFamily:"'Inter', sans-serif", color:'var(--vg-ink)', background:'var(--vg-bg)', minHeight:'100vh', boxSizing:'border-box' },
+  spin: { width:36, height:36, border:'3px solid var(--vg-border)', borderTop:'3px solid var(--vg-brand-500)', borderRadius:'50%', margin:'0 auto 16px', animation:'spin 0.8s linear infinite' },
 };

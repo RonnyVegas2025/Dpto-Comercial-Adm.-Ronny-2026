@@ -1,1 +1,25 @@
 
+
+/* ── VEGAS PLATFORM UI STANDARD v1.0 — tokens ───────────────────────── */
+:root {
+  /* Marca */
+  --vg-brand-400:#6E68AE; --vg-brand-500:#4D56A1; --vg-brand-700:#3A4080;
+  --vg-brand-800:#2C3164; --vg-brand-50:#F0F0F8;
+  --vg-rose-400:#9E7A9C;  --vg-peach-400:#D69086;
+  /* Superfícies */
+  --vg-bg:#F5F5FA; --vg-surface:#FFFFFF; --vg-surface-muted:#F7F7FB;
+  --vg-border:#E4E4EF; --vg-border-field:#8E90AD;
+  /* Texto */
+  --vg-ink:#1C1F3B; --vg-ink-secondary:#494D6E; --vg-muted:#6E7190;
+  /* Semânticos (bg / fg) */
+  --vg-success-bg:#E4F4EE; --vg-success-fg:#1F7A5C;
+  --vg-warning-bg:#FDF3E2; --vg-warning-fg:#9A6410;
+  --vg-danger-bg:#FBEAEC;  --vg-danger-fg:#B03A45;
+  --vg-info-bg:#F0F0F8;    --vg-info-fg:#434B8F;
+  --vg-neutral-bg:#EEEEF4; --vg-neutral-fg:#5A5E7A;
+  /* Assinatura */
+  --vg-gradient: linear-gradient(90deg,#6E68AE 0%,#9E7A9C 52%,#D69086 100%);
+  /* Raio */
+  --vg-radius-sm:6px; --vg-radius:10px; --vg-radius-lg:14px;
+}
+.vg-num { font-variant-numeric: tabular-nums; }
