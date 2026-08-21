@@ -938,6 +938,27 @@ export default function DashboardVendedor() {
 
       {dados && !loading && (() => {
         const { kpis, lista, mesesDisp, porProduto, ranking, consultor, consultoresDaVisao, empresasNaMeta, vmetasRows, metaPorMes } = dados;
+
+        // Escopo de consultores da visão atual (mesma regra de metasGestor): usado para
+        // recortar as linhas de valor_meta_empresa no cabeçalho, no rodapé e na paginação
+        // da tabela "Empresas na Meta", evitando dupla contagem em empresas com consultores
+        // de gestores diferentes.
+        const consIdsEscopoView = new Set(
+          consultorId
+            ? [consultorId]
+            : (gestoresSel.size > 0
+                ? consultores.filter(c => gestoresSel.has(c.gestor))
+                : gestorFiltro !== 'Geral'
+                ? consultores.filter(c => c.gestor === gestorFiltro)
+                : consultores
+              ).filter(c => !filtroEquipeTopo || c.equipe === filtroEquipeTopo).map(c => c.id)
+        );
+        const entradasDaEmpresa = (empresaId) =>
+          (vmetasRows||[]).filter(v =>
+            v.empresa_id === empresaId &&
+            (v.regra === 'upsell' || !v.consultor_id || consIdsEscopoView.has(v.consultor_id))
+          );
+
         const apurado    = kpis.totalValorMeta || 0;
         const pctApurado = kpis.metaTotal > 0 ? (apurado / kpis.metaTotal) * 100 : 0;
         const corPct = (p) => p >= 80 ? '#34d399' : p >= 60 ? '#f0b429' : '#f87171';
@@ -1186,7 +1207,7 @@ export default function DashboardVendedor() {
                     <tbody>
                       {(()=>{
                         const baseEmpresas = filtroMetaCadastro
-                          ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).filter(e=>!filtroMetaProduto||e.produto_contratado===filtroMetaProduto).map(e=>({...e,_metaEntradas:(vmetasRows||[]).filter(v=>v.empresa_id===e.id).map(v=>({...v,consultor_nome:v.consultores?.nome||null}))}))
+                          ? lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro).filter(e=>!filtroMetaProduto||e.produto_contratado===filtroMetaProduto).map(e=>({...e,_metaEntradas:entradasDaEmpresa(e.id).map(v=>({...v,consultor_nome:v.consultores?.nome||null}))}))
                           : empresasNaMeta.filter(e=>{
                               if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal)) return false;
                               if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto) return false;
@@ -1239,7 +1260,7 @@ export default function DashboardVendedor() {
                         <td style={{padding:'10px 12px',fontWeight:800,color:'#34d399',textAlign:'right'}}>
                           {(()=>{
                             const base=filtroMetaCadastro?lista.filter(e=>e.data_cadastro?.substring(0,7)===filtroMetaCadastro&&(!filtroMetaProduto||e.produto_contratado===filtroMetaProduto)):empresasNaMeta.filter(e=>{if(filtroMetaMesLocal&&!e._metaEntradas.some(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal))return false;if(filtroMetaProduto&&e.produto_contratado!==filtroMetaProduto)return false;return true;});
-                            const total=base.reduce((s,e)=>{const entradasBanco=(vmetasRows||[]).filter(v=>v.empresa_id===e.id);const filtradas=filtroMetaMesLocal?entradasBanco.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal):entradasBanco;if(filtradas.length>0)return s+filtradas.reduce((sv,v)=>sv+(v.valor_meta||0),0);const metaComp=e.metaComp?.substring(0,7);if(filtroMetaMesLocal&&metaComp!==filtroMetaMesLocal)return s;return s+(e.valorMeta||0);},0);
+                            const total=base.reduce((s,e)=>{const entradasBanco=entradasDaEmpresa(e.id);const filtradas=filtroMetaMesLocal?entradasBanco.filter(v=>v.competencia_meta?.substring(0,7)===filtroMetaMesLocal):entradasBanco;if(filtradas.length>0)return s+filtradas.reduce((sv,v)=>sv+(v.valor_meta||0),0);const metaComp=e.metaComp?.substring(0,7);if(filtroMetaMesLocal&&metaComp!==filtroMetaMesLocal)return s;return s+(e.valorMeta||0);},0);
                             return fmt(total);
                           })()}
                         </td>
