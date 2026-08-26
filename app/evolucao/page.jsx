@@ -147,6 +147,19 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
 }
 
 // Badge de meta para exibição na tabela
+// Meta CONFIRMADA = existe linha em valor_meta_empresa para a competência da meta
+// calculada (mesAlvo) desta empresa/consultor. Específica por mês (não usa fallback
+// por empresa_id, que mascarava metas de outros meses — ex.: upsell — como confirmadas).
+function metaGravadaDaEmpresa(e, metasGravadas) {
+  const mesAlvoYM = e._meta?.mesAlvo ? e._meta.mesAlvo.substring(0,7) : null;
+  if (!mesAlvoYM) return null;
+  const entradas = metasGravadas[`all__${e.id}`] || [];
+  return entradas.find(v =>
+    v.competencia_meta?.substring(0,7) === mesAlvoYM &&
+    (!v.consultor_id || v.consultor_id === e._consId)
+  ) || null;
+}
+
 function BadgeMeta({ meta, pct }) {
   if (!meta || meta.regra === null) {
     return <span style={{ color: '#374151', fontSize: '0.72rem' }}>—</span>;
@@ -211,7 +224,11 @@ function BannerFiltros({ filtros, onLimpar }) {
   if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
   if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
   if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
-  if (filtros.metaStatus !== 'todos') tags.push({ label: filtros.metaStatus === 'na_meta' ? '✅ Na meta' : filtros.metaStatus === 'pendente' ? '⏳ Pendente meta' : '— Fora da meta', cor: filtros.metaStatus === 'na_meta' ? '#34d399' : filtros.metaStatus === 'pendente' ? '#f0b429' : '#6b7280' });
+  if (filtros.metaStatus !== 'todos') {
+    const metaLabels = { na_meta: '✅ Confirmadas na meta', aguardando: '⏳ Aguardando confirmação', pendente: '⏳ Pendente elegibilidade', fora: '— Fora da meta' };
+    const metaCores  = { na_meta: '#34d399', aguardando: '#f0b429', pendente: '#f0b429', fora: '#6b7280' };
+    tags.push({ label: metaLabels[filtros.metaStatus] || filtros.metaStatus, cor: metaCores[filtros.metaStatus] || '#6b7280' });
+  }
   if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: '#34d399' });
   if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: '#fbbf24' });
   if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: '#e8eaf0' });
@@ -301,13 +318,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   const col = (k) => !colunas || colunas.has(k);
 
   // ── Confirmação de meta (calculada → gravada) ──────────────────────────
-  // Meta gravada da empresa (chave calculada + fallback por empresa_id) — mesma lógica da linha.
-  const metaGravadaDe = (e) => {
-    const chave = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-    const byChave = chave ? metasGravadas[chave] : null;
-    if (byChave) return byChave;
-    return Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1] || null;
-  };
+  const metaGravadaDe = (e) => metaGravadaDaEmpresa(e, metasGravadas);
   const aguardandoDe = (e) => !!(e._meta?.elegivel) && !metaGravadaDe(e);
   const algumAguardando = lista.some(aguardandoDe);
 
@@ -462,7 +473,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                 : null;
 
               const metaFinal      = metaLocal || metaLocalFallback;
-              const temMetaGravada = !!metaFinal;
+              // Confirmada = há linha para a competência da meta calculada (específica por mês).
+              const temMetaGravada = !!metaGravadaDe(e);
               const isModalAberto  = modalMeta?._key === e._key;
               const rowBg = (meta?.elegivel || temMetaGravada)
                 ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
@@ -1266,10 +1278,11 @@ export default function Evolucao() {
     if (filtroMesCadastro !== 'todos') arr = arr.filter(e => e.mesCadastro === filtroMesCadastro);
     // Filtro upsell
     if (filtroUpsell) arr = arr.filter(e => e._upsell);
-    // NOVO: filtro por status de meta
-    if (filtroMeta === 'na_meta')   arr = arr.filter(e => e._meta?.elegivel === true);
-    if (filtroMeta === 'pendente')  arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
-    if (filtroMeta === 'fora')      arr = arr.filter(e => !e._meta || e._meta?.regra === null);
+    // Filtro por status de meta
+    if (filtroMeta === 'na_meta')     arr = arr.filter(e => !!metaGravadaDaEmpresa(e, metasGravadas));                                   // Confirmadas (têm linha)
+    if (filtroMeta === 'aguardando')  arr = arr.filter(e => e._meta?.elegivel === true && !metaGravadaDaEmpresa(e, metasGravadas));     // Calculadas, sem linha
+    if (filtroMeta === 'pendente')    arr = arr.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);                     // Pendente elegibilidade
+    if (filtroMeta === 'fora')        arr = arr.filter(e => !e._meta || e._meta?.regra === null);
     // Filtro por mês específico da meta — usa mesAlvo calculado OU competencia_meta gravada (incluindo upsell)
     if (filtroMesMeta !== 'todos') {
       arr = arr.filter(e => {
@@ -1304,12 +1317,7 @@ export default function Evolucao() {
     const crescendo   = listaFiltrada.filter(e => e.tend === 'up').length;
     const pctAtivacao = total > 0 ? (creditaram / total) * 100 : 0;
     // KPIs de meta — usa valor do banco (metasGravadas) quando disponível, senão o calculado
-    function getMetaGravada(e) {
-      const chaveCalc = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
-      return chaveCalc
-        ? metasGravadas[chaveCalc]
-        : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
-    }
+    const getMetaGravada = (e) => metaGravadaDaEmpresa(e, metasGravadas);
     const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
     // Confirmadas = têm linha em valor_meta_empresa; Aguardando = calculadas (elegíveis) mas sem linha.
     const confirmadas = listaFiltrada.filter(e => getMetaGravada(e)).length;
@@ -1352,8 +1360,10 @@ export default function Evolucao() {
     if (filtroStatus === 'creditou')    base = base.filter(e =>  e.creditou);
     if (filtroStatus === 'sem_credito') base = base.filter(e => !e.creditou);
     if (filtroTend  !== 'todos') base = base.filter(e => e.tend === filtroTend);
-    if (filtroMeta === 'na_meta')  base = base.filter(e => e._meta?.elegivel === true);
-    if (filtroMeta === 'pendente') base = base.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
+    if (filtroMeta === 'na_meta')     base = base.filter(e => !!metaGravadaDaEmpresa(e, metasGravadas));
+    if (filtroMeta === 'aguardando')  base = base.filter(e => e._meta?.elegivel === true && !metaGravadaDaEmpresa(e, metasGravadas));
+    if (filtroMeta === 'pendente')    base = base.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null);
+    if (filtroMeta === 'fora')        base = base.filter(e => !e._meta || e._meta?.regra === null);
     return [...new Set(base.map(e => e.mesCadastro).filter(Boolean))].sort().reverse();
   }, [listaCompleta, busca, filtroCategoria, filtroDiretor, filtroGestor, filtroDepto, filtroVendedor, filtroProduto, filtroStatus, filtroTend, filtroMeta]);
 
@@ -1626,8 +1636,9 @@ export default function Evolucao() {
             <select style={{ ...s.sel, borderColor: filtroMeta !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMeta !== 'todos' ? '#34d399' : '#e8eaf0' }}
               value={filtroMeta} onChange={e => setFiltroMeta(e.target.value)}>
               <option value="todos">🎯 Todas (meta)</option>
-              <option value="na_meta">✅ Na meta</option>
-              <option value="pendente">⏳ Pendente meta</option>
+              <option value="na_meta">✅ Confirmadas na meta</option>
+              <option value="aguardando">⏳ Aguardando confirmação</option>
+              <option value="pendente">⏳ Pendente elegibilidade</option>
               <option value="fora">— Fora da meta</option>
             </select>
             {/* Filtro upsell toggle */}
