@@ -153,13 +153,16 @@ function BadgeMeta({ meta, pct }) {
   }
 
   if (meta.elegivel) {
+    // CALCULADO, aguardando confirmação (ainda sem linha em valor_meta_empresa) → ÂMBAR
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', borderRadius: 5, padding: '2px 7px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-          ✅ {meta.regra === 'beneficio' ? '1ª rec.' : '3º mês'} · {fmtMes(meta.mesAlvo)}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+        <span style={{ background: 'rgba(240,180,41,0.15)', border: '1px solid rgba(240,180,41,0.45)', color: '#f0b429', borderRadius: 5, padding: '2px 7px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+          ⏳ Aguardando confirmação
         </span>
-        <span style={{ color: '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
-        {pct < 100 && <span style={{ color: '#f0b429', fontSize: '0.62rem' }}>{pct}% de {fmt(meta.valorBruto)}</span>}
+        <span style={{ color: '#f0b429', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
+        <span style={{ color: '#9ca3af', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
+          {meta.regra === 'beneficio' ? '1ª rec.' : '3º mês'} · {fmtMes(meta.mesAlvo)}{pct < 100 ? ` · ${pct}%` : ''}
+        </span>
       </div>
     );
   }
@@ -260,7 +263,7 @@ function IdCopiavel({ id }) {
 }
 
 function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
-  metasGravadas = {}, onSalvarMeta, onRemoverMeta, filtroMesMeta = 'todos', mesesVisiveis = null,
+  metasGravadas = {}, onSalvarMeta, onRemoverMeta, onConfirmarMeta, onConfirmarLote, filtroMesMeta = 'todos', mesesVisiveis = null,
 }) {
   const mostraMes = (m) => !mesesVisiveis || mesesVisiveis.includes(m);
   const [pagina,       setPagina]       = useState(1);
@@ -296,6 +299,60 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   }).length;
 
   const col = (k) => !colunas || colunas.has(k);
+
+  // ── Confirmação de meta (calculada → gravada) ──────────────────────────
+  // Meta gravada da empresa (chave calculada + fallback por empresa_id) — mesma lógica da linha.
+  const metaGravadaDe = (e) => {
+    const chave = e._meta?.mesAlvo ? `${e.id}__${e._meta.mesAlvo.substring(0,10)}` : null;
+    const byChave = chave ? metasGravadas[chave] : null;
+    if (byChave) return byChave;
+    return Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1] || null;
+  };
+  const aguardandoDe = (e) => !!(e._meta?.elegivel) && !metaGravadaDe(e);
+  const algumAguardando = lista.some(aguardandoDe);
+
+  const [selecionados,    setSelecionados]    = useState(() => new Set()); // e._key
+  const [confirmRow,      setConfirmRow]       = useState(null);
+  const [confirmValor,    setConfirmValor]     = useState('');
+  const [confirmErro,     setConfirmErro]      = useState('');
+  const [confirmando,     setConfirmando]      = useState(false);
+  const [loteAberto,      setLoteAberto]       = useState(false);
+  const [loteProcessando, setLoteProcessando]  = useState(false);
+  const [loteResultado,   setLoteResultado]    = useState(null);
+
+  // Ao trocar de filtro (muda o tamanho da lista), limpa a seleção.
+  useEffect(() => { setSelecionados(new Set()); }, [lista.length]);
+
+  const paginaAguardando = listaPagina.filter(aguardandoDe);
+  const todasPaginaSel   = paginaAguardando.length > 0 && paginaAguardando.every(e => selecionados.has(e._key));
+  const selecionadasArr  = lista.filter(e => selecionados.has(e._key) && aguardandoDe(e));
+  const totalSelecionado = selecionadasArr.reduce((sv, e) => sv + (e._meta?.valorMeta || 0), 0);
+
+  const toggleSel = (key) => setSelecionados(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleTodasPagina = () => setSelecionados(prev => {
+    const n = new Set(prev);
+    if (todasPaginaSel) paginaAguardando.forEach(e => n.delete(e._key));
+    else paginaAguardando.forEach(e => n.add(e._key));
+    return n;
+  });
+
+  function abrirConfirm(e) { setConfirmRow(e); setConfirmValor(String(e._meta?.valorMeta ?? '')); setConfirmErro(''); }
+  async function executarConfirm() {
+    if (!confirmRow || confirmValor === '') return;
+    setConfirmando(true); setConfirmErro('');
+    const r = await onConfirmarMeta(confirmRow, confirmValor);
+    setConfirmando(false);
+    if (r?.error) setConfirmErro('Erro: ' + r.error);
+    else { setSelecionados(prev => { const n = new Set(prev); n.delete(confirmRow._key); return n; }); setConfirmRow(null); }
+  }
+  async function executarLote() {
+    if (!selecionadasArr.length) return;
+    setLoteProcessando(true);
+    const r = await onConfirmarLote(selecionadasArr);
+    setLoteProcessando(false);
+    setLoteResultado(r);
+    setSelecionados(new Set());
+  }
 
   // Abre o modal para uma empresa
   function abrirModalMeta(empresa) {
@@ -344,10 +401,33 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
         </div>
         <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
       </div>
+      {selecionadasArr.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 10, padding: '10px 16px', marginBottom: 12 }}>
+          <span style={{ color: '#f0b429', fontWeight: 700, fontSize: '0.85rem' }}>
+            {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} selecionada{selecionadasArr.length > 1 ? 's' : ''} · Total {fmt(totalSelecionado)}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setSelecionados(new Set())}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 14px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+            Limpar seleção
+          </button>
+          <button onClick={() => { setLoteResultado(null); setLoteAberto(true); }}
+            style={{ background: '#16a34a', border: 'none', borderRadius: 8, padding: '6px 16px', color: '#fff', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            ✓ Confirmar {selecionadasArr.length} selecionada{selecionadasArr.length > 1 ? 's' : ''}
+          </button>
+        </div>
+      )}
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '60vh', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
         <table style={s.table}>
           <thead>
             <tr>
+              {algumAguardando && (
+                <th style={{ ...s.th, width: 34, textAlign: 'center' }}>
+                  <input type="checkbox" checked={todasPaginaSel} onChange={toggleTodasPagina}
+                    title="Selecionar todas as aguardando desta página"
+                    style={{ cursor: 'pointer', accentColor: '#f0b429' }} disabled={paginaAguardando.length === 0} />
+                </th>
+              )}
               <th style={s.th}>Empresa</th>
               {col('categoria')    && <th style={s.th}>Categoria</th>}
               {col('produto')      && <th style={s.th}>Produto</th>}
@@ -390,6 +470,14 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               return (
                 <React.Fragment key={e._key}>
                 <tr style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
+                  {algumAguardando && (
+                    <td style={{ ...s.td, textAlign: 'center' }}>
+                      {aguardandoDe(e) && (
+                        <input type="checkbox" checked={selecionados.has(e._key)} onChange={() => toggleSel(e._key)}
+                          style={{ cursor: 'pointer', accentColor: '#f0b429' }} />
+                      )}
+                    </td>
+                  )}
                   <td style={s.td}>
                     {/* Link para gestão + botão de meta lado a lado */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -491,16 +579,77 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         </a>
                       </div>
                     ) : (
-                      <BadgeMeta meta={meta} pct={e._pct} onClick={() => meta?.elegivel && abrirModalMeta(e)} />
-                    )}
-                    {(meta?.elegivel && !temMetaGravada) && (
-                      <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
-                        style={{ marginTop: 4, display: 'block', textAlign: 'center', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 5, padding: '2px 10px', color: '#34d399', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
-                        + Marcar meta ↗
-                      </a>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                        <BadgeMeta meta={meta} pct={e._pct} />
+                        {aguardandoDe(e) && (
+                          <button onClick={() => abrirConfirm(e)}
+                            style={{ marginTop: 2, background: 'rgba(240,180,41,0.15)', border: '1px solid rgba(240,180,41,0.5)', borderRadius: 5, padding: '3px 10px', color: '#f0b429', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            ✓ Confirmar na meta
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>}
                 </tr>
+
+                {/* Diálogo inline de confirmação individual */}
+                {confirmRow?._key === e._key && col('meta') && (
+                  <tr key={e._key + '-confirm'} style={{ background: 'rgba(240,180,41,0.04)' }}>
+                    <td colSpan={99} style={{ padding: '0 12px 12px' }}>
+                      <div style={{ background: '#0f1923', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 12, padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#f0b429', fontSize: '0.9rem', marginBottom: 3 }}>
+                              🎯 Confirmar na meta — {e.nome}
+                            </div>
+                            <div style={{ color: '#6b7280', fontSize: '0.72rem' }}>
+                              ID {e.produto_id} · {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · <strong style={{ color: '#e8eaf0' }}>{fmtMes((String(meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</strong>
+                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct ?? 100}%)
+                            </div>
+                          </div>
+                          <button onClick={() => setConfirmRow(null)}
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', color: '#6b7280', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                            ✕ Fechar
+                          </button>
+                        </div>
+
+                        {confirmErro && <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: '#f87171', fontSize: '0.78rem' }}>{confirmErro}</div>}
+
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                            {[
+                              { label: 'Valor bruto',      val: meta?.valorBruto },
+                              { label: 'Valor considerado', val: meta?.valorConsid },
+                              { label: 'Valor da meta',     val: meta?.valorMeta },
+                            ].map(o => (
+                              <div key={o.label}>
+                                <div style={{ color: '#6b7280', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6 }}>{o.label}</div>
+                                <div style={{ color: '#e8eaf0', fontWeight: 700, fontSize: '0.85rem' }}>{fmt(o.val || 0)}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ minWidth: 180 }}>
+                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 5 }}>Valor que entra na meta *</label>
+                            <input type="number" step="0.01" value={confirmValor}
+                              onChange={ev => setConfirmValor(ev.target.value)}
+                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(240,180,41,0.4)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
+                              autoFocus />
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <button onClick={() => setConfirmRow(null)}
+                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 18px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
+                              Cancelar
+                            </button>
+                            <button onClick={executarConfirm} disabled={confirmando || confirmValor === ''}
+                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: confirmValor === '' ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', opacity: confirmValor === '' ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                              {confirmando ? 'Confirmando...' : '✓ Confirmar'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
 
                 {/* Modal inline desabilitado — usa página de gestão */}
                 {false && isModalAberto && col('meta') && (
@@ -614,7 +763,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
           <tfoot>
             <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
               <td colSpan={
-                1 +
+                1 + (algumAguardando?1:0) +
                 (col('categoria')?1:0) +
                 (col('produto')?1:0) +
                 (col('vendedor')?1:0) +
@@ -643,6 +792,72 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
         </table>
       </div>
       {totalPaginas > 1 && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}><Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} /></div>}
+
+      {/* Diálogo de confirmação em lote */}
+      {loteAberto && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+          onClick={() => { if (!loteProcessando) { setLoteAberto(false); setLoteResultado(null); } }}>
+          <div onClick={ev => ev.stopPropagation()}
+            style={{ background: '#0f1923', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 14, padding: '20px 24px', width: 'min(560px, 96vw)', maxHeight: '84vh', display: 'flex', flexDirection: 'column' }}>
+            {!loteResultado ? (
+              <>
+                <div style={{ fontWeight: 700, color: '#f0b429', fontSize: '1rem', marginBottom: 4 }}>✓ Confirmar {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} na meta</div>
+                <div style={{ color: '#6b7280', fontSize: '0.78rem', marginBottom: 14 }}>Total: <strong style={{ color: '#34d399' }}>{fmt(totalSelecionado)}</strong> · usa o valor calculado de cada empresa</div>
+                <div style={{ overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr style={{ position: 'sticky', top: 0, background: '#141c26' }}>
+                        <th style={{ ...s.th, padding: '8px 12px' }}>Empresa</th>
+                        <th style={{ ...s.th, padding: '8px 12px' }}>Mês</th>
+                        <th style={{ ...s.th, padding: '8px 12px', textAlign: 'right' }}>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selecionadasArr.map(e => (
+                        <tr key={e._key} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <td style={{ ...s.td, padding: '8px 12px', color: '#e8eaf0' }}>{e.nome}<span style={{ color: '#6b7280', fontSize: '0.68rem' }}> · ID {e.produto_id}</span></td>
+                          <td style={{ ...s.td, padding: '8px 12px', color: '#9ca3af' }}>{fmtMes((String(e._meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</td>
+                          <td style={{ ...s.td, padding: '8px 12px', textAlign: 'right', color: '#f0b429', fontWeight: 700 }}>{fmt(e._meta?.valorMeta || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                  <button onClick={() => setLoteAberto(false)} disabled={loteProcessando}
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 18px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
+                    Cancelar
+                  </button>
+                  <button onClick={executarLote} disabled={loteProcessando}
+                    style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    {loteProcessando ? 'Confirmando...' : `✓ Confirmar todas`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '1rem', marginBottom: 6 }}>✓ {loteResultado.confirmadas} confirmada{loteResultado.confirmadas === 1 ? '' : 's'}</div>
+                {loteResultado.falhas?.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ color: '#f87171', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>{loteResultado.falhas.length} falha{loteResultado.falhas.length === 1 ? '' : 's'}:</div>
+                    <div style={{ maxHeight: '40vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {loteResultado.falhas.map((f, i) => (
+                        <div key={i} style={{ color: '#9ca3af', fontSize: '0.76rem' }}>• {f.nome} (ID {f.id}) — {f.erro}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <button onClick={() => { setLoteAberto(false); setLoteResultado(null); }}
+                    style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit' }}>
+                    Fechar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -1096,6 +1311,9 @@ export default function Evolucao() {
         : Object.entries(metasGravadas).filter(([k]) => !k.startsWith('all__')).find(([k]) => k.startsWith(`${e.id}__`))?.[1];
     }
     const naMeta      = listaFiltrada.filter(e => getMetaGravada(e) || e._meta?.elegivel).length;
+    // Confirmadas = têm linha em valor_meta_empresa; Aguardando = calculadas (elegíveis) mas sem linha.
+    const confirmadas = listaFiltrada.filter(e => getMetaGravada(e)).length;
+    const aguardando  = listaFiltrada.filter(e => !getMetaGravada(e) && e._meta?.elegivel).length;
     const pendenteMeta = listaFiltrada.filter(e => e._meta?.elegivel === false && e._meta?.regra !== null).length;
     const totalMetaApurado = listaFiltrada.reduce((s, e) => {
       // Soma entradas do banco filtradas pelo mês quando filtroMesMeta está ativo.
@@ -1117,7 +1335,7 @@ export default function Evolucao() {
       empresas: listaFiltrada.filter(e => { const mi=meses.indexOf(m); return ((e.vals?.[mi] ?? libMap[`${e.produto_id}__${m}`] ?? 0))>0; }).length,
     }));
     const totalUpsell = listaFiltrada.filter(e => e._upsell).length;
-    return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, pendenteMeta, totalMetaApurado, totalUpsell };
+    return { total, creditaram, semCredito, totalCred, totalPrevisto, crescendo, pctAtivacao, porMes, naMeta, confirmadas, aguardando, pendenteMeta, totalMetaApurado, totalUpsell };
   }, [listaFiltrada, meses, libMap, metasGravadas, filtroMesMeta]);
 
   // Meses únicos de cadastro para o filtro
@@ -1339,8 +1557,16 @@ export default function Evolucao() {
         {/* NOVOS KPIs de meta */}
         <div style={{ ...s.kpi, borderColor: 'rgba(52,211,153,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('na_meta'); setAba('evolucao'); }}>
           <span style={s.kpiLabel}>✅ Na Meta</span>
-          <span style={{ ...s.kpiVal, color: '#34d399' }}>{kpis.naMeta}</span>
-          <span style={{ ...s.kpiSub, color: '#34d399' }}>{fmt(kpis.totalMetaApurado)}</span>
+          <span style={s.kpiVal}>
+            <span style={{ color: '#34d399' }}>{kpis.confirmadas}</span>
+            <span style={{ color: '#4b5563', fontSize: '0.85rem', fontWeight: 600 }}> · </span>
+            <span style={{ color: '#f0b429' }}>{kpis.aguardando}</span>
+          </span>
+          <span style={s.kpiSub}>
+            <span style={{ color: '#34d399' }}>{kpis.confirmadas} confirmadas</span>
+            <span style={{ color: '#6b7280' }}> · </span>
+            <span style={{ color: '#f0b429' }}>{kpis.aguardando} aguardando</span>
+          </span>
         </div>
         {/* KPI Upsell */}
         <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.2)', cursor: 'pointer', background: filtroUpsell ? 'rgba(251,191,36,0.08)' : '#161a26' }}
@@ -1676,6 +1902,89 @@ export default function Evolucao() {
                 .delete().eq('empresa_id', empresa.id).eq('competencia_meta', comp);
               const delKey = `${empresa.id}__${comp}`;
               setMetasGravadas(prev => { const n={...prev}; delete n[delKey]; return n; });
+            }}
+            onConfirmarMeta={async (empresa, valorMeta) => {
+              // Confirmação = registro NOVO (sem delete). Grava a meta calculada em valor_meta_empresa.
+              const meta = empresa._meta;
+              if (!meta?.mesAlvo) return { error: 'Mês da meta não identificado' };
+              const comp = meta.mesAlvo.substring(0,7) + '-01';
+              const { error } = await supabase.from('valor_meta_empresa').insert({
+                empresa_id:        empresa.id,
+                produto_id:        empresa.produto_id,
+                consultor_id:      empresa._consId || null,
+                competencia_meta:  comp,
+                valor_bruto:       meta.valorBruto || 0,
+                valor_considerado: meta.valorConsid || 0,
+                valor_meta:        parseFloat(valorMeta),
+                pct_consultor:     empresa._pct ?? 100,
+                regra:             meta.regra,
+                mes_sequencia:     meta.regra === 'beneficio' ? 1 : meta.regra === 'convenio' ? 3 : 0,
+              });
+              if (error) return { error: error.message };
+              setMetasGravadas(prev => {
+                const pointKey = `${empresa.id}__${meta.mesAlvo.substring(0,10)}`;
+                const allKey   = `all__${empresa.id}`;
+                const entrada  = { valor_meta: parseFloat(valorMeta), regra: meta.regra, competencia_meta: comp, consultor_id: empresa._consId || null };
+                const listaAtual = (prev[allKey] || []).filter(x => !(x.competencia_meta?.substring(0,7) === comp.substring(0,7) && (x.consultor_id ?? null) === (empresa._consId ?? null)));
+                return { ...prev, [pointKey]: entrada, [allKey]: [...listaAtual, entrada] };
+              });
+              return { ok: true };
+            }}
+            onConfirmarLote={async (empresasArr) => {
+              const registros = empresasArr.map(empresa => {
+                const meta = empresa._meta;
+                if (!meta?.mesAlvo) return null;
+                const comp = meta.mesAlvo.substring(0,7) + '-01';
+                return {
+                  empresa, comp, valor: meta.valorMeta, regra: meta.regra,
+                  registro: {
+                    empresa_id:        empresa.id,
+                    produto_id:        empresa.produto_id,
+                    consultor_id:      empresa._consId || null,
+                    competencia_meta:  comp,
+                    valor_bruto:       meta.valorBruto || 0,
+                    valor_considerado: meta.valorConsid || 0,
+                    valor_meta:        meta.valorMeta,
+                    pct_consultor:     empresa._pct ?? 100,
+                    regra:             meta.regra,
+                    mes_sequencia:     meta.regra === 'beneficio' ? 1 : meta.regra === 'convenio' ? 3 : 0,
+                  },
+                };
+              }).filter(Boolean);
+
+              const CHUNK = 50;
+              let confirmadas = 0; const falhas = []; const aplicados = [];
+              for (let i = 0; i < registros.length; i += CHUNK) {
+                const slice = registros.slice(i, i + CHUNK);
+                const { error } = await supabase.from('valor_meta_empresa').insert(slice.map(r => r.registro));
+                if (error) {
+                  // Fallback: insere um a um para identificar quais falharam.
+                  for (const r of slice) {
+                    const { error: e2 } = await supabase.from('valor_meta_empresa').insert(r.registro);
+                    if (e2) falhas.push({ nome: r.empresa.nome, id: r.empresa.produto_id, erro: e2.message });
+                    else { confirmadas++; aplicados.push(r); }
+                  }
+                } else {
+                  confirmadas += slice.length;
+                  aplicados.push(...slice);
+                }
+              }
+              if (aplicados.length) {
+                setMetasGravadas(prev => {
+                  const next = { ...prev };
+                  for (const r of aplicados) {
+                    const meta = r.empresa._meta;
+                    const pointKey = `${r.empresa.id}__${meta.mesAlvo.substring(0,10)}`;
+                    const allKey   = `all__${r.empresa.id}`;
+                    const entrada  = { valor_meta: r.valor, regra: r.regra, competencia_meta: r.comp, consultor_id: r.empresa._consId || null };
+                    const listaAtual = (next[allKey] || []).filter(x => !(x.competencia_meta?.substring(0,7) === r.comp.substring(0,7) && (x.consultor_id ?? null) === (r.empresa._consId ?? null)));
+                    next[pointKey] = entrada;
+                    next[allKey] = [...listaAtual, entrada];
+                  }
+                  return next;
+                });
+              }
+              return { confirmadas, falhas };
             }}
           />
         </div>
