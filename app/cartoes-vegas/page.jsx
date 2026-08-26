@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   PlusCircle, Layers, Building2, Users, ChevronRight, ChevronDown,
-  Target, TrendingUp, Wallet, FileText,
+  Target, TrendingUp, Wallet, FileText, Package, Trophy,
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -229,8 +229,49 @@ export default function CartoesVegas() {
       }).sort((a,b) => b.meta - a.meta || b.esperado - a.esperado);
     }
 
-    return { card1, card2, diretorias, gestores, novosCount: novos.length };
-  }, [base, aba, mesFiltro]);
+    // Bloco Produtos — distribuição por produto_contratado (respeita escopo da aba + período)
+    const scopeSlot = (c) => aba === 'geral' || c.diretor === aba;
+    const prodStat = {};
+    const ensP = (p) => prodStat[p] || (prodStat[p] = { esperado:0, mov:0, meta:0, contratos:new Set() });
+    for(const e of empresas) {
+      const prod = e.produto_contratado || '—';
+      const movP = movPeriodo(e);
+      const espBase = (e.potencial_movimentacao||0) * (e.peso_categoria||1);
+      for(const sl of slotsDe(e)) {
+        const c = consultMap[sl.id];
+        if(!c || !scopeSlot(c)) continue;
+        const st = ensP(prod);
+        st.esperado += espBase * (sl.pct/100);
+        st.mov      += movP   * (sl.pct/100);
+        st.contratos.add(e.id);
+      }
+    }
+    for(const v of metaRowsPeriodo) {
+      const emp = empMap[v.empresa_id]; if(!emp) continue;
+      const donoId = (v.regra === 'upsell' || !v.consultor_id) ? emp.consultor_principal_id : v.consultor_id;
+      const dono = consultMap[donoId]; if(!dono || !scopeSlot(dono)) continue;
+      ensP(emp.produto_contratado || '—').meta += v.valor_meta || 0;
+    }
+    const metaTotalEscopo = card2.meta;
+    const produtos = Object.entries(prodStat).map(([produto, st]) => ({
+      produto, esperado:st.esperado, mov:st.mov, meta:st.meta, contratos:st.contratos.size,
+      pctTotal: metaTotalEscopo > 0 ? st.meta/metaTotalEscopo*100 : 0,
+    })).filter(p => p.meta > 0 || p.esperado > 0 || p.mov > 0)
+      .sort((a,b) => b.meta - a.meta);
+
+    // Bloco Ranking — vendedores por % da meta (só quem tem meta do período > 0)
+    const ranking = consultores
+      .filter(c => c.ativo && (aba === 'geral' || c.diretor === aba))
+      .map(c => {
+        const mp = metaPeriodoCons(c);
+        const meta = statAll[c.id]?.meta || 0;
+        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : 0 };
+      })
+      .filter(r => r.metaPeriodo > 0)
+      .sort((a,b) => b.pctMeta - a.pctMeta);
+
+    return { card1, card2, diretorias, gestores, produtos, ranking, novosCount: novos.length };
+  }, [base, meses, aba, mesFiltro]);
 
   const toggle = (g) => setExpandidos(prev => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
 
@@ -331,6 +372,54 @@ export default function CartoesVegas() {
         </div>
       </div>
 
+      {/* BLOCO PRODUTOS — Distribuição por produto (todas as abas) */}
+      <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginBottom:24 }}>
+        <div style={{ padding:'24px 24px 4px' }}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <Package {...ICON} color={corAba} /> Distribuição por Produto
+          </div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todos os produtos' : `Diretoria ${aba}`}{mesFiltro==='todos' ? ' · acumulado 2026' : ` · ${fmtMes(mesFiltro+'-01')}`}</div>
+        </div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+            <thead>
+              <tr>
+                <th style={s.th}>Produto</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
+                <th style={{ ...s.th, minWidth:150 }}>% do total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.produtos.length === 0 && (
+                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum produto com valor no período.</td></tr>
+              )}
+              {v.produtos.map(p => (
+                <tr key={p.produto} style={{ borderTop:'1px solid var(--vg-border)' }}>
+                  <td style={{ ...s.td, fontWeight:500, color:'var(--vg-ink)' }}>{p.produto}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(p.contratos)}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.esperado)}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{metaAplic ? fmt(p.meta) : '—'}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.mov)}</td>
+                  <td style={s.td}>
+                    {metaAplic ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ flex:1, height:6, background:'var(--vg-neutral-bg)', borderRadius:3, overflow:'hidden', minWidth:60 }}>
+                          <div style={{ height:'100%', width:`${Math.min(p.pctTotal,100)}%`, background:corAba, borderRadius:3 }} />
+                        </div>
+                        <span className="vg-num" style={{ ...CAPTION, minWidth:46, textAlign:'right', fontWeight:600 }}>{fmtPct(p.pctTotal)}</span>
+                      </div>
+                    ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* BLOCO 3 — Comparativo por diretoria (só na aba Geral) */}
       {aba === 'geral' && (
         <div style={{ marginBottom:24 }}>
@@ -376,13 +465,14 @@ export default function CartoesVegas() {
                   <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                  <th style={{ ...s.th, textAlign:'right' }}>Meta do período</th>
                   <th style={{ ...s.th, textAlign:'right' }}>% da meta</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
                 </tr>
               </thead>
               <tbody>
                 {v.gestores.length === 0 && (
-                  <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor nesta diretoria.</td></tr>
+                  <tr><td colSpan={7} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor nesta diretoria.</td></tr>
                 )}
                 {v.gestores.map(g => {
                   const aberto = expandidos.has(g.gestor);
@@ -399,6 +489,12 @@ export default function CartoesVegas() {
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(g.contratos)}</td>
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(g.esperado)}</td>
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{metaAplic ? fmt(g.meta) : '—'}</td>
+                        <td style={{ ...s.td, textAlign:'right' }}>
+                          {metaAplic && g.metaPeriodo > 0 ? (
+                            <><div className="vg-num" style={{ fontWeight:600, color:'var(--vg-ink)' }}>{fmt(g.metaPeriodo)}</div>
+                            <div className="vg-num" style={CAPTION}>{fmt(g.metaMensal)}/mês</div></>
+                          ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
+                        </td>
                         <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:metaAplic ? corPct(g.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{metaAplic ? (g.pctMeta==null ? '—' : fmtPct(g.pctMeta)) : '—'}</td>
                         <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{fmt(g.mov)}</td>
                       </tr>
@@ -408,6 +504,12 @@ export default function CartoesVegas() {
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtInt(vd.contratos)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.esperado)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{metaAplic ? fmt(vd.meta) : '—'}</td>
+                          <td style={{ ...s.td, textAlign:'right' }}>
+                            {metaAplic && vd.metaPeriodo > 0 ? (
+                              <><div className="vg-num" style={{ color:'var(--vg-ink-secondary)' }}>{fmt(vd.metaPeriodo)}</div>
+                              <div className="vg-num" style={CAPTION}>{fmt(vd.metaMensal)}/mês</div></>
+                            ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
+                          </td>
                           <td style={{ ...s.td, textAlign:'right', color:metaAplic ? corPct(vd.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{metaAplic ? (vd.pctMeta==null ? '—' : fmtPct(vd.pctMeta)) : '—'}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.mov)}</td>
                         </tr>
@@ -420,6 +522,52 @@ export default function CartoesVegas() {
           </div>
         </div>
       )}
+
+      {/* BLOCO RANKING — Vendedores por % da meta (todas as abas) */}
+      <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginTop:24 }}>
+        <div style={{ padding:'24px 24px 4px' }}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <Trophy {...ICON} color={corAba} /> Ranking de Vendedores
+          </div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`}{mesFiltro==='todos' ? ' · acumulado 2026' : ` · ${fmtMes(mesFiltro+'-01')}`}</div>
+        </div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+            <thead>
+              <tr>
+                <th style={{ ...s.th, width:60, textAlign:'center' }}>#</th>
+                <th style={s.th}>Vendedor</th>
+                <th style={s.th}>Gestor</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Meta do período</th>
+                <th style={{ ...s.th, textAlign:'right' }}>% da meta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.ranking.length === 0 && (
+                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum vendedor com meta cadastrada no período.</td></tr>
+              )}
+              {v.ranking.map((r,i) => {
+                const top3 = i < 3;
+                const corRank = r.pctMeta>=100 ? 'var(--vg-success-fg)' : r.pctMeta>=70 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+                return (
+                  <tr key={r.id} style={{ borderTop:'1px solid var(--vg-border)' }}>
+                    <td style={{ ...s.td, textAlign:'center' }}>
+                      <span className="vg-num" style={{ fontFamily:OUTFIT, fontWeight:700, fontSize: top3 ? 18 : 14, color: top3 ? 'var(--vg-brand-500)' : 'var(--vg-muted)' }}>{i+1}</span>
+                    </td>
+                    <td style={{ ...s.td, fontWeight:600, color:'var(--vg-ink)' }}>{r.nome}</td>
+                    <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{r.gestor}</td>
+                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaApurada)}</td>
+                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaPeriodo)}</td>
+                    <td style={{ ...s.td, textAlign:'right', fontWeight:700, color:corRank }} className="vg-num">{fmtPct(r.pctMeta)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por % da meta — vendedores sem meta cadastrada não aparecem.</div>
+      </div>
     </div>
   );
 }
