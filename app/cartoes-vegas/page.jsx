@@ -377,9 +377,10 @@ export default function CartoesVegas() {
         return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : null };
       })
       .filter(r => r.mov > 0 || r.metaApurada > 0 || r.metaPeriodo > 0)
-      // Sem meta apurada (ou 0) primeiro, ordenados por mov real desc; depois os com meta, por meta apurada desc.
+      // Sem meta CADASTRADA (metaPeriodo 0) primeiro, ordenados por mov real desc; depois os
+      // com meta cadastrada, por meta APURADA desc (mesmo quando a apurada for zero).
       .sort((a,b) => {
-        const aSem = !(a.metaApurada > 0), bSem = !(b.metaApurada > 0);
+        const aSem = !(a.metaPeriodo > 0), bSem = !(b.metaPeriodo > 0);
         if(aSem !== bSem) return aSem ? -1 : 1;
         if(aSem) return b.mov - a.mov;
         return b.metaApurada - a.metaApurada;
@@ -428,6 +429,7 @@ export default function CartoesVegas() {
     : v.periodoMeses.length === 1 ? fmtMes(v.periodoMeses[0]+'-01')
     : `${v.periodoMeses.length} meses`;
   const ultimoLabel = v.ultimoMes ? fmtMes(v.ultimoMes+'-01') : '—';
+  const rotuloPeriodo = mesesSel.size === 0 ? 'Todos os meses' : v.periodoMeses.map(m => fmtMes(m+'-01')).join(', ');
 
   // Movimentação real do escopo (último mês) + utilização
   const movCell = (val) => v.movDisponivel ? fmt(val) : '—';
@@ -685,7 +687,7 @@ export default function CartoesVegas() {
           <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Trophy {...ICON} color={corAba} /> Ranking de Vendedores
           </div>
-          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`} · ordenado por meta apurada · mov. real de {ultimoLabel}</div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`} · ordenado por meta apurada · período: {rotuloPeriodo} · mov. real de {ultimoLabel}</div>
         </div>
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
@@ -715,7 +717,7 @@ export default function CartoesVegas() {
                     <td style={{ ...s.td, fontWeight:600, color:'var(--vg-ink)' }}>{r.nome}</td>
                     <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{r.gestor}</td>
                     <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{movCell(r.mov)}</td>
-                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{temMeta ? fmt(r.metaApurada) : '—'}</td>
+                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaApurada)}</td>
                     <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{temMeta ? fmt(r.metaPeriodo) : '—'}</td>
                     <td style={{ ...s.td, textAlign:'right', fontWeight:700, color: temMeta ? corPct(r.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{temMeta ? fmtPct(r.pctMeta) : '—'}</td>
                   </tr>
