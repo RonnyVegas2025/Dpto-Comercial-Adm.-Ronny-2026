@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import {
-  Wallet, TrendingDown, Percent, Building2, Users, ChevronRight, ChevronDown,
-  BarChart3, FileSpreadsheet, Search, FileText,
+  Wallet, TrendingDown, TrendingUp, Percent, Building2, Users, ChevronRight, ChevronDown,
+  BarChart3, FileSpreadsheet, Search, FileText, AlertTriangle,
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -59,35 +59,38 @@ function Metrica({ label, valor, icon, destaque=false, corValor, sub }) {
   );
 }
 
-// Gráfico de barras (SVG puro) — custo por mês.
-function GraficoBarras({ serie, cor='var(--vg-brand-500)' }) {
-  if(!serie.length) return <div style={{ ...CAPTION, padding:'24px 0' }}>Sem dados no período.</div>;
-  const H=190, padL=8, padR=8, padT=22, padB=30;
-  const W = Math.max(serie.length*84, 360);
+// Barras agrupadas (SVG puro) — receita × custo por mês.
+function GraficoReceitaCusto({ dados }) {
+  if(!dados.length) return <div style={{ ...CAPTION, padding:'24px 0' }}>Sem dados no período.</div>;
+  const CR = 'var(--vg-success-fg)', CC = 'var(--vg-danger-fg)';
+  const H=200, padL=8, padR=8, padT=22, padB=30;
+  const W = Math.max(dados.length*90, 380);
   const iW = W-padL-padR, iH = H-padT-padB;
-  const max = Math.max(...serie.map(s=>s.valor), 1);
-  const slot = iW/serie.length;
-  const bw = Math.min(48, slot*0.6);
-  const cx = (i) => padL + (i+0.5)*slot;
+  const max = Math.max(...dados.map(d => Math.max(d.receita, d.custo)), 1);
+  const slot = iW/dados.length;
+  const bw = Math.min(20, slot*0.28);
+  const gc = (i) => padL + (i+0.5)*slot; // centro do grupo
   return (
-    <div style={{ overflowX:'auto' }}>
-      <svg width={W} height={H} style={{ display:'block', minWidth:'100%' }}>
-        {serie.map((s,i) => {
-          const bh = (s.valor/max)*iH;
-          return (
-            <g key={s.mes}>
-              <title>{`${fmtMes(s.mes+'-01')} · ${fmt(s.valor)}`}</title>
-              <rect x={cx(i)-bw/2} y={padT+iH-bh} width={bw} height={Math.max(bh,1)} fill={cor} rx="4" />
-              <text x={cx(i)} y={padT+iH-bh-6} textAnchor="middle" fontSize="9.5" fontFamily="'Outfit',sans-serif" fontWeight="600" fill="var(--vg-ink-secondary)">
-                {s.valor>=1000 ? `${Math.round(s.valor/1000)}k` : Math.round(s.valor)}
-              </text>
-              <text x={cx(i)} y={H-10} textAnchor="middle" fontSize="10" fontFamily="'Inter',sans-serif" fill="var(--vg-muted)">
-                {fmtMes(s.mes+'-01').split('/')[0]}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+    <div>
+      <div style={{ display:'flex', gap:16, marginBottom:8 }}>
+        <span style={{ ...CAPTION, display:'inline-flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:3, background:CR }} /> Receita</span>
+        <span style={{ ...CAPTION, display:'inline-flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:3, background:CC }} /> Custo</span>
+      </div>
+      <div style={{ overflowX:'auto' }}>
+        <svg width={W} height={H} style={{ display:'block', minWidth:'100%' }}>
+          {dados.map((d,i) => {
+            const hr=(d.receita/max)*iH, hc=(d.custo/max)*iH, c=gc(i);
+            return (
+              <g key={d.mes}>
+                <title>{`${fmtMes(d.mes+'-01')}\nReceita ${fmt(d.receita)}\nCusto ${fmt(d.custo)}`}</title>
+                <rect x={c-bw-2} y={padT+iH-hr} width={bw} height={Math.max(hr,1)} fill={CR} rx="3" />
+                <rect x={c+2}    y={padT+iH-hc} width={bw} height={Math.max(hc,1)} fill={CC} rx="3" />
+                <text x={c} y={H-10} textAnchor="middle" fontSize="10" fontFamily="'Inter',sans-serif" fill="var(--vg-muted)">{fmtMes(d.mes+'-01').split('/')[0]}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }
@@ -110,9 +113,13 @@ export default function RentabilidadeNova() {
     setLoading(true);
     try {
       const empresas = await fetchAll(supabase.from('empresas').select(
-        `id, produto_id, nome, categoria, produto_contratado, taxa_negativa,
+        `id, produto_id, nome, categoria, produto_contratado, taxa_negativa, taxa_positiva, taxa_bandeira,
          consultor_principal:consultor_principal_id(id,nome,diretor,gestor)`)
         .not('produto_contratado','ilike','%desconto condicional%'));
+
+      // Completude da receita (global, não depende de filtros): empresas com taxa positiva ou bandeira > 0.
+      const totalCad   = empresas.length;
+      const comReceita = empresas.filter(e => (Number(e.taxa_positiva)||0) > 0 || (Number(e.taxa_bandeira)||0) > 0).length;
 
       const prodIds = empresas.map(e => e.produto_id).filter(v => v != null);
       const libs = await fetchEmPartes(prodIds, (ids) =>
@@ -130,7 +137,7 @@ export default function RentabilidadeNova() {
 
       const mesesUnion = [...new Set(libs.map(l => l.competencia?.substring(0,7)).filter(m => m && m >= PERIODO_INI && m <= PERIODO_FIM))].sort();
 
-      setDados({ empresas, libByProd });
+      setDados({ empresas, libByProd, receitaConfig: { com: comReceita, total: totalCad } });
       setMeses(mesesUnion);
     } catch(err) { console.error(err); }
     setLoading(false);
@@ -138,7 +145,7 @@ export default function RentabilidadeNova() {
 
   const view = useMemo(() => {
     if(!dados) return null;
-    const { empresas, libByProd } = dados;
+    const { empresas, libByProd, receitaConfig } = dados;
 
     const modoGeral = dirsSel.size === 0;
     const inEscopo  = (dir) => modoGeral || dirsSel.has(dir);
@@ -156,32 +163,45 @@ export default function RentabilidadeNova() {
       if(somenteTaxa && !(taxa > 0)) continue;
       const recarga = recargaSel(e);
       if(recarga <= 0) continue;
+      const taxaPos = Number(e.taxa_positiva) || 0;
+      const taxaBand = Number(e.taxa_bandeira) || 0;
       const custo = recarga * taxa;
+      const recTaxa = recarga * taxaPos;
+      const recBand = recarga * taxaBand;
+      const receita = recTaxa + recBand;
       base.push({
         id:e.id, produto_id:e.produto_id, nome:e.nome, categoria:e.categoria, produto:e.produto_contratado,
         dir, gestor:e.consultor_principal?.gestor || null, vendedor:e.consultor_principal?.nome || '—',
-        taxa, recarga, custo,
+        taxa, taxaPos, taxaBand, recarga, custo, recTaxa, recBand, receita, spread: receita - custo,
       });
     }
 
     const totalRecarga  = base.reduce((s,e) => s + e.recarga, 0);
     const totalCusto    = base.reduce((s,e) => s + e.custo, 0);
+    const totalRecTaxa  = base.reduce((s,e) => s + e.recTaxa, 0);
+    const totalRecBand  = base.reduce((s,e) => s + e.recBand, 0);
+    const totalReceita  = totalRecTaxa + totalRecBand;
+    const totalSpread   = totalReceita - totalCusto;
     const pct           = totalRecarga > 0 ? totalCusto/totalRecarga*100 : 0;
+    const margem        = totalRecarga > 0 ? totalSpread/totalRecarga*100 : 0;
     const totalEmpresas = base.length;
     const comTaxa       = base.filter(e => e.taxa > 0).length;
 
     // Evolução: todos os meses disponíveis (respeita escopo + toggle, ignora o filtro de meses).
     const baseEvol = empresas.filter(e => inEscopo(e.consultor_principal?.diretor || null) && (!somenteTaxa || (Number(e.taxa_negativa)||0) > 0));
     const perMonth = meses.map(m => {
-      let recarga=0, custo=0, comTaxaM=0;
+      let recarga=0, custo=0, recTaxa=0, recBand=0, comTaxaM=0;
       for(const e of baseEvol) {
         const r = recargaMes(e, m);
         if(r <= 0) continue;
         const taxa = Number(e.taxa_negativa) || 0;
         recarga += r; custo += r*taxa;
+        recTaxa += r*(Number(e.taxa_positiva)||0);
+        recBand += r*(Number(e.taxa_bandeira)||0);
         if(taxa > 0) comTaxaM++;
       }
-      return { mes:m, recarga, custo, pct: recarga>0 ? custo/recarga*100 : 0, comTaxa:comTaxaM };
+      const receita = recTaxa + recBand, spread = receita - custo;
+      return { mes:m, recarga, custo, recTaxa, recBand, receita, spread, pct: recarga>0 ? custo/recarga*100 : 0, margem: recarga>0 ? spread/recarga*100 : 0, comTaxa:comTaxaM };
     });
 
     // Por diretoria + gestor (a partir da base), com vendedores.
@@ -189,21 +209,25 @@ export default function RentabilidadeNova() {
     for(const e of base) {
       if(!e.gestor) continue;
       const key = `${e.dir} ${e.gestor}`;
-      const g = gmap[key] || (gmap[key] = { key:`${e.dir}::${e.gestor}`, diretor:e.dir, gestor:e.gestor, empresas:0, recarga:0, custo:0, _vend:{} });
-      g.empresas++; g.recarga += e.recarga; g.custo += e.custo;
+      const g = gmap[key] || (gmap[key] = { key:`${e.dir}::${e.gestor}`, diretor:e.dir, gestor:e.gestor, empresas:0, recarga:0, custo:0, receita:0, spread:0, _vend:{} });
+      g.empresas++; g.recarga += e.recarga; g.custo += e.custo; g.receita += e.receita; g.spread += e.spread;
       const vid = e.vendedor;
-      const vv = g._vend[vid] || (g._vend[vid] = { nome:e.vendedor, empresas:0, recarga:0, custo:0 });
-      vv.empresas++; vv.recarga += e.recarga; vv.custo += e.custo;
+      const vv = g._vend[vid] || (g._vend[vid] = { nome:e.vendedor, empresas:0, recarga:0, custo:0, receita:0, spread:0 });
+      vv.empresas++; vv.recarga += e.recarga; vv.custo += e.custo; vv.receita += e.receita; vv.spread += e.spread;
     }
     const gestores = Object.values(gmap).map(g => ({
-      key:g.key, diretor:g.diretor, gestor:g.gestor, empresas:g.empresas, recarga:g.recarga, custo:g.custo,
+      key:g.key, diretor:g.diretor, gestor:g.gestor, empresas:g.empresas, recarga:g.recarga, custo:g.custo, receita:g.receita, spread:g.spread,
       pct: g.recarga>0 ? g.custo/g.recarga*100 : 0,
       vendedores: Object.values(g._vend).map(v => ({ ...v, pct: v.recarga>0 ? v.custo/v.recarga*100 : 0 })).sort((a,b) => b.custo - a.custo),
     })).sort((a,b) => b.custo - a.custo);
 
     const empresasTab = [...base].sort((a,b) => b.custo - a.custo);
 
-    return { totalRecarga, totalCusto, pct, totalEmpresas, comTaxa, perMonth, gestores, empresasTab, modoGeral };
+    return {
+      totalRecarga, totalCusto, totalReceita, totalRecTaxa, totalRecBand, totalSpread,
+      pct, margem, totalEmpresas, comTaxa, perMonth, gestores, empresasTab, modoGeral,
+      receitaConfig,
+    };
   }, [dados, meses, mesesSel, somenteTaxa, dirsSel]);
 
   const toggleMes = (m) => setMesesSel(prev => { const n = new Set(prev); n.has(m) ? n.delete(m) : n.add(m); return n; });
@@ -243,7 +267,11 @@ export default function RentabilidadeNova() {
     const linhas = empresasFiltradas.map(e => ({
       'Empresa': e.nome, 'ID': e.produto_id, 'Categoria': e.categoria || '', 'Produto': e.produto || '',
       'Diretoria': e.dir || '', 'Gestor': e.gestor || '', 'Vendedor': e.vendedor || '',
-      'Taxa (%)': Number(((e.taxa||0)*100).toFixed(4)), 'Recarga': Number(e.recarga.toFixed(2)), 'Custo': Number(e.custo.toFixed(2)),
+      'Taxa Neg. (%)': Number(((e.taxa||0)*100).toFixed(4)),
+      'Taxa Pos. (%)': Number(((e.taxaPos||0)*100).toFixed(4)),
+      'Bandeira (%)': Number(((e.taxaBand||0)*100).toFixed(4)),
+      'Recarga': Number(e.recarga.toFixed(2)), 'Receita': Number(e.receita.toFixed(2)),
+      'Custo': Number(e.custo.toFixed(2)), 'Spread': Number(e.spread.toFixed(2)),
     }));
     const ws = XLSX.utils.json_to_sheet(linhas);
     const wb = XLSX.utils.book_new();
@@ -306,28 +334,42 @@ export default function RentabilidadeNova() {
       <div style={{ ...CAPTION, marginBottom:24 }}>Clique nas diretorias para selecionar múltiplas</div>
 
       {/* Cards do topo */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px,1fr))', gap:16, marginBottom:24 }}>
-        <div style={cardStyle}><Metrica icon={<Wallet {...ICON} />} label="Recarga Total" valor={fmt(v.totalRecarga)} destaque corValor={corAba} /></div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:16, marginBottom:16 }}>
+        <div style={cardStyle}><Metrica icon={<Wallet {...ICON} />} label="Recarga Total" valor={fmt(v.totalRecarga)} corValor={corAba} /></div>
+        <div style={cardStyle}><Metrica icon={<TrendingUp {...ICON} color="var(--vg-success-fg)" />} label="Receita" valor={fmt(v.totalReceita)} corValor="var(--vg-success-fg)" sub={`taxa ${fmt(v.totalRecTaxa)} · bandeira ${fmt(v.totalRecBand)}`} /></div>
         <div style={cardStyle}><Metrica icon={<TrendingDown {...ICON} color="var(--vg-danger-fg)" />} label="Custo (Taxa Negativa)" valor={fmt(v.totalCusto)} corValor="var(--vg-danger-fg)" /></div>
-        <div style={cardStyle}><Metrica icon={<Percent {...ICON} />} label="% sobre a Recarga" valor={fmtPct(v.pct)} sub={recorteLabel} /></div>
+        <div style={{ ...cardStyle, border:'1px solid var(--vg-brand-500)' }}><Metrica icon={<Wallet {...ICON} color="var(--vg-brand-500)" />} label="Spread Líquido" valor={fmt(v.totalSpread)} destaque corValor={v.totalSpread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-brand-700)'} /></div>
+        <div style={cardStyle}><Metrica icon={<Percent {...ICON} />} label="Margem" valor={fmtPct(v.margem)} corValor={v.margem<0 ? 'var(--vg-danger-fg)' : 'var(--vg-ink)'} sub={recorteLabel} /></div>
         <div style={cardStyle}><Metrica icon={<FileText {...ICON} />} label="Empresas" valor={fmtInt(v.totalEmpresas)} sub={`${fmtInt(v.comTaxa)} de ${fmtInt(v.totalEmpresas)} com taxa negativa`} /></div>
       </div>
+
+      {/* Aviso de receita incompleta (some quando > 50% das empresas têm receita) */}
+      {v.receitaConfig.total > 0 && (v.receitaConfig.com / v.receitaConfig.total) <= 0.5 && (
+        <div style={{ display:'flex', alignItems:'flex-start', gap:10, background:'var(--vg-warning-bg)', border:'1px solid var(--vg-warning-fg)', borderRadius:'var(--vg-radius-lg)', padding:'14px 18px', marginBottom:24 }}>
+          <AlertTriangle size={18} strokeWidth={2} color="var(--vg-warning-fg)" style={{ flexShrink:0, marginTop:1 }} />
+          <div style={{ color:'var(--vg-warning-fg)', fontSize:13, lineHeight:'20px' }}>
+            Receita configurada apenas para Vegas Benefícios (<span className="vg-num">{fmtInt(v.receitaConfig.com)}</span> de <span className="vg-num">{fmtInt(v.receitaConfig.total)}</span> empresas). O spread ficará negativo até que as taxas dos demais produtos sejam cadastradas.
+          </div>
+        </div>
+      )}
 
       {/* Evolução mensal */}
       <div style={{ ...cardStyle, marginBottom:24 }}>
         <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-          <BarChart3 {...ICON} color={corAba} /> Evolução Mensal do Custo
+          <BarChart3 {...ICON} color={corAba} /> Evolução Mensal — Receita × Custo
         </div>
         <div style={{ ...CAPTION, marginBottom:16 }}>{escopoTxt} · {recorteLabel} · Jan a Jul/2026</div>
-        <GraficoBarras serie={v.perMonth.map(p => ({ mes:p.mes, valor:p.custo }))} cor="var(--vg-danger-fg)" />
+        <GraficoReceitaCusto dados={v.perMonth} />
         <div style={{ overflowX:'auto', marginTop:16 }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
             <thead>
               <tr>
                 <th style={s.th}>Mês</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Recarga</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Receita</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Custo</th>
-                <th style={{ ...s.th, textAlign:'right' }}>%</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Spread</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Margem %</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Empresas c/ taxa</th>
               </tr>
             </thead>
@@ -336,8 +378,10 @@ export default function RentabilidadeNova() {
                 <tr key={p.mes} style={{ borderTop:'1px solid var(--vg-border)' }}>
                   <td style={{ ...s.td, fontWeight:500, color:'var(--vg-ink)' }}>{fmtMes(p.mes+'-01')}</td>
                   <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.recarga)}</td>
-                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-danger-fg)', fontWeight:600 }} className="vg-num">{fmt(p.custo)}</td>
-                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtPct(p.pct)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-success-fg)' }} className="vg-num">{fmt(p.receita)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-danger-fg)' }} className="vg-num">{fmt(p.custo)}</td>
+                  <td style={{ ...s.td, textAlign:'right', fontWeight:600, color: p.spread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-success-fg)' }} className="vg-num">{fmt(p.spread)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color: p.margem<0 ? 'var(--vg-danger-fg)' : 'var(--vg-ink-secondary)' }} className="vg-num">{fmtPct(p.margem)}</td>
                   <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtInt(p.comTaxa)}</td>
                 </tr>
               ))}
@@ -362,13 +406,15 @@ export default function RentabilidadeNova() {
                 <th style={s.th}>Gestor</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Empresas</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Recarga</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Receita</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Custo</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Spread</th>
                 <th style={{ ...s.th, textAlign:'right' }}>%</th>
               </tr>
             </thead>
             <tbody>
               {v.gestores.length === 0 && (
-                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor na seleção.</td></tr>
+                <tr><td colSpan={8} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor na seleção.</td></tr>
               )}
               {v.gestores.map(g => {
                 const aberto = expandidos.has(g.key);
@@ -385,7 +431,9 @@ export default function RentabilidadeNova() {
                       <td style={{ ...s.td, fontWeight:600, color:'var(--vg-ink)' }}>{g.gestor}</td>
                       <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(g.empresas)}</td>
                       <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(g.recarga)}</td>
+                      <td style={{ ...s.td, textAlign:'right', color:'var(--vg-success-fg)' }} className="vg-num">{fmt(g.receita)}</td>
                       <td style={{ ...s.td, textAlign:'right', color:'var(--vg-danger-fg)', fontWeight:600 }} className="vg-num">{fmt(g.custo)}</td>
+                      <td style={{ ...s.td, textAlign:'right', fontWeight:600, color: g.spread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-success-fg)' }} className="vg-num">{fmt(g.spread)}</td>
                       <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{fmtPct(g.pct)}</td>
                     </tr>
                     {aberto && g.vendedores.map((vd,i) => (
@@ -394,7 +442,9 @@ export default function RentabilidadeNova() {
                         <td style={{ ...s.td, paddingLeft:44, color:'var(--vg-ink-secondary)' }}>{vd.nome}</td>
                         <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtInt(vd.empresas)}</td>
                         <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.recarga)}</td>
+                        <td style={{ ...s.td, textAlign:'right', color:'var(--vg-success-fg)' }} className="vg-num">{fmt(vd.receita)}</td>
                         <td style={{ ...s.td, textAlign:'right', color:'var(--vg-danger-fg)' }} className="vg-num">{fmt(vd.custo)}</td>
+                        <td style={{ ...s.td, textAlign:'right', color: vd.spread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-success-fg)' }} className="vg-num">{fmt(vd.spread)}</td>
                         <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtPct(vd.pct)}</td>
                       </tr>
                     ))}
@@ -438,14 +488,18 @@ export default function RentabilidadeNova() {
                 <th style={s.th}>Diretoria</th>
                 <th style={s.th}>Gestor</th>
                 <th style={s.th}>Vendedor</th>
-                <th style={{ ...s.th, textAlign:'right' }}>Taxa %</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Taxa Neg. %</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Taxa Pos. %</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Bandeira %</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Recarga</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Receita</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Custo</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Spread</th>
               </tr>
             </thead>
             <tbody>
               {empresasPag.length === 0 && (
-                <tr><td colSpan={10} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhuma empresa encontrada.</td></tr>
+                <tr><td colSpan={14} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhuma empresa encontrada.</td></tr>
               )}
               {empresasPag.map(e => (
                 <tr key={e.id} style={{ borderTop:'1px solid var(--vg-border)' }}>
@@ -457,8 +511,12 @@ export default function RentabilidadeNova() {
                   <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{e.gestor || '—'}</td>
                   <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{e.vendedor}</td>
                   <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtTaxa(e.taxa)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtTaxa(e.taxaPos)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtTaxa(e.taxaBand)}</td>
                   <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(e.recarga)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color: e.receita>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)' }} className="vg-num">{fmt(e.receita)}</td>
                   <td style={{ ...s.td, textAlign:'right', color: e.custo>0 ? 'var(--vg-danger-fg)' : 'var(--vg-muted)', fontWeight:600 }} className="vg-num">{fmt(e.custo)}</td>
+                  <td style={{ ...s.td, textAlign:'right', fontWeight:600, color: e.spread<0 ? 'var(--vg-danger-fg)' : e.spread>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)' }} className="vg-num">{fmt(e.spread)}</td>
                 </tr>
               ))}
             </tbody>
