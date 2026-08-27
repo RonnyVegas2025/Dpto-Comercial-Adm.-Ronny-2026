@@ -127,7 +127,7 @@ export default function CartoesVegas() {
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')),
-        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,meta_mensal,meta_inicio,ativo')),
+        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,setor,meta_mensal,meta_inicio,ativo')),
       ]);
 
       const empIds  = empresas.map(e => e.id);
@@ -383,16 +383,17 @@ export default function CartoesVegas() {
         const mov = st?.mov || 0;
         const meta = st?.meta || 0;
         const mp = metaPeriodoCons(c);
-        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, media: mediaMensal(meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? meta/mp*100 : null };
+        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, media: mediaMensal(meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? meta/mp*100 : null, isLicit: c.setor === 'Licitação' };
       })
       .filter(r => r.mov > 0 || r.metaApurada > 0 || r.metaPeriodo > 0)
-      // Sem meta CADASTRADA (metaPeriodo 0) primeiro, ordenados por mov real desc; depois os
-      // com meta cadastrada, por meta APURADA desc (mesmo quando a apurada for zero).
+      // Licitação (setor) SEMPRE no topo (maior volume); depois quem apurou (meta apurada desc);
+      // por último quem apurou zero, ordenados por movimentação real desc.
       .sort((a,b) => {
-        const aSem = !(a.metaPeriodo > 0), bSem = !(b.metaPeriodo > 0);
-        if(aSem !== bSem) return aSem ? -1 : 1;
-        if(aSem) return b.mov - a.mov;
-        return b.metaApurada - a.metaApurada;
+        if(a.isLicit !== b.isLicit) return a.isLicit ? -1 : 1;
+        const aTem = a.metaApurada > 0, bTem = b.metaApurada > 0;
+        if(aTem !== bTem) return aTem ? -1 : 1;
+        if(aTem) return b.metaApurada - a.metaApurada;
+        return b.mov - a.mov;
       });
 
     // Evolução: meta apurada mês a mês (todos os meses, mesmo escopo dos cards).
@@ -740,7 +741,7 @@ export default function CartoesVegas() {
             </tbody>
           </table>
         </div>
-        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por meta apurada — vendedores sem meta cadastrada aparecem no topo, ordenados por movimentação real.</div>
+        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por meta apurada — licitação em primeiro por volume; vendedores sem meta apurada aparecem no fim, ordenados por movimentação real.</div>
       </div>
     </div>
   );
