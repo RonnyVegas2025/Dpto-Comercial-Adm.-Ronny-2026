@@ -212,7 +212,9 @@ export default function CartoesVegas() {
     // Média mensal = meta apurada ÷ nº de meses válidos. Com meta cadastrada, meses = metaPeriodo/metaMensal
     // (contagem que respeita o meta_inicio); sem meta cadastrada, meses = nº de meses do período.
     const mediaMensal = (metaApurada, metaPeriodo, metaMensal) => {
-      const mesesV = metaPeriodo > 0 ? Math.round(metaPeriodo / (metaMensal || 1)) : periodoMeses.length;
+      // Com meta cadastrada: divisor = metaPeriodo/metaMensal (já respeita meta_inicio).
+      // Sem meta cadastrada: conta só os meses do período a partir de 2026-01 (descarta 2025).
+      const mesesV = metaPeriodo > 0 ? Math.round(metaPeriodo / (metaMensal || 1)) : periodoMeses.filter(m => m >= '2026-01').length;
       if(mesesV <= 0) return null;
       if(metaPeriodo > 0) return metaApurada / mesesV; // exibe mesmo quando apurada = 0
       return metaApurada > 0 ? metaApurada / mesesV : null; // sem cadastrada e sem apuração → "—"
