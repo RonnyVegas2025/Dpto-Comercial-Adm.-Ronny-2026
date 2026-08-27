@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
-  PlusCircle, Layers, Building2, Users, ChevronRight, ChevronDown,
-  Target, TrendingUp, Wallet, FileText, Package, Trophy,
+  Layers, Building2, Users, ChevronRight, ChevronDown,
+  Target, TrendingUp, Wallet, FileText, Package, Trophy, LineChart,
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -18,6 +18,8 @@ const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
 const fmtMes = (d) => { if(!d) return '—'; const [y,m]=String(d).split('-'); const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return `${ms[parseInt(m)-1]}/${y}`; };
 // Reduz a fonte para valores muito longos (8+ dígitos) não estourarem o card.
 const fFit = (str, base) => { const n=String(str).length; if(n>=17) return base-6; if(n>=15) return base-4; if(n>=13) return base-2; return base; };
+
+const MOV_DESDE = '2026-04'; // movimentacoes só tem dados de 2026-04 em diante
 
 async function fetchAll(query) {
   let all=[], from=0;
@@ -53,7 +55,7 @@ const CAPTION = { fontSize:12, lineHeight:'18px', color:'var(--vg-muted)' };
 const LABEL   = { ...CAPTION, textTransform:'uppercase', letterSpacing:0.6 };
 const OUTFIT  = "'Outfit', sans-serif";
 
-function Metrica({ label, valor, icon, destaque=false, muted=false, valorTitle, corValor }) {
+function Metrica({ label, valor, icon, destaque=false, muted=false, valorTitle, corValor, sub }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:0 }}>
       <div style={{ ...LABEL, display:'flex', alignItems:'center', gap:6 }}>{icon}{label}</div>
@@ -63,16 +65,50 @@ function Metrica({ label, valor, icon, destaque=false, muted=false, valorTitle, 
         color: muted ? 'var(--vg-muted)' : (corValor || 'var(--vg-ink)'),
         fontStyle: muted ? 'italic' : 'normal',
       }}>{valor}</div>
+      {sub && <div style={{ ...CAPTION, marginTop:2 }}>{sub}</div>}
     </div>
   );
 }
 
-const corPct = (p) => p==null ? 'var(--vg-muted)' : p>=80 ? 'var(--vg-success-fg)' : p>=60 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+const corPct = (p) => p==null ? 'var(--vg-muted)' : p>=100 ? 'var(--vg-success-fg)' : p>=70 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+
+// Gráfico de evolução (SVG puro) — meta apurada mês a mês.
+function GraficoEvolucao({ serie, cor='var(--vg-brand-500)' }) {
+  if(!serie.length) return <div style={{ ...CAPTION, padding:'24px 0' }}>Sem dados de meta no período.</div>;
+  const H=190, padL=8, padR=8, padT=22, padB=30;
+  const W = Math.max(serie.length*84, 360);
+  const iW = W-padL-padR, iH = H-padT-padB;
+  const max = Math.max(...serie.map(s=>s.valor), 1);
+  const x = (i) => serie.length===1 ? padL+iW/2 : padL + (i/(serie.length-1))*iW;
+  const y = (val) => padT + iH - (val/max)*iH;
+  const linePts = serie.map((s,i)=>`${x(i).toFixed(1)},${y(s.valor).toFixed(1)}`).join(' ');
+  const areaPts = `${padL},${(padT+iH).toFixed(1)} ${linePts} ${(padL+iW).toFixed(1)},${(padT+iH).toFixed(1)}`;
+  return (
+    <div style={{ overflowX:'auto' }}>
+      <svg width={W} height={H} style={{ display:'block', minWidth:'100%' }}>
+        <polygon points={areaPts} fill={cor} opacity="0.08" />
+        <polyline points={linePts} fill="none" stroke={cor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {serie.map((s,i)=>(
+          <g key={s.mes}>
+            <title>{`${fmtMes(s.mes+'-01')} · ${fmt(s.valor)}`}</title>
+            <circle cx={x(i)} cy={y(s.valor)} r="3.5" fill={cor} />
+            <text x={x(i)} y={y(s.valor)-9} textAnchor="middle" fontSize="9.5" fontFamily="'Outfit',sans-serif" fontWeight="600" fill="var(--vg-ink-secondary)">
+              {s.valor>=1000 ? `${Math.round(s.valor/1000)}k` : Math.round(s.valor)}
+            </text>
+            <text x={x(i)} y={H-10} textAnchor="middle" fontSize="10" fontFamily="'Inter',sans-serif" fill="var(--vg-muted)">
+              {fmtMes(s.mes+'-01').split('/')[0]}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 export default function CartoesVegas() {
   const [base, setBase]       = useState(null);
   const [meses, setMeses]     = useState([]);
-  const [mesFiltro, setMesFiltro] = useState('todos');
+  const [mesesSel, setMesesSel] = useState(() => new Set()); // vazio = Todos
   const [aba, setAba]         = useState('geral'); // geral | Ronny | Rossi | Sartori
   const [expandidos, setExpandidos] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -97,12 +133,15 @@ export default function CartoesVegas() {
       const empIds  = empresas.map(e => e.id);
       const prodIds = empresas.map(e => e.produto_id);
 
-      const [libs, vmetas] = await Promise.all([
+      const [libs, vmetas, movs] = await Promise.all([
         fetchEmPartes(prodIds, (ids) =>
           supabase.from('liberacoes').select('produto_id,competencia,total_liberado').in('produto_id', ids), 200),
         fetchEmPartes(empIds, (ids) =>
           supabase.from('valor_meta_empresa')
             .select('empresa_id,consultor_id,competencia_meta,valor_meta,regra').in('empresa_id', ids), 300),
+        fetchEmPartes(empIds, (ids) =>
+          supabase.from('movimentacoes')
+            .select('empresa_id,competencia,valor_movimentacao').in('empresa_id', ids), 300),
       ]);
 
       const empMap = {};
@@ -111,7 +150,7 @@ export default function CartoesVegas() {
       const consultMap = {};
       for(const c of consultores) consultMap[c.id] = c;
 
-      // Movimentação por produto → mês (YYYY-MM)
+      // Creditado (liberacoes) por produto → mês (YYYY-MM)
       const libByProd = {};
       for(const l of libs) {
         const m = l.competencia?.substring(0,7);
@@ -120,12 +159,21 @@ export default function CartoesVegas() {
           (libByProd[l.produto_id][m] || 0) + (l.total_liberado || 0);
       }
 
+      // Movimentação real (movimentacoes) por empresa → mês (YYYY-MM)
+      const movByEmp = {};
+      for(const mv of movs) {
+        const m = mv.competencia?.substring(0,7);
+        if(!m) continue;
+        (movByEmp[mv.empresa_id] = movByEmp[mv.empresa_id] || {})[m] =
+          (movByEmp[mv.empresa_id][m] || 0) + (mv.valor_movimentacao || 0);
+      }
+
       const mesesUnion = [...new Set([
         ...vmetas.map(v => v.competencia_meta?.substring(0,7)),
         ...libs.map(l => l.competencia?.substring(0,7)),
       ].filter(Boolean))].sort();
 
-      setBase({ empresas, empMap, consultores, consultMap, libByProd, vmetas });
+      setBase({ empresas, empMap, consultores, consultMap, libByProd, movByEmp, vmetas });
       setMeses(mesesUnion);
     } catch(err) { console.error(err); }
     setLoading(false);
@@ -133,7 +181,13 @@ export default function CartoesVegas() {
 
   const view = useMemo(() => {
     if(!base) return null;
-    const { empresas, empMap, consultores, consultMap, libByProd, vmetas } = base;
+    const { empresas, empMap, consultores, consultMap, libByProd, movByEmp, vmetas } = base;
+
+    // Período = meses marcados (ordenados) ou todos.
+    const periodoMeses = mesesSel.size ? meses.filter(m => mesesSel.has(m)) : meses;
+    const periodoSet   = new Set(periodoMeses);
+    const ultimoMes    = periodoMeses.length ? periodoMeses[periodoMeses.length-1] : null;
+    const movDisponivel = !!ultimoMes && ultimoMes >= MOV_DESDE;
 
     const slotsDe = (e) => {
       const arr = [];
@@ -144,43 +198,29 @@ export default function CartoesVegas() {
       return arr;
     };
 
-    // Movimentação real da empresa no período (acumulado se "todos")
-    const movPeriodo = (e) => {
-      const byM = libByProd[e.produto_id];
-      if(!byM) return 0;
-      if(mesFiltro === 'todos') return Object.values(byM).reduce((s,x)=>s+x,0);
-      return byM[mesFiltro] || 0;
-    };
+    // Movimentação real da empresa = ÚLTIMO mês do período (de movimentacoes).
+    const movRealEmp   = (e) => movDisponivel ? (movByEmp[e.id]?.[ultimoMes] || 0) : 0;
+    // Creditado (liberacoes) do mesmo último mês.
+    const creditadoEmp = (e) => ultimoMes ? (libByProd[e.produto_id]?.[ultimoMes] || 0) : 0;
 
-    const noPeriodo = (ym) => mesFiltro === 'todos' ? true : ym === mesFiltro;
-    const metaRowsPeriodo = vmetas.filter(v => noPeriodo(v.competencia_meta?.substring(0,7)));
+    const metaRowsPeriodo = vmetas.filter(v => periodoSet.has(v.competencia_meta?.substring(0,7)));
 
-    // Meta DO PERÍODO por consultor (mesma regra de /vendedor): meta_mensal × nº de
-    // meses do período que são >= ao piso do consultor (meta_inicio; nunca antes de 2026-01).
-    const mesesPeriodo = mesFiltro === 'todos' ? meses : [mesFiltro];
+    // Meta DO PERÍODO por consultor: meta_mensal × nº de meses do período >= piso (meta_inicio; ≥ 2026-01).
     const pisoDe = (c) => { const mi = c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01'; return mi > '2026-01' ? mi : '2026-01'; };
-    const metaPeriodoCons = (c) => (c.meta_mensal||0) * mesesPeriodo.filter(m => m >= pisoDe(c)).length;
+    const metaPeriodoCons = (c) => (c.meta_mensal||0) * periodoMeses.filter(m => m >= pisoDe(c)).length;
 
-    // Empresas novas (cadastro dentro do período; "todos" = ano 2026)
-    const novaNoPeriodo = (e) => {
-      const dc = e.data_cadastro;
-      if(!dc) return false;
-      return mesFiltro === 'todos' ? String(dc).substring(0,4) === '2026' : String(dc).substring(0,7) === mesFiltro;
-    };
-    const novos = empresas.filter(novaNoPeriodo);
-    const novosSet = new Set(novos.map(e => e.id));
-
-    // Constrói estatística por consultor: esperado (SEMPRE mensal), mov (período), meta (período)
+    // Estatística por consultor: esperado (SEMPRE mensal), mov (último mês), creditado, meta (período).
     const buildStat = (empresasList, metaRows) => {
       const stat = {};
-      const ens = (cid) => stat[cid] || (stat[cid] = { esperado:0, mov:0, meta:0, contratos:new Set() });
+      const ens = (cid) => stat[cid] || (stat[cid] = { esperado:0, mov:0, creditado:0, meta:0, contratos:new Set() });
       for(const e of empresasList) {
-        const movP = movPeriodo(e);
+        const mv = movRealEmp(e), cr = creditadoEmp(e);
         const espBase = (e.potencial_movimentacao||0) * (e.peso_categoria||1);
         for(const sl of slotsDe(e)) {
           const st = ens(sl.id);
-          st.esperado += espBase * (sl.pct/100);
-          st.mov      += movP   * (sl.pct/100);
+          st.esperado  += espBase * (sl.pct/100);
+          st.mov       += mv      * (sl.pct/100);
+          st.creditado += cr      * (sl.pct/100);
           st.contratos.add(e.id);
         }
       }
@@ -195,29 +235,77 @@ export default function CartoesVegas() {
       return stat;
     };
 
-    const statAll   = buildStat(empresas, metaRowsPeriodo);
-    const statNovos = buildStat(novos, metaRowsPeriodo.filter(v => novosSet.has(v.empresa_id)));
+    const statAll = buildStat(empresas, metaRowsPeriodo);
 
     const sumBy = (stat, pred) => {
-      let esperado=0, mov=0, meta=0; const contratos=new Set();
+      let esperado=0, mov=0, creditado=0, meta=0; const contratos=new Set();
       for(const cid of Object.keys(stat)) {
         const c = consultMap[cid];
         if(pred && !(c && pred(c))) continue;
         const st = stat[cid];
-        esperado += st.esperado; mov += st.mov; meta += st.meta;
+        esperado += st.esperado; mov += st.mov; creditado += st.creditado; meta += st.meta;
         for(const id of st.contratos) contratos.add(id);
       }
-      return { esperado, mov, meta, contratos: contratos.size };
+      return { esperado, mov, creditado, meta, contratos: contratos.size };
     };
 
     const scopePred = aba === 'geral' ? null : (c => c.diretor === aba);
-    const card1 = sumBy(statNovos, scopePred);
-    const card2 = sumBy(statAll,   scopePred);
+    const card2 = sumBy(statAll, scopePred);
 
-    // Bloco 3 — comparativo por diretoria (aba Geral)
+    // ── "Novo em 2026" — meta considerada (gravada + elegível não gravada), inclui licitação ──
+    const libsList = {}; // produto -> [{comp, val}] ordenado asc
+    for(const pid in libByProd) libsList[pid] = Object.entries(libByProd[pid]).map(([comp,val])=>({comp,val})).sort((a,b)=>a.comp.localeCompare(b.comp));
+    const hoje = new Date();
+    const hojeYM = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const isVB = (e) => { const p=(e.produto_contratado||'').toLowerCase().trim(); return p==='vegas benefícios'||p==='vegas beneficios'; };
+    const calcElegib = (e) => {
+      const cat=(e.categoria||'').toLowerCase();
+      const isConv = cat.includes('conv') || cat.includes('mobil');
+      const peso = isVB(e) ? (e.peso_categoria ?? 1) : 1;
+      const list = libsList[e.produto_id] || [];
+      const comValor = list.filter(l => l.val > 0);
+      let mesAlvo=null, valorBase=0;
+      if(!isConv) {
+        if(!comValor.length) return null;
+        mesAlvo = comValor[0].comp; valorBase = comValor[0].val;
+      } else {
+        if(!comValor.length) return null;
+        const [y0,m0] = comValor[0].comp.split('-').map(Number);
+        const tres = [0,1,2].map(i => { const d=new Date(y0, m0-1+i, 1); const comp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; return { comp, val: (list.find(l=>l.comp===comp)?.val)||0 }; });
+        const alvo = tres[2].val>0 ? tres[2] : [...tres].reverse().find(t=>t.val>0);
+        if(!alvo) return null;
+        mesAlvo = alvo.comp; valorBase = alvo.val;
+      }
+      if(!mesAlvo || mesAlvo > hojeYM) return null; // mês alvo tem que já ter chegado
+      return { mesAlvo, valor: valorBase * peso }; // pct = 100 (valor cheio da empresa)
+    };
+
+    // Gravada por empresa: soma no período + meses gravados (para não duplicar (a) com (b)).
+    const gravadaPeriodoEmp = {}, gravadaMesesEmp = {};
+    for(const v of vmetas) {
+      const m = v.competencia_meta?.substring(0,7); if(!m) continue;
+      (gravadaMesesEmp[v.empresa_id] = gravadaMesesEmp[v.empresa_id] || new Set()).add(m);
+      if(periodoSet.has(m)) gravadaPeriodoEmp[v.empresa_id] = (gravadaPeriodoEmp[v.empresa_id]||0) + (v.valor_meta||0);
+    }
+    const consideradoEmpresa = (e) => {
+      let val = gravadaPeriodoEmp[e.id] || 0;              // (a) gravado no período
+      const calc = calcElegib(e);                          // (b) elegível não gravado
+      if(calc && periodoSet.has(calc.mesAlvo) && !gravadaMesesEmp[e.id]?.has(calc.mesAlvo)) val += calc.valor;
+      return val;
+    };
+    let novoComercial=0, novoLicitacao=0;
+    for(const e of empresas) {
+      const dir = consultMap[e.consultor_principal_id]?.diretor;
+      if(aba !== 'geral' && dir !== aba) continue;
+      const val = consideradoEmpresa(e);
+      if(dir === 'Sartori') novoLicitacao += val; else novoComercial += val;
+    }
+    const novo = { comercial:novoComercial, licitacao:novoLicitacao, total:novoComercial+novoLicitacao };
+
+    // Bloco — comparativo por diretoria (aba Geral)
     const diretorias = DIRETORIAS.map(d => ({ dir:d, ...sumBy(statAll, c => c.diretor === d) }));
 
-    // Bloco 4 — gestores da diretoria (abas de diretoria)
+    // Bloco — gestores da diretoria (abas de diretoria)
     let gestores = [];
     if(aba !== 'geral') {
       const consDir = consultores.filter(c => c.diretor === aba && c.ativo);
@@ -232,25 +320,25 @@ export default function CartoesVegas() {
           const sv = raw ? { esperado:raw.esperado, mov:raw.mov, meta:raw.meta, contratos:raw.contratos.size } : { esperado:0, mov:0, meta:0, contratos:0 };
           const mp = metaPeriodoCons(c);
           return { id:c.id, nome:c.nome, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, pctMeta: mp>0 ? sv.meta/mp*100 : null };
-        }).sort((a,b) => b.meta - a.meta || b.esperado - a.esperado);
+        }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
         return { gestor:g, ...st, metaPeriodo, metaMensal, pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
-      }).sort((a,b) => b.meta - a.meta || b.esperado - a.esperado);
+      }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
     }
 
-    // Bloco Produtos — distribuição por produto_contratado (respeita escopo da aba + período)
+    // Bloco — distribuição por produto (respeita escopo + período)
     const scopeSlot = (c) => aba === 'geral' || c.diretor === aba;
     const prodStat = {};
     const ensP = (p) => prodStat[p] || (prodStat[p] = { esperado:0, mov:0, meta:0, contratos:new Set() });
     for(const e of empresas) {
       const prod = e.produto_contratado || '—';
-      const movP = movPeriodo(e);
+      const mv = movRealEmp(e);
       const espBase = (e.potencial_movimentacao||0) * (e.peso_categoria||1);
       for(const sl of slotsDe(e)) {
         const c = consultMap[sl.id];
         if(!c || !scopeSlot(c)) continue;
         const st = ensP(prod);
         st.esperado += espBase * (sl.pct/100);
-        st.mov      += movP   * (sl.pct/100);
+        st.mov      += mv      * (sl.pct/100);
         st.contratos.add(e.id);
       }
     }
@@ -267,21 +355,53 @@ export default function CartoesVegas() {
     })).filter(p => p.meta > 0 || p.esperado > 0 || p.mov > 0)
       .sort((a,b) => b.meta - a.meta);
 
-    // Bloco Ranking — vendedores por % da meta (só quem tem meta do período > 0)
+    // Nota: quanto do produto Alimentação vem de licitação (Sartori).
+    let alimLicitMov=0, alimTotalMov=0;
+    for(const e of empresas) {
+      if(!/aliment/i.test(e.produto_contratado||'')) continue;
+      const dir = consultMap[e.consultor_principal_id]?.diretor;
+      if(aba !== 'geral' && dir !== aba) continue;
+      const mv = movRealEmp(e);
+      alimTotalMov += mv;
+      if(dir === 'Sartori') alimLicitMov += mv;
+    }
+
+    // Bloco — ranking de vendedores por MOVIMENTAÇÃO REAL (desc)
     const ranking = consultores
       .filter(c => c.ativo && (aba === 'geral' || c.diretor === aba))
       .map(c => {
+        const st = statAll[c.id];
+        const mov = st?.mov || 0;
+        const meta = st?.meta || 0;
         const mp = metaPeriodoCons(c);
-        const meta = statAll[c.id]?.meta || 0;
-        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : 0 };
+        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : null };
       })
-      .filter(r => r.metaPeriodo > 0)
-      .sort((a,b) => b.pctMeta - a.pctMeta);
+      .filter(r => r.mov > 0 || r.metaApurada > 0 || r.metaPeriodo > 0)
+      .sort((a,b) => b.mov - a.mov || b.metaApurada - a.metaApurada);
 
-    return { card1, card2, diretorias, gestores, produtos, ranking, novosCount: novos.length };
-  }, [base, meses, aba, mesFiltro]);
+    // Evolução: meta apurada mês a mês (todos os meses, mesmo escopo dos cards).
+    const metaSerie = meses.map(m => {
+      let val = 0;
+      for(const v of vmetas) {
+        if(v.competencia_meta?.substring(0,7) !== m) continue;
+        const emp = empMap[v.empresa_id]; if(!emp) continue;
+        const donoId = (v.regra === 'upsell' || !v.consultor_id) ? emp.consultor_principal_id : v.consultor_id;
+        const dono = consultMap[donoId]; if(!dono) continue;
+        if(scopePred && !scopePred(dono)) continue;
+        val += v.valor_meta || 0;
+      }
+      return { mes:m, valor:val };
+    });
+
+    return {
+      card2, novo, diretorias, gestores, produtos, ranking, metaSerie,
+      ultimoMes, movDisponivel, periodoMeses,
+      alim: { licit:alimLicitMov, total:alimTotalMov },
+    };
+  }, [base, meses, aba, mesesSel]);
 
   const toggle = (g) => setExpandidos(prev => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
+  const toggleMes = (m) => setMesesSel(prev => { const n = new Set(prev); n.has(m) ? n.delete(m) : n.add(m); return n; });
 
   if(loading || !view) return (
     <div style={{ ...s.page, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
@@ -297,6 +417,19 @@ export default function CartoesVegas() {
   const metaAplic = metaAplicavel(aba); // false só na aba Sartori
   const corAba = aba === 'geral' ? 'var(--vg-brand-500)' : CORES_DIR[aba];
 
+  // Rótulos de período
+  const periodoLabel = mesesSel.size === 0 ? 'acumulado 2026'
+    : v.periodoMeses.length === 1 ? fmtMes(v.periodoMeses[0]+'-01')
+    : `${v.periodoMeses.length} meses`;
+  const ultimoLabel = v.ultimoMes ? fmtMes(v.ultimoMes+'-01') : '—';
+
+  // Movimentação real do escopo (último mês) + utilização
+  const movCell = (val) => v.movDisponivel ? fmt(val) : '—';
+  const utilizacao = v.card2.creditado > 0 ? v.card2.mov/v.card2.creditado*100 : null;
+  const movSub = !v.movDisponivel
+    ? `movimentação real disponível a partir de ${fmtMes(MOV_DESDE+'-01')}`
+    : `creditado ${fmt(v.card2.creditado)} · utilização ${utilizacao==null ? '—' : fmtPct(utilizacao)}`;
+
   return (
     <div style={s.page}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -311,22 +444,20 @@ export default function CartoesVegas() {
         <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'6px 0 0' }}>Resultado comercial por diretoria — resumo primeiro, detalhe sob demanda</p>
       </div>
 
-      {/* Filtro de mês */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:16 }}>
-        {[{ k:'todos', label:'Todos' }, ...meses.map(m => ({ k:m, label:fmtMes(m+'-01') }))].map(op => {
-          const ativo = mesFiltro === op.k;
-          return (
-            <button key={op.k} onClick={()=>setMesFiltro(op.k)}
-              style={{ background: ativo ? 'var(--vg-brand-50)' : 'var(--vg-surface)',
-                border:`1px solid ${ativo ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`,
-                color: ativo ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)',
-                borderRadius:'var(--vg-radius)', padding:'7px 14px', fontSize:13, fontWeight:ativo?600:500,
-                fontFamily:"'Inter', sans-serif", cursor:'pointer', outline:'none' }}>
-              {op.label}
-            </button>
-          );
-        })}
+      {/* Filtro de meses — multi-seleção */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:6, alignItems:'center' }}>
+        <button onClick={()=>setMesesSel(new Set())}
+          style={btnMes(mesesSel.size===0)}>Todos</button>
+        <button onClick={()=>setMesesSel(new Set(meses.slice(-3)))}
+          style={btnMes(false)}>Trimestre</button>
+        <button onClick={()=>setMesesSel(new Set(meses.slice(-6)))}
+          style={btnMes(false)}>Semestre</button>
+        <span style={{ width:1, height:22, background:'var(--vg-border)', margin:'0 4px' }} />
+        {meses.map(m => (
+          <button key={m} onClick={()=>toggleMes(m)} style={btnMes(mesesSel.has(m))}>{fmtMes(m+'-01')}</button>
+        ))}
       </div>
+      <div style={{ ...CAPTION, marginBottom:16 }}>Clique nos meses para selecionar múltiplos</div>
 
       {/* Abas de diretoria */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:24 }}>
@@ -348,87 +479,45 @@ export default function CartoesVegas() {
         })}
       </div>
 
-      {/* CARD 1 — Contratos novos */}
+      {/* CARD — Novo em 2026 */}
       <div style={{ ...cardStyle, marginBottom:20 }}>
         <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-          <PlusCircle {...ICON} color={corAba} /> Contratos Novos
+          <TrendingUp {...ICON} color={corAba} /> Novo em 2026
         </div>
-        <div style={{ ...CAPTION, marginBottom:18 }}>
-          {mesFiltro === 'todos' ? 'Cadastrados em 2026' : `Cadastrados em ${fmtMes(mesFiltro+'-01')}`}
-          {aba !== 'geral' && ` · Diretoria ${aba}`}
+        <div style={{ ...CAPTION, marginBottom:18 }}>Meta considerada (confirmada + calculada) no período · {periodoLabel}{aba!=='geral' && ` · Diretoria ${aba}`}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:20 }}>
+          <Metrica icon={<Building2 {...ICON} />} label="Comercial (Ronny + Rossi)" valor={fmt(v.novo.comercial)} />
+          <Metrica icon={<Layers {...ICON} />}    label="Licitação (Sartori)"       valor={fmt(v.novo.licitacao)} corValor="var(--vg-peach-400)" />
+          <Metrica icon={<TrendingUp {...ICON} color={corAba} />} label="Total" valor={fmt(v.novo.total)} destaque corValor={corAba} />
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:20 }}>
-          <Metrica icon={<FileText {...ICON} />}  label="Contratos novos"       valor={fmtInt(v.card1.contratos)} destaque corValor={corAba} />
-          <Metrica icon={<TrendingUp {...ICON} />} label="Mov. esperada (mês)"   valor={fmt(v.card1.esperado)} />
-          <Metrica icon={<Target {...ICON} />}     label="Meta apurada"          valor={metaAplic ? fmt(v.card1.meta) : '—'} muted={!metaAplic} valorTitle={metaAplic ? undefined : 'Licitação não entra na meta comercial'} />
-          <Metrica icon={<Wallet {...ICON} />}     label="Movimentação real"     valor={fmt(v.card1.mov)} />
-        </div>
-        <div style={{ ...CAPTION, marginTop:16 }}>Esperado é capacidade mensal do contrato.</div>
+        <div style={{ ...CAPTION, marginTop:16 }}>Inclui licitação — não entra na meta comercial.</div>
       </div>
 
-      {/* CARD 2 — Total da carteira */}
+      {/* CARD — Total da carteira */}
       <div style={{ ...cardStyle, marginBottom:24 }}>
         <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
           <Layers {...ICON} color={corAba} /> Total da Carteira {aba !== 'geral' && `· ${aba}`}
         </div>
-        <div style={{ ...CAPTION, marginBottom:18 }}>Carteira completa do escopo{mesFiltro==='todos' ? ' · acumulado 2026' : ` · ${fmtMes(mesFiltro+'-01')}`}</div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:20 }}>
-          <Metrica icon={<FileText {...ICON} />}   label="Contratos ativos"      valor={fmtInt(v.card2.contratos)} />
-          <Metrica icon={<TrendingUp {...ICON} />} label="Mov. esperada (mês)"   valor={fmt(v.card2.esperado)} destaque corValor={corAba} />
-          <Metrica icon={<Target {...ICON} />}     label="Meta apurada"          valor={metaAplic ? fmt(v.card2.meta) : '—'} muted={!metaAplic} valorTitle={metaAplic ? undefined : 'Licitação não entra na meta comercial'} />
-          <Metrica icon={<Wallet {...ICON} />}     label="Movimentação real"     valor={fmt(v.card2.mov)} />
+        <div style={{ ...CAPTION, marginBottom:18 }}>Carteira completa do escopo · {periodoLabel}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:20 }}>
+          <Metrica icon={<FileText {...ICON} />}   label="Contratos ativos"    valor={fmtInt(v.card2.contratos)} />
+          <Metrica icon={<TrendingUp {...ICON} />} label="Mov. esperada (mês)" valor={fmt(v.card2.esperado)} />
+          <Metrica icon={<Target {...ICON} />}     label="Meta apurada"        valor={metaAplic ? fmt(v.card2.meta) : '—'} muted={!metaAplic} valorTitle={metaAplic ? undefined : 'Licitação não entra na meta comercial'} />
+          <Metrica icon={<Wallet {...ICON} />}     label={`Mov. real (${ultimoLabel})`} valor={movCell(v.card2.mov)} destaque corValor={corAba}
+            muted={!v.movDisponivel} sub={movSub} />
         </div>
       </div>
 
-      {/* BLOCO PRODUTOS — Distribuição por produto (todas as abas) */}
-      <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginBottom:24 }}>
-        <div style={{ padding:'24px 24px 4px' }}>
-          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-            <Package {...ICON} color={corAba} /> Distribuição por Produto
-          </div>
-          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todos os produtos' : `Diretoria ${aba}`}{mesFiltro==='todos' ? ' · acumulado 2026' : ` · ${fmtMes(mesFiltro+'-01')}`}</div>
+      {/* BLOCO — Evolução da meta apurada */}
+      <div style={{ ...cardStyle, marginBottom:24 }}>
+        <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+          <LineChart {...ICON} color={corAba} /> Evolução da Meta Apurada
         </div>
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
-            <thead>
-              <tr>
-                <th style={s.th}>Produto</th>
-                <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
-                <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
-                <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
-                <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
-                <th style={{ ...s.th, minWidth:150 }}>% do total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {v.produtos.length === 0 && (
-                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum produto com valor no período.</td></tr>
-              )}
-              {v.produtos.map(p => (
-                <tr key={p.produto} style={{ borderTop:'1px solid var(--vg-border)' }}>
-                  <td style={{ ...s.td, fontWeight:500, color:'var(--vg-ink)' }}>{p.produto}</td>
-                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(p.contratos)}</td>
-                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.esperado)}</td>
-                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{metaAplic ? fmt(p.meta) : '—'}</td>
-                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.mov)}</td>
-                  <td style={s.td}>
-                    {metaAplic ? (
-                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <div style={{ flex:1, height:6, background:'var(--vg-neutral-bg)', borderRadius:3, overflow:'hidden', minWidth:60 }}>
-                          <div style={{ height:'100%', width:`${Math.min(p.pctTotal,100)}%`, background:corAba, borderRadius:3 }} />
-                        </div>
-                        <span className="vg-num" style={{ ...CAPTION, minWidth:46, textAlign:'right', fontWeight:600 }}>{fmtPct(p.pctTotal)}</span>
-                      </div>
-                    ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div style={{ ...CAPTION, marginBottom:16 }}>Meta apurada mês a mês · {aba==='geral' ? 'todas as diretorias' : `Diretoria ${aba}`}</div>
+        <GraficoEvolucao serie={v.metaSerie} cor={corAba} />
       </div>
 
-      {/* BLOCO 3 — Comparativo por diretoria (só na aba Geral) */}
+      {/* BLOCO — Comparativo por diretoria (só na aba Geral) */}
       {aba === 'geral' && (
         <div style={{ marginBottom:24 }}>
           <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
@@ -447,7 +536,7 @@ export default function CartoesVegas() {
                     <LinhaMetrica label="Contratos"        valor={fmtInt(d.contratos)} />
                     <LinhaMetrica label="Esperado / mês"   valor={fmt(d.esperado)} />
                     <LinhaMetrica label="Meta apurada"     valor={aplica ? fmt(d.meta) : '—'} muted={!aplica} valorTitle={aplica ? undefined : 'Licitação não entra na meta comercial'} />
-                    <LinhaMetrica label="Movimentação real" valor={fmt(d.mov)} destaque cor={CORES_DIR[d.dir]} />
+                    <LinhaMetrica label={`Mov. real (${ultimoLabel})`} valor={movCell(d.mov)} muted={!v.movDisponivel} destaque cor={CORES_DIR[d.dir]} />
                   </div>
                 </div>
               );
@@ -456,9 +545,9 @@ export default function CartoesVegas() {
         </div>
       )}
 
-      {/* BLOCO 4 — Gestores da diretoria (abas de diretoria) */}
+      {/* BLOCO — Gestores da diretoria (abas de diretoria) */}
       {aba !== 'geral' && (
-        <div style={{ ...cardStyle, padding:0, overflow:'hidden' }}>
+        <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginBottom:24 }}>
           <div style={{ padding:'24px 24px 4px' }}>
             <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
               <Users {...ICON} color={corAba} /> Gestores · Diretoria {aba}
@@ -504,7 +593,7 @@ export default function CartoesVegas() {
                           ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
                         </td>
                         <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:metaAplic ? corPct(g.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{metaAplic ? (g.pctMeta==null ? '—' : fmtPct(g.pctMeta)) : '—'}</td>
-                        <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{fmt(g.mov)}</td>
+                        <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{movCell(g.mov)}</td>
                       </tr>
                       {aberto && g.vendedores.map(vd => (
                         <tr key={`${g.gestor}-${vd.id}`} style={{ borderTop:'1px solid var(--vg-border)', background:'var(--vg-surface-muted)' }}>
@@ -519,7 +608,7 @@ export default function CartoesVegas() {
                             ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
                           </td>
                           <td style={{ ...s.td, textAlign:'right', color:metaAplic ? corPct(vd.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{metaAplic ? (vd.pctMeta==null ? '—' : fmtPct(vd.pctMeta)) : '—'}</td>
-                          <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.mov)}</td>
+                          <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{movCell(vd.mov)}</td>
                         </tr>
                       ))}
                     </Fragment>
@@ -531,13 +620,66 @@ export default function CartoesVegas() {
         </div>
       )}
 
-      {/* BLOCO RANKING — Vendedores por % da meta (todas as abas) */}
-      <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginTop:24 }}>
+      {/* BLOCO — Distribuição por produto */}
+      <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginBottom:24 }}>
+        <div style={{ padding:'24px 24px 4px' }}>
+          <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <Package {...ICON} color={corAba} /> Distribuição por Produto
+          </div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todos os produtos' : `Diretoria ${aba}`} · {periodoLabel}</div>
+        </div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+            <thead>
+              <tr>
+                <th style={s.th}>Produto</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
+                <th style={{ ...s.th, minWidth:150 }}>% do total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.produtos.length === 0 && (
+                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum produto com valor no período.</td></tr>
+              )}
+              {v.produtos.map(p => (
+                <tr key={p.produto} style={{ borderTop:'1px solid var(--vg-border)' }}>
+                  <td style={{ ...s.td, fontWeight:500, color:'var(--vg-ink)' }}>{p.produto}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(p.contratos)}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(p.esperado)}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{metaAplic ? fmt(p.meta) : '—'}</td>
+                  <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{movCell(p.mov)}</td>
+                  <td style={s.td}>
+                    {metaAplic ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ flex:1, height:6, background:'var(--vg-neutral-bg)', borderRadius:3, overflow:'hidden', minWidth:60 }}>
+                          <div style={{ height:'100%', width:`${Math.min(p.pctTotal,100)}%`, background:corAba, borderRadius:3 }} />
+                        </div>
+                        <span className="vg-num" style={{ ...CAPTION, minWidth:46, textAlign:'right', fontWeight:600 }}>{fmtPct(p.pctTotal)}</span>
+                      </div>
+                    ) : <span style={{ color:'var(--vg-muted)' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {v.alim.licit > 0 && (
+          <div style={{ padding:'12px 24px 20px', ...CAPTION }}>
+            Do produto <strong style={{ color:'var(--vg-ink-secondary)' }}>Alimentação</strong>, <span className="vg-num">{fmt(v.alim.licit)}</span> de <span className="vg-num">{fmt(v.alim.total)}</span> em movimentação vêm de <strong style={{ color:'var(--vg-peach-400)' }}>licitação (Sartori)</strong> — não é venda comercial.
+          </div>
+        )}
+      </div>
+
+      {/* BLOCO — Ranking de vendedores (por movimentação real) */}
+      <div style={{ ...cardStyle, padding:0, overflow:'hidden' }}>
         <div style={{ padding:'24px 24px 4px' }}>
           <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Trophy {...ICON} color={corAba} /> Ranking de Vendedores
           </div>
-          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`}{mesFiltro==='todos' ? ' · acumulado 2026' : ` · ${fmtMes(mesFiltro+'-01')}`}</div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`} · ordenado por movimentação real ({ultimoLabel})</div>
         </div>
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
@@ -546,6 +688,7 @@ export default function CartoesVegas() {
                 <th style={{ ...s.th, width:60, textAlign:'center' }}>#</th>
                 <th style={s.th}>Vendedor</th>
                 <th style={s.th}>Gestor</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Meta do período</th>
                 <th style={{ ...s.th, textAlign:'right' }}>% da meta</th>
@@ -553,11 +696,11 @@ export default function CartoesVegas() {
             </thead>
             <tbody>
               {v.ranking.length === 0 && (
-                <tr><td colSpan={6} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum vendedor com meta cadastrada no período.</td></tr>
+                <tr><td colSpan={7} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum vendedor com movimentação no período.</td></tr>
               )}
               {v.ranking.map((r,i) => {
                 const top3 = i < 3;
-                const corRank = r.pctMeta>=100 ? 'var(--vg-success-fg)' : r.pctMeta>=70 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
+                const temMeta = r.metaPeriodo > 0;
                 return (
                   <tr key={r.id} style={{ borderTop:'1px solid var(--vg-border)' }}>
                     <td style={{ ...s.td, textAlign:'center' }}>
@@ -565,19 +708,30 @@ export default function CartoesVegas() {
                     </td>
                     <td style={{ ...s.td, fontWeight:600, color:'var(--vg-ink)' }}>{r.nome}</td>
                     <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{r.gestor}</td>
-                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaApurada)}</td>
-                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaPeriodo)}</td>
-                    <td style={{ ...s.td, textAlign:'right', fontWeight:700, color:corRank }} className="vg-num">{fmtPct(r.pctMeta)}</td>
+                    <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{movCell(r.mov)}</td>
+                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{temMeta ? fmt(r.metaApurada) : '—'}</td>
+                    <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{temMeta ? fmt(r.metaPeriodo) : '—'}</td>
+                    <td style={{ ...s.td, textAlign:'right', fontWeight:700, color: temMeta ? corPct(r.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{temMeta ? fmtPct(r.pctMeta) : '—'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por % da meta — vendedores sem meta cadastrada não aparecem.</div>
+        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por movimentação real — vendedores sem meta cadastrada aparecem com "—" nas colunas de meta.</div>
       </div>
     </div>
   );
+}
+
+function btnMes(ativo) {
+  return {
+    background: ativo ? 'var(--vg-brand-50)' : 'var(--vg-surface)',
+    border:`1px solid ${ativo ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`,
+    color: ativo ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)',
+    borderRadius:'var(--vg-radius)', padding:'7px 14px', fontSize:13, fontWeight:ativo?600:500,
+    fontFamily:"'Inter', sans-serif", cursor:'pointer', outline:'none',
+  };
 }
 
 function LinhaMetrica({ label, valor, destaque=false, muted=false, cor, valorTitle }) {
