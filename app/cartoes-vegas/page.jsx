@@ -91,7 +91,7 @@ export default function CartoesVegas() {
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')),
-        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,meta_mensal,ativo')),
+        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,meta_mensal,meta_inicio,ativo')),
       ]);
 
       const empIds  = empresas.map(e => e.id);
@@ -154,6 +154,12 @@ export default function CartoesVegas() {
 
     const noPeriodo = (ym) => mesFiltro === 'todos' ? true : ym === mesFiltro;
     const metaRowsPeriodo = vmetas.filter(v => noPeriodo(v.competencia_meta?.substring(0,7)));
+
+    // Meta DO PERÍODO por consultor (mesma regra de /vendedor): meta_mensal × nº de
+    // meses do período que são >= ao piso do consultor (meta_inicio; nunca antes de 2026-01).
+    const mesesPeriodo = mesFiltro === 'todos' ? meses : [mesFiltro];
+    const pisoDe = (c) => { const mi = c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01'; return mi > '2026-01' ? mi : '2026-01'; };
+    const metaPeriodoCons = (c) => (c.meta_mensal||0) * mesesPeriodo.filter(m => m >= pisoDe(c)).length;
 
     // Empresas novas (cadastro dentro do período; "todos" = ano 2026)
     const novaNoPeriodo = (e) => {
@@ -219,13 +225,15 @@ export default function CartoesVegas() {
       gestores = nomes.map(g => {
         const cons  = consDir.filter(c => c.gestor === g);
         const st    = sumBy(statAll, c => c.gestor === g && c.diretor === aba);
-        const denom = cons.reduce((s,c) => s + (c.meta_mensal||0), 0);
+        const metaPeriodo = cons.reduce((s,c) => s + metaPeriodoCons(c), 0);
+        const metaMensal  = cons.reduce((s,c) => s + (c.meta_mensal||0), 0);
         const vendedores = cons.map(c => {
           const raw = statAll[c.id];
           const sv = raw ? { esperado:raw.esperado, mov:raw.mov, meta:raw.meta, contratos:raw.contratos.size } : { esperado:0, mov:0, meta:0, contratos:0 };
-          return { id:c.id, nome:c.nome, ...sv, denom:c.meta_mensal||0, pctMeta: c.meta_mensal>0 ? sv.meta/c.meta_mensal*100 : null };
+          const mp = metaPeriodoCons(c);
+          return { id:c.id, nome:c.nome, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, pctMeta: mp>0 ? sv.meta/mp*100 : null };
         }).sort((a,b) => b.meta - a.meta || b.esperado - a.esperado);
-        return { gestor:g, ...st, denom, pctMeta: denom>0 ? st.meta/denom*100 : null, vendedores };
+        return { gestor:g, ...st, metaPeriodo, metaMensal, pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
       }).sort((a,b) => b.meta - a.meta || b.esperado - a.esperado);
     }
 
