@@ -377,7 +377,13 @@ export default function CartoesVegas() {
         return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : null };
       })
       .filter(r => r.mov > 0 || r.metaApurada > 0 || r.metaPeriodo > 0)
-      .sort((a,b) => b.mov - a.mov || b.metaApurada - a.metaApurada);
+      // Sem meta apurada (ou 0) primeiro, ordenados por mov real desc; depois os com meta, por meta apurada desc.
+      .sort((a,b) => {
+        const aSem = !(a.metaApurada > 0), bSem = !(b.metaApurada > 0);
+        if(aSem !== bSem) return aSem ? -1 : 1;
+        if(aSem) return b.mov - a.mov;
+        return b.metaApurada - a.metaApurada;
+      });
 
     // Evolução: meta apurada mês a mês (todos os meses, mesmo escopo dos cards).
     const metaSerie = meses.map(m => {
@@ -679,7 +685,7 @@ export default function CartoesVegas() {
           <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Trophy {...ICON} color={corAba} /> Ranking de Vendedores
           </div>
-          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`} · ordenado por movimentação real ({ultimoLabel})</div>
+          <div style={{ ...CAPTION, marginBottom:12 }}>{aba==='geral' ? 'Todas as diretorias' : `Diretoria ${aba}`} · ordenado por meta apurada · mov. real de {ultimoLabel}</div>
         </div>
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
@@ -718,7 +724,7 @@ export default function CartoesVegas() {
             </tbody>
           </table>
         </div>
-        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por movimentação real — vendedores sem meta cadastrada aparecem com "—" nas colunas de meta.</div>
+        <div style={{ padding:'12px 24px 20px', ...CAPTION }}>Ordenado por meta apurada — vendedores sem meta cadastrada aparecem no topo, ordenados por movimentação real.</div>
       </div>
     </div>
   );
