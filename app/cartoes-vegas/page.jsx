@@ -209,6 +209,15 @@ export default function CartoesVegas() {
     const pisoDe = (c) => { const mi = c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01'; return mi > '2026-01' ? mi : '2026-01'; };
     const metaPeriodoCons = (c) => (c.meta_mensal||0) * periodoMeses.filter(m => m >= pisoDe(c)).length;
 
+    // Média mensal = meta apurada ÷ nº de meses válidos. Com meta cadastrada, meses = metaPeriodo/metaMensal
+    // (contagem que respeita o meta_inicio); sem meta cadastrada, meses = nº de meses do período.
+    const mediaMensal = (metaApurada, metaPeriodo, metaMensal) => {
+      const mesesV = metaPeriodo > 0 ? Math.round(metaPeriodo / (metaMensal || 1)) : periodoMeses.length;
+      if(mesesV <= 0) return null;
+      if(metaPeriodo > 0) return metaApurada / mesesV; // exibe mesmo quando apurada = 0
+      return metaApurada > 0 ? metaApurada / mesesV : null; // sem cadastrada e sem apuração → "—"
+    };
+
     // Estatística por consultor: esperado (SEMPRE mensal), mov (último mês), creditado, meta (período).
     const buildStat = (empresasList, metaRows) => {
       const stat = {};
@@ -319,9 +328,9 @@ export default function CartoesVegas() {
           const raw = statAll[c.id];
           const sv = raw ? { esperado:raw.esperado, mov:raw.mov, meta:raw.meta, contratos:raw.contratos.size } : { esperado:0, mov:0, meta:0, contratos:0 };
           const mp = metaPeriodoCons(c);
-          return { id:c.id, nome:c.nome, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, pctMeta: mp>0 ? sv.meta/mp*100 : null };
+          return { id:c.id, nome:c.nome, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, media: mediaMensal(sv.meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? sv.meta/mp*100 : null };
         }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
-        return { gestor:g, ...st, metaPeriodo, metaMensal, pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
+        return { gestor:g, ...st, metaPeriodo, metaMensal, media: mediaMensal(st.meta, metaPeriodo, metaMensal), pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
       }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
     }
 
@@ -374,7 +383,7 @@ export default function CartoesVegas() {
         const mov = st?.mov || 0;
         const meta = st?.meta || 0;
         const mp = metaPeriodoCons(c);
-        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, pctMeta: mp>0 ? meta/mp*100 : null };
+        return { id:c.id, nome:c.nome, gestor:c.gestor || '—', mov, metaApurada:meta, metaPeriodo:mp, media: mediaMensal(meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? meta/mp*100 : null };
       })
       .filter(r => r.mov > 0 || r.metaApurada > 0 || r.metaPeriodo > 0)
       // Sem meta CADASTRADA (metaPeriodo 0) primeiro, ordenados por mov real desc; depois os
@@ -570,6 +579,7 @@ export default function CartoesVegas() {
                   <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                  <th style={{ ...s.th, textAlign:'right' }}>Média / mês</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Meta do período</th>
                   <th style={{ ...s.th, textAlign:'right' }}>% da meta</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
@@ -577,7 +587,7 @@ export default function CartoesVegas() {
               </thead>
               <tbody>
                 {v.gestores.length === 0 && (
-                  <tr><td colSpan={7} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor nesta diretoria.</td></tr>
+                  <tr><td colSpan={8} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor nesta diretoria.</td></tr>
                 )}
                 {v.gestores.map(g => {
                   const aberto = expandidos.has(g.gestor);
@@ -594,6 +604,7 @@ export default function CartoesVegas() {
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(g.contratos)}</td>
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(g.esperado)}</td>
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{metaAplic ? fmt(g.meta) : '—'}</td>
+                        <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink)' }} className="vg-num">{metaAplic && g.media != null ? fmt(g.media) : '—'}</td>
                         <td style={{ ...s.td, textAlign:'right' }}>
                           {metaAplic && g.metaPeriodo > 0 ? (
                             <><div className="vg-num" style={{ fontWeight:600, color:'var(--vg-ink)' }}>{fmt(g.metaPeriodo)}</div>
@@ -609,6 +620,7 @@ export default function CartoesVegas() {
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtInt(vd.contratos)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.esperado)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{metaAplic ? fmt(vd.meta) : '—'}</td>
+                          <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink)' }} className="vg-num">{metaAplic && vd.media != null ? fmt(vd.media) : '—'}</td>
                           <td style={{ ...s.td, textAlign:'right' }}>
                             {metaAplic && vd.metaPeriodo > 0 ? (
                               <><div className="vg-num" style={{ color:'var(--vg-ink-secondary)' }}>{fmt(vd.metaPeriodo)}</div>
@@ -698,13 +710,14 @@ export default function CartoesVegas() {
                 <th style={s.th}>Gestor</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Mov. real</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Média / mês</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Meta do período</th>
                 <th style={{ ...s.th, textAlign:'right' }}>% da meta</th>
               </tr>
             </thead>
             <tbody>
               {v.ranking.length === 0 && (
-                <tr><td colSpan={7} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum vendedor com movimentação no período.</td></tr>
+                <tr><td colSpan={8} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum vendedor com movimentação no período.</td></tr>
               )}
               {v.ranking.map((r,i) => {
                 const top3 = i < 3;
@@ -718,6 +731,7 @@ export default function CartoesVegas() {
                     <td style={{ ...s.td, color:'var(--vg-ink-secondary)' }}>{r.gestor}</td>
                     <td style={{ ...s.td, textAlign:'right', fontWeight:600, color:'var(--vg-ink)' }} className="vg-num">{movCell(r.mov)}</td>
                     <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(r.metaApurada)}</td>
+                    <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink)' }} className="vg-num">{r.media != null ? fmt(r.media) : '—'}</td>
                     <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{temMeta ? fmt(r.metaPeriodo) : '—'}</td>
                     <td style={{ ...s.td, textAlign:'right', fontWeight:700, color: temMeta ? corPct(r.pctMeta) : 'var(--vg-muted)' }} className="vg-num">{temMeta ? fmtPct(r.pctMeta) : '—'}</td>
                   </tr>
