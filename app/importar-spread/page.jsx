@@ -146,7 +146,7 @@ export default function ImportarSpread() {
         spread_planilha: r.spread,
         spread_bandeira: 0,
         spread_negativo: 0,
-        spread_total:    r.spread,
+        // spread_total é GENERATED ALWAYS no Postgres — não pode ser atribuído no insert.
       }));
 
       let inserted = 0; const errors = [];
