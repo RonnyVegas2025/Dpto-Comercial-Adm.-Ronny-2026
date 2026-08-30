@@ -4,6 +4,19 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, PERFIS } from './context/AuthContext';
 import { navVisivel } from './navItems';
+import {
+  LayoutDashboard, User, Upload, Building2, LineChart, PackagePlus, Settings,
+  ClipboardList, Lock, BarChart3, CreditCard, TrendingUp, Package, FileText,
+  Briefcase, LogOut, Circle,
+} from 'lucide-react';
+
+const ICONES = {
+  LayoutDashboard, User, Upload, Building2, LineChart, PackagePlus, Settings,
+  ClipboardList, Lock, BarChart3, CreditCard, TrendingUp, Package, FileText, Briefcase,
+};
+
+const OUTFIT = "'Outfit', sans-serif";
+const INTER  = "'Inter', sans-serif";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -11,72 +24,68 @@ export default function Sidebar() {
 
   const navFiltrado = navVisivel(profile, podeVer);
 
-  const corPerfil = {
-    gestor_master:        '#f0b429',
-    diretoria:            '#2563eb',
-    gestor_comercial:     '#16a34a',
-    supervisor_comercial: '#7c3aed',
-    supervisor_adm:       '#ea580c',
-    administrativo:       '#0891b2',
-    vendedor:             '#6b7280',
-  };
-  const cor = corPerfil[profile?.perfil] || '#6b7280';
-
   return (
     <aside style={{ position:'fixed', top:0, left:0, width:220, height:'100vh',
-      background:'#ffffff', borderRight:'1px solid #e4e7ef',
-      display:'flex', flexDirection:'column', zIndex:100, padding:'24px 0' }}>
+      background:'var(--vg-surface)', borderRight:'1px solid var(--vg-border)',
+      display:'flex', flexDirection:'column', zIndex:100, padding:'24px 0', fontFamily:INTER }}>
 
+      {/* Cabeçalho */}
       <div style={{ padding:'0 20px 20px' }}>
-        <div style={{ fontWeight:700, fontSize:'1rem', color:'#1a1d2e', fontFamily:"'DM Sans',sans-serif" }}>Vegas Card</div>
-        <div style={{ color:'#8b92b0', fontSize:'0.65rem', letterSpacing:1.5, textTransform:'uppercase', marginTop:3 }}>Gestão Comercial</div>
+        <div style={{ fontFamily:OUTFIT, fontWeight:600, fontSize:18, lineHeight:'24px', color:'var(--vg-ink)' }}>Vegas Card</div>
+        <div style={{ color:'var(--vg-muted)', fontSize:12, letterSpacing:'0.05em', textTransform:'uppercase', marginTop:3 }}>Gestão Comercial</div>
       </div>
 
+      {/* Bloco do usuário */}
       {profile && (
-        <div style={{ margin:'0 10px 12px', background:`${cor}08`, border:`1px solid ${cor}20`, borderRadius:10, padding:'10px 12px' }}>
-          <div style={{ fontWeight:600, fontSize:'0.8rem', color:'#1a1d2e', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{profile.nome}</div>
-          <div style={{ background:cor, color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:'0.62rem', fontWeight:700, display:'inline-block', marginTop:4 }}>
+        <div style={{ margin:'0 12px 12px', background:'var(--vg-surface-muted)', border:'1px solid var(--vg-border)', borderRadius:'var(--vg-radius)', padding:'10px 12px' }}>
+          <div style={{ fontWeight:600, fontSize:13, color:'var(--vg-ink)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{profile.nome}</div>
+          <div style={{ background:'var(--vg-info-bg)', color:'var(--vg-info-fg)', borderRadius:4, padding:'2px 8px', fontSize:11, fontWeight:600, display:'inline-block', marginTop:5 }}>
             {PERFIS[profile.perfil] || profile.perfil}
           </div>
           {/* Perfil: acessível a QUALQUER usuário autenticado, fora do filtro podeVer(). */}
-          <Link href="/perfil" style={{ display:'flex', alignItems:'center', gap:6, marginTop:8, textDecoration:'none',
-            color: pathname?.startsWith('/perfil') ? '#b45309' : '#6b7280', fontFamily:"'DM Sans',sans-serif", fontSize:'0.72rem', fontWeight:600 }}>
-            <span style={{ fontSize:'0.72rem' }}>⚙️</span> Meu perfil e senha
+          <Link href="/perfil" style={{ display:'flex', alignItems:'center', gap:6, marginTop:9, textDecoration:'none',
+            color: pathname?.startsWith('/perfil') ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)', fontSize:12, fontWeight:600 }}>
+            <Settings size={14} strokeWidth={1.75} color={pathname?.startsWith('/perfil') ? 'var(--vg-brand-500)' : 'var(--vg-muted)'} /> Meu perfil e senha
           </Link>
         </div>
       )}
 
-      <div style={{ height:1, background:'#e4e7ef', margin:'0 0 10px' }} />
-      <div style={{ padding:'0 20px 6px', color:'#8b92b0', fontSize:'0.62rem', fontWeight:600, letterSpacing:1.5, textTransform:'uppercase' }}>Menu</div>
+      <div style={{ height:1, background:'var(--vg-border)', margin:'0 0 10px' }} />
+      <div style={{ padding:'0 20px 6px', color:'var(--vg-muted)', fontSize:12, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase' }}>Menu</div>
 
-      <nav style={{ flex:1, display:'flex', flexDirection:'column', gap:1, padding:'0 10px', overflowY:'auto' }}>
+      {/* Itens */}
+      <nav style={{ flex:1, display:'flex', flexDirection:'column', gap:2, padding:'0 10px', overflowY:'auto' }}>
         {navFiltrado.map(({ href, icon, label }) => {
           const active = pathname === href || (href !== '/' && pathname?.startsWith(href));
+          const Ico = ICONES[icon] || Circle;
           return (
-            <Link key={href} href={href} style={{ display:'flex', alignItems:'center', gap:10,
-              padding:'8px 12px', borderRadius:8, textDecoration:'none',
-              fontFamily:"'DM Sans',sans-serif", fontWeight:active?600:400, fontSize:'0.875rem',
-              background:active?'#fff8e6':'transparent', color:active?'#b45309':'#4a5068' }}>
-              <span style={{ width:28, height:28, display:'inline-flex', alignItems:'center', justifyContent:'center',
-                background:active?'#f0b429':'#f0f2f8', borderRadius:6, fontSize:'0.8rem', flexShrink:0 }}>{icon}</span>
+            <Link key={href} href={href}
+              onMouseEnter={e => { if(!active) e.currentTarget.style.background = 'var(--vg-surface-muted)'; }}
+              onMouseLeave={e => { if(!active) e.currentTarget.style.background = 'transparent'; }}
+              style={{ position:'relative', display:'flex', alignItems:'center', gap:10,
+                padding:'9px 12px', borderRadius:'var(--vg-radius-sm)', textDecoration:'none',
+                fontFamily:INTER, fontWeight:active?600:500, fontSize:14,
+                background: active ? 'var(--vg-brand-50)' : 'transparent',
+                color: active ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)',
+                transition:'background 0.15s' }}>
+              {active && <span style={{ position:'absolute', left:0, top:6, bottom:6, width:3, borderRadius:2, background:'var(--vg-gradient)' }} />}
+              <Ico size={18} strokeWidth={1.75} color={active ? 'var(--vg-brand-500)' : 'var(--vg-muted)'} style={{ flexShrink:0 }} />
               {label}
             </Link>
           );
         })}
       </nav>
 
-      <div style={{ padding:'12px 10px 0', borderTop:'1px solid #e4e7ef' }}>
+      {/* Sair */}
+      <div style={{ padding:'12px 10px 0', borderTop:'1px solid var(--vg-border)' }}>
         <button onClick={logout} style={{ display:'flex', alignItems:'center', gap:10,
-          width:'100%', padding:'8px 12px', borderRadius:8, background:'transparent',
-          border:'none', cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
-          fontSize:'0.85rem', fontWeight:500, color:'#dc2626' }}
-          onMouseEnter={e=>e.currentTarget.style.background='#fef2f2'}
+          width:'100%', padding:'9px 12px', borderRadius:'var(--vg-radius-sm)', background:'transparent',
+          border:'none', cursor:'pointer', fontFamily:INTER, fontSize:14, fontWeight:500, color:'var(--vg-danger-fg)', transition:'background 0.15s' }}
+          onMouseEnter={e=>e.currentTarget.style.background='var(--vg-danger-bg)'}
           onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-          <span style={{ width:28, height:28, display:'inline-flex', alignItems:'center',
-            justifyContent:'center', background:'#fef2f2', borderRadius:6, fontSize:'0.8rem' }}>🚪</span>
-          Sair
+          <LogOut size={18} strokeWidth={1.75} color="var(--vg-danger-fg)" style={{ flexShrink:0 }} /> Sair
         </button>
-        <div style={{ color:'#b0b7cc', fontSize:'0.65rem', letterSpacing:0.5, padding:'8px 12px 0' }}>v1.0 · 2026</div>
+        <div style={{ color:'var(--vg-muted)', fontSize:11, letterSpacing:0.3, padding:'8px 12px 0' }}>v1.0 · 2026</div>
       </div>
     </aside>
   );
