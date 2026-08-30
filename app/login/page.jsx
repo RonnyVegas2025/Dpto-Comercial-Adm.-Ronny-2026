@@ -36,18 +36,18 @@ export default function LoginPage() {
         {/* ESQUERDA — painel institucional */}
         <div className="login-left" style={{
           flex:'0 0 45%', background:'var(--vg-brand-800)', color:'#fff',
-          display:'flex', flexDirection:'column', justifyContent:'space-between',
-          padding:'56px 56px 40px', boxSizing:'border-box',
+          display:'flex', flexDirection:'column', justifyContent:'center',
+          padding:'56px 56px 40px', boxSizing:'border-box', position:'relative',
         }}>
           <div style={{ maxWidth:460 }}>
             <h1 style={{ fontFamily:"'Outfit', sans-serif", fontSize:32, lineHeight:'42px', fontWeight:600, margin:0 }}>
-              Vegas Card — Gestão Comercial
+              Vegas Card —<br /><span style={{ whiteSpace:'nowrap' }}>Gestão Comercial</span>
             </h1>
             <p style={{ color:'rgba(255,255,255,0.7)', fontSize:14, lineHeight:'22px', margin:'18px 0 0', maxWidth:400 }}>
               Ambiente interno. Os dados exibidos são confidenciais e o acesso é registrado.
             </p>
           </div>
-          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:12, letterSpacing:0.4 }}>Vegas Card — uso interno</div>
+          <div style={{ position:'absolute', left:56, bottom:40, color:'rgba(255,255,255,0.5)', fontSize:12, letterSpacing:0.4 }}>Vegas Card — uso interno</div>
         </div>
 
         {/* DIREITA — autenticação */}
@@ -60,7 +60,7 @@ export default function LoginPage() {
               style={{ display:'block', width:240, maxWidth:'70%', height:'auto', objectFit:'contain', margin:'0 auto 12px' }} />
 
             <h2 style={{ fontFamily:"'Outfit', sans-serif", fontSize:24, lineHeight:'32px', fontWeight:600, color:'var(--vg-ink)', margin:'0 0 6px', textAlign:'center' }}>
-              Vegas Card
+              Vegas Card —<wbr /> <span style={{ whiteSpace:'nowrap' }}>ADM Comercial</span>
             </h2>
             <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'0 0 28px', textAlign:'center' }}>
               Acesse com seu e-mail corporativo.
