@@ -41,7 +41,7 @@ export default function LoginPage() {
         }}>
           <div style={{ maxWidth:460 }}>
             <h1 style={{ fontFamily:"'Outfit', sans-serif", fontSize:32, lineHeight:'42px', fontWeight:600, margin:0 }}>
-              Vegas Card —<br /><span style={{ whiteSpace:'nowrap' }}>Gestão Comercial</span>
+              Vegas Card<br /><span style={{ whiteSpace:'nowrap' }}>Gestão Comercial</span>
             </h1>
             <p style={{ color:'rgba(255,255,255,0.7)', fontSize:14, lineHeight:'22px', margin:'18px 0 0', maxWidth:400 }}>
               Ambiente interno. Os dados exibidos são confidenciais e o acesso é registrado.
