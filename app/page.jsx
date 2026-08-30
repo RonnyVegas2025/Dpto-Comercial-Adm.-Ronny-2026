@@ -8,7 +8,10 @@ const menus = [
       { href: '/importar',            icon: '🏢', label: 'Empresas',    sub: 'Importar cadastro do Excel',         cor: '#f0b429' },
       { href: '/importar-liberacoes',  icon: '💳', label: 'Liberações',    sub: 'Créditos liberados por mês',        cor: '#22c55e' },
       { href: '/importar-movimentacao',icon: '📊', label: 'Movimentação',  sub: 'Convênio, Mobilidade e outros',     cor: '#3b82f6' },
-      { href: '/importar-spreads',     icon: '💹', label: 'Spreads',       sub: 'Taxa ADM e rentabilidade',           cor: '#7c3aed' },
+      // Importador antigo de spreads — substituído por /importar-spread.
+      // Gravava múltiplos meses e linhas zeradas; mantido apenas por referência.
+      // { href: '/importar-spreads',     icon: '💹', label: 'Spreads',       sub: 'Taxa ADM e rentabilidade',           cor: '#7c3aed' },
+      { href: '/importar-spread',      icon: '💹', label: 'Spread',        sub: 'Spread dos comércios por mês',       cor: '#7c3aed' },
       { href: '/importar-taxa-negativa', icon: '📉', label: 'Taxa Negativa',  sub: 'Desconto Condicional por mês',       cor: '#ef4444' },
       { href: '/importar-fechamento',  icon: '📈', label: 'Fechamento',    sub: 'Vendas e taxas mensais',            cor: '#a78bfa' },
     ],

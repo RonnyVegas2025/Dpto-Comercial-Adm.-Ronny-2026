@@ -10,6 +10,9 @@ const nav = [
   { href: '/vendedor',           icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
   { href: '/movimentacoes',      icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
   { href: '/importar-base',      icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
+  // Importador novo de spread (um mês por arquivo, só linhas com valor).
+  // Substitui o antigo /importar-spreads, mantido apenas por referência na home.
+  { href: '/importar-spread',    icon: '💹', label: 'Importar Spread', pagina: 'importar-spread'   },
   { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
   { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
   { href: '/fechamento-meta',    icon: '🔒', label: 'Fechamento Meta', pagina: 'fechamento-meta'  },
