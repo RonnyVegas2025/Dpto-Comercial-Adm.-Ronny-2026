@@ -32,7 +32,7 @@ export default function Sidebar() {
       {/* Cabeçalho */}
       <div style={{ padding:'0 20px 20px' }}>
         <img src="/logo-vegas.png" alt="Vegas Card"
-          style={{ display:'block', width:190, maxWidth:'100%', height:'auto', objectFit:'contain', margin:'0 0 2px -6px' }} />
+          style={{ display:'block', width:140, maxWidth:'100%', height:'auto', objectFit:'contain', margin:'-18px 0 -14px -14px' }} />
         <div style={{ color:'var(--vg-muted)', fontSize:12, letterSpacing:'0.05em', textTransform:'uppercase' }}>Gestão Comercial</div>
       </div>
 
