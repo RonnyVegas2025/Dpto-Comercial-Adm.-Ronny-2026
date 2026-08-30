@@ -80,7 +80,7 @@ export default function AppShell({ children }) {
   return (
     <div style={{ display:'flex' }}>
       <Sidebar />
-      <main style={{ marginLeft:220, flex:1, minHeight:'100vh' }}>
+      <main style={{ marginLeft:248, flex:1, minHeight:'100vh' }}>
         {children}
       </main>
     </div>

@@ -25,7 +25,7 @@ export default function Sidebar() {
   const navFiltrado = navVisivel(profile, podeVer);
 
   return (
-    <aside style={{ position:'fixed', top:0, left:0, width:220, height:'100vh',
+    <aside style={{ position:'fixed', top:0, left:0, width:248, height:'100vh',
       background:'var(--vg-surface)', borderRight:'1px solid var(--vg-border)',
       display:'flex', flexDirection:'column', zIndex:100, padding:'24px 0', fontFamily:INTER }}>
 
