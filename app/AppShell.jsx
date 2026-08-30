@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './Sidebar';
-import { primeiraRotaPermitida, rotasVisiveis } from './navItems';
+import { primeiraRotaPermitida } from './navItems';
 
 export default function AppShell({ children }) {
   const { user, profile, loading, podeVer, permissoes } = useAuth();
@@ -27,8 +27,6 @@ export default function AppShell({ children }) {
       let next = null;
       try { next = new URLSearchParams(window.location.search).get('next'); } catch (_) {}
       const destino = next && next.startsWith('/') ? next : primeiraRotaPermitida(profile, permissoes);
-      // TEMPORÁRIO: confirmar comportamento em produção antes de remover.
-      console.log('[AppShell] pós-login → destino:', destino, '| visíveis:', rotasVisiveis(profile, permissoes).map(r => r.href), '| perfil:', profile?.perfil);
       router.replace(destino);
       return;
     }
@@ -44,7 +42,6 @@ export default function AppShell({ children }) {
     if (user && pathname === '/sem-acesso') {
       const destino = primeiraRotaPermitida(profile, permissoes);
       if (destino !== '/sem-acesso') {
-        console.log('[AppShell] /sem-acesso → recupera para:', destino);
         router.replace(destino);
       }
       return;
