@@ -31,8 +31,9 @@ export default function Sidebar() {
 
       {/* Cabeçalho */}
       <div style={{ padding:'0 20px 20px' }}>
-        <div style={{ fontFamily:OUTFIT, fontWeight:600, fontSize:18, lineHeight:'24px', color:'var(--vg-ink)' }}>Vegas Card</div>
-        <div style={{ color:'var(--vg-muted)', fontSize:12, letterSpacing:'0.05em', textTransform:'uppercase', marginTop:3 }}>Gestão Comercial</div>
+        <img src="/logo-vegas.png" alt="Vegas Card"
+          style={{ display:'block', width:190, maxWidth:'100%', height:'auto', objectFit:'contain', margin:'0 0 2px -6px' }} />
+        <div style={{ color:'var(--vg-muted)', fontSize:12, letterSpacing:'0.05em', textTransform:'uppercase' }}>Gestão Comercial</div>
       </div>
 
       {/* Bloco do usuário */}
