@@ -3,11 +3,26 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
+import {
+  Target, CalendarDays, Users, BarChart3, Wallet, Building2, CheckCircle2,
+  TrendingUp, TrendingDown, Trophy, Globe, FileText, AlertTriangle, ArrowRight, Search, Inbox,
+} from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// ── VEGAS PLATFORM UI STANDARD — tokens de estilo (100% visual) ──────────
+const OUTFIT = "'Outfit', sans-serif";
+const INTER  = "'Inter', sans-serif";
+const ICON   = { size:18, strokeWidth:1.75, color:'var(--vg-ink-secondary)' };
+const cardStyle = { background:'var(--vg-surface)', border:'1px solid var(--vg-border)', borderRadius:'var(--vg-radius-lg)', padding:24, boxShadow:'0 1px 2px rgba(28,31,59,0.04)' };
+const H_CARD  = { fontFamily:OUTFIT, fontSize:16, lineHeight:'24px', fontWeight:600, color:'var(--vg-ink)' };
+const CAPTION = { fontSize:12, lineHeight:'18px', color:'var(--vg-muted)' };
+const LABEL   = { ...CAPTION, textTransform:'uppercase', letterSpacing:0.6 };
+// Cor semântica de performance: >=80 success · >=50 warning · abaixo danger.
+const corSem  = (p) => p>=80 ? 'var(--vg-success-fg)' : p>=50 ? 'var(--vg-warning-fg)' : 'var(--vg-danger-fg)';
 
 const fmt    = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
@@ -420,18 +435,18 @@ export default function HomePage() {
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#f5f6fa',flexDirection:'column',gap:16}}>
-      <div style={{width:40,height:40,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}></div>
-      <div style={{color:'#8b92b0',fontSize:'0.85rem'}}>Carregando seu painel...</div>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'var(--vg-bg)',flexDirection:'column',gap:16,fontFamily:INTER}}>
+      <div style={{width:36,height:36,border:'3px solid var(--vg-border)',borderTop:'3px solid var(--vg-brand-500)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}></div>
+      <div style={{color:'var(--vg-muted)',fontSize:14}}>Carregando seu painel…</div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if (!dados || dados.vazio) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#f5f6fa',flexDirection:'column',gap:16}}>
-      <div style={{fontSize:'3rem'}}>📭</div>
-      <div style={{color:'#4a5068',fontWeight:600}}>Nenhum dado encontrado</div>
-      <div style={{color:'#8b92b0',fontSize:'0.85rem'}}>Verifique suas permissões de acesso</div>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'var(--vg-bg)',flexDirection:'column',gap:12,fontFamily:INTER}}>
+      <Inbox size={40} strokeWidth={1.5} color="var(--vg-muted)" />
+      <div style={{color:'var(--vg-ink)',fontWeight:600,fontFamily:OUTFIT}}>Nenhum dado encontrado</div>
+      <div style={{color:'var(--vg-muted)',fontSize:14}}>Verifique suas permissões de acesso</div>
     </div>
   );
 
@@ -442,7 +457,7 @@ export default function HomePage() {
     consultores, totalEmpresas, mesAtual, mesAnterior, metaPorConsultor, mesesDisp, mesesComLib,
   } = dados;
 
-  const corPct  = (p) => p>=80?'#16a34a':p>=60?'#d97706':'#dc2626';
+  const corPct  = corSem;
 
   // ── Filtro de equipe (Melhoria 2): deriva as métricas da equipe selecionada ──
   const equipes      = dados.equipesDisponiveis || [];
@@ -477,44 +492,47 @@ export default function HomePage() {
     .slice(0, equipeAtiva ? 50 : 3);
   const semMovCriticoView = equipeAtiva ? ((dados.semMovPorEquipe?.[equipeAtiva]) || 0) : semMovCritico;
 
-  // Banner de performance — usa o pct filtrado pela equipe (pctMetaView)
-  const perfView  = pctMetaView >= 80 ? 'verde' : pctMetaView >= 60 ? 'amarelo' : 'vermelho';
+  // Banner de performance — usa o pct filtrado pela equipe (pctMetaView).
+  // Faixas semânticas do padrão: >=80 success · >=50 warning · abaixo danger.
+  const perfView  = pctMetaView >= 80 ? 'verde' : pctMetaView >= 50 ? 'amarelo' : 'vermelho';
   const perfMsgView = perfView === 'verde'
-    ? { emoji:'🟢', titulo:'Parabéns! Sua equipe está performando bem.',  sub:`Meta atingida em ${fmtPct(pctMetaView)} — continue assim!` }
+    ? { titulo:'Parabéns! Sua equipe está performando bem.',  sub:`Meta atingida em ${fmtPct(pctMetaView)} — continue assim!` }
     : perfView === 'amarelo'
-    ? { emoji:'🟡', titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMetaView)} da meta — foco para fechar forte o mês.` }
-    : { emoji:'🔴', titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMetaView)} da meta atingida — revise as prioridades.` };
-  const corPerf = perfView==='verde'?'#16a34a':perfView==='amarelo'?'#d97706':'#dc2626';
-  const bgPerf  = perfView==='verde'?'rgba(22,163,74,0.06)':perfView==='amarelo'?'rgba(217,119,6,0.06)':'rgba(220,38,38,0.06)';
-  const bdPerf  = perfView==='verde'?'rgba(22,163,74,0.2)':perfView==='amarelo'?'rgba(217,119,6,0.2)':'rgba(220,38,38,0.2)';
+    ? { titulo:'Sua equipe está quase lá!',                   sub:`${fmtPct(pctMetaView)} da meta — foco para fechar forte o mês.` }
+    : { titulo:'Atenção! Sua equipe precisa de foco.',        sub:`Apenas ${fmtPct(pctMetaView)} da meta atingida — revise as prioridades.` };
+  const PERF_TOK = { verde:{ bg:'var(--vg-success-bg)', fg:'var(--vg-success-fg)' }, amarelo:{ bg:'var(--vg-warning-bg)', fg:'var(--vg-warning-fg)' }, vermelho:{ bg:'var(--vg-danger-bg)', fg:'var(--vg-danger-fg)' } };
+  const corPerf = PERF_TOK[perfView].fg;
+  const bgPerf  = PERF_TOK[perfView].bg;
+  const PerfIcon = perfView === 'vermelho' ? AlertTriangle : TrendingUp;
 
   return (
-    <div style={{maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'}}>
+    <div style={{maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:INTER,color:'var(--vg-ink)',background:'var(--vg-bg)',minHeight:'100vh',boxSizing:'border-box'}}>
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
       {/* Header */}
-      <div style={{marginBottom:28}}>
-        <div style={{color:'#b45309',fontWeight:700,fontSize:'0.75rem',letterSpacing:2,marginBottom:8,textTransform:'uppercase'}}>♠ Vegas Card</div>
-        <h1 style={{fontSize:'1.8rem',fontWeight:700,margin:'0 0 4px',color:'#1a1d2e'}}>
-          Olá, {dados.prof?.nome?.split(' ')[0]} 👋
+      <div style={{marginBottom:24}}>
+        <div style={{...CAPTION,marginBottom:6}}>Vegas Card / Início</div>
+        <h1 style={{fontFamily:OUTFIT,fontSize:24,lineHeight:'32px',fontWeight:600,margin:0,color:'var(--vg-ink)'}}>
+          Olá, {dados.prof?.nome?.split(' ')[0]}
         </h1>
-        <p style={{color:'#8b92b0',fontSize:'0.9rem',margin:0}}>
+        <p style={{color:'var(--vg-ink-secondary)',fontSize:14,lineHeight:'22px',margin:'6px 0 0'}}>
           Resumo da sua equipe
         </p>
 
         {/* Filtro de equipe (Melhoria 2) — só aparece se houver mais de uma equipe */}
         {equipes.length > 1 && (
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:16}}>
             {['Geral', ...equipes].map(eq => {
               const ativo = filtroEquipe === eq;
+              const Ico = eq === 'Geral' ? Globe : Users;
               return (
                 <button key={eq} onClick={() => setFiltroEquipe(eq)}
-                  style={{padding:'6px 14px',borderRadius:8,fontSize:'0.8rem',fontWeight:ativo?700:500,cursor:'pointer',fontFamily:'inherit',
-                    border:`1px solid ${ativo?'#f0b429':'#e4e7ef'}`,background:ativo?'#fff8e6':'#ffffff',color:ativo?'#b45309':'#6b7280'}}>
-                  {eq === 'Geral' ? '🌐 Geral' : `👥 ${eq}`}
+                  style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:'var(--vg-radius)',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:INTER,
+                    border:`1px solid ${ativo?'var(--vg-brand-500)':'var(--vg-border)'}`,background:ativo?'var(--vg-brand-50)':'var(--vg-surface)',color:ativo?'var(--vg-brand-700)':'var(--vg-ink-secondary)'}}>
+                  <Ico size={15} strokeWidth={1.75} color={ativo?'var(--vg-brand-500)':'var(--vg-muted)'} /> {eq}
                 </button>
               );
             })}
@@ -523,15 +541,15 @@ export default function HomePage() {
       </div>
 
       {/* Banner de performance */}
-      <div style={{background:bgPerf,border:`1px solid ${bdPerf}`,borderRadius:14,padding:'20px 24px',marginBottom:24,display:'flex',alignItems:'center',gap:16,animation:'fadeIn 0.4s ease'}}>
-        <div style={{fontSize:'2.5rem',lineHeight:1}}>{perfMsgView.emoji}</div>
+      <div style={{background:bgPerf,border:`1px solid ${corPerf}`,borderRadius:'var(--vg-radius-lg)',padding:'20px 24px',marginBottom:24,display:'flex',alignItems:'center',gap:16,animation:'fadeIn 0.4s ease'}}>
+        <PerfIcon size={28} strokeWidth={1.75} color={corPerf} style={{flexShrink:0}} />
         <div style={{flex:1}}>
-          <div style={{fontWeight:700,fontSize:'1.05rem',color:corPerf,marginBottom:4}}>{perfMsgView.titulo}</div>
-          <div style={{color:'#6b7280',fontSize:'0.85rem'}}>{perfMsgView.sub}</div>
+          <div style={{fontFamily:OUTFIT,fontWeight:600,fontSize:16,lineHeight:'24px',color:corPerf,marginBottom:2}}>{perfMsgView.titulo}</div>
+          <div style={{color:'var(--vg-ink-secondary)',fontSize:14,lineHeight:'22px'}}>{perfMsgView.sub}</div>
         </div>
         <div style={{textAlign:'right',flexShrink:0}}>
-          <div style={{fontSize:'2rem',fontWeight:800,color:corPerf}}>{fmtPct(pctMetaView)}</div>
-          <div style={{color:'#9ca3af',fontSize:'0.72rem',textTransform:'uppercase',letterSpacing:1}}>da meta</div>
+          <div className="vg-num" style={{fontFamily:OUTFIT,fontSize:28,fontWeight:600,color:corPerf,lineHeight:1.1}}>{fmtPct(pctMetaView)}</div>
+          <div style={{...LABEL}}>da meta</div>
         </div>
       </div>
 
@@ -539,48 +557,54 @@ export default function HomePage() {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
         {[
           {
+            Ico: Building2, num: false,
             label: 'Empresas Ativas',
             val:   totalEmpresasView,
             sub:   `${comMovView} movimentando em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
-            subCor:'#16a34a',
+            subCor:'var(--vg-ink-secondary)',
           },
           {
+            Ico: Wallet, num: true,
             label: `Mov. ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
             val:   fmt(movAtualView),
             sub:   movAnterior > 0
               ? `${variacao>=0?'▲':'▼'} ${fmtPct(Math.abs(variacao))} vs ${fmtMes(mesAnterior ? mesAnterior+'-01' : null)}`
               : '—',
-            subCor: variacao >= 0 ? '#16a34a' : '#dc2626',
+            subCor: variacao >= 0 ? 'var(--vg-success-fg)' : 'var(--vg-danger-fg)',
           },
           {
+            Ico: BarChart3, num: true,
             label: 'Esperado/mês',
             val:   fmt(esperadoView),
             sub:   `${fmtPct(pctAderenciaView)} realizado`,
             subCor: corPct(pctAderenciaView),
           },
           {
+            Ico: Target, num: true,
             label: 'Meta Apurada',
             val:   fmt(metaApuradaView),
             sub:   `meta: ${fmt(metaTotalView)}/mês`,
-            subCor:'#8b92b0',
+            subCor:'var(--vg-muted)',
           },
           {
+            Ico: Target, num: true,
             label: 'Meta Acumulada',
             val:   fmt(metaTotalView),
             sub:   `${fmt(consEscopo.reduce((s,c) => s+(c.meta_mensal||0), 0))}/mês`,
-            subCor: '#8b92b0',
+            subCor: 'var(--vg-muted)',
           },
           {
+            Ico: CheckCircle2, num: false,
             label: 'Novos Contratos',
             val:   novasView,
             sub:   `em ${fmtMes(mesAtual ? mesAtual+'-01' : null)}`,
-            subCor:'#60a5fa',
+            subCor:'var(--vg-ink-secondary)',
           },
         ].map((k,i) => (
-          <div key={i} style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'18px 20px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',animation:`fadeIn 0.4s ease ${i*0.05}s both`}}>
-            <div style={{color:'#8b92b0',fontSize:'0.65rem',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{k.label}</div>
-            <div style={{fontSize:'1.3rem',fontWeight:700,color:'#1a1d2e',marginBottom:4}}>{k.val}</div>
-            <div style={{fontSize:'0.72rem',color:k.subCor,fontWeight:500}}>{k.sub}</div>
+          <div key={i} style={{...cardStyle,padding:20,animation:`fadeIn 0.4s ease ${i*0.05}s both`}}>
+            <div style={{...LABEL,display:'flex',alignItems:'center',gap:6,marginBottom:8}}><k.Ico {...ICON} color="var(--vg-muted)" />{k.label}</div>
+            <div className={k.num ? 'vg-num' : undefined} style={{fontFamily:OUTFIT,fontSize:24,lineHeight:'32px',fontWeight:600,color:'var(--vg-ink)',marginBottom:4,overflowWrap:'anywhere'}}>{k.val}</div>
+            <div className="vg-num" style={{fontSize:12,lineHeight:'18px',color:k.subCor,fontWeight:500}}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -588,53 +612,52 @@ export default function HomePage() {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:24}}>
 
         {/* Barra de meta */}
-        <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'20px 24px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e',marginBottom:16}}>🎯 Meta da Equipe</div>
+        <div style={cardStyle}>
+          <div style={{...H_CARD,display:'flex',alignItems:'center',gap:8,marginBottom:16}}><Target {...ICON} /> Meta da Equipe</div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-            <span style={{fontSize:'0.8rem',color:'#6b7280'}}>Apurado vs Meta mensal</span>
-            <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctMetaView)}}>{fmtPct(pctMetaView)}</span>
+            <span style={{fontSize:13,color:'var(--vg-ink-secondary)'}}>Apurado vs Meta mensal</span>
+            <span className="vg-num" style={{fontSize:13,fontWeight:600,color:corPct(pctMetaView)}}>{fmtPct(pctMetaView)}</span>
           </div>
-          <div style={{background:'#f0f2f8',borderRadius:8,height:14,overflow:'hidden',marginBottom:12}}>
-            <div style={{height:'100%',borderRadius:8,transition:'width 1s ease',width:`${Math.min(pctMetaView,100)}%`,background:corPct(pctMetaView)}}></div>
+          <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:12,overflow:'hidden',marginBottom:12}}>
+            <div style={{height:'100%',borderRadius:4,transition:'width 1s ease',width:`${Math.min(pctMetaView,100)}%`,background:corPct(pctMetaView)}}></div>
           </div>
-          <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem',marginBottom:16}}>
-            <span style={{color:corPct(pctMetaView),fontWeight:700}}>{fmt(metaApuradaView)} apurado</span>
-            <span style={{color:'#9ca3af'}}>{fmt(metaTotalView)}/mês</span>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:16}}>
+            <span className="vg-num" style={{color:corPct(pctMetaView),fontWeight:600}}>{fmt(metaApuradaView)} apurado</span>
+            <span className="vg-num" style={{color:'var(--vg-muted)'}}>{fmt(metaTotalView)}/mês</span>
           </div>
-          <div style={{paddingTop:14,borderTop:'1px solid #f0f2f8'}}>
+          <div style={{paddingTop:14,borderTop:'1px solid var(--vg-border)'}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-              <span style={{fontSize:'0.8rem',color:'#6b7280'}}>Mov. real vs esperada ({fmtMes(mesAtual ? mesAtual+'-01' : null)})</span>
-              <span style={{fontSize:'0.82rem',fontWeight:700,color:corPct(pctAderenciaView)}}>{fmtPct(pctAderenciaView)}</span>
+              <span style={{fontSize:13,color:'var(--vg-ink-secondary)'}}>Mov. real vs esperada ({fmtMes(mesAtual ? mesAtual+'-01' : null)})</span>
+              <span className="vg-num" style={{fontSize:13,fontWeight:600,color:corPct(pctAderenciaView)}}>{fmtPct(pctAderenciaView)}</span>
             </div>
-            <div style={{background:'#f0f2f8',borderRadius:8,height:10,overflow:'hidden'}}>
-              <div style={{height:'100%',borderRadius:8,width:`${Math.min(pctAderenciaView,100)}%`,background:corPct(pctAderenciaView)}}></div>
+            <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:10,overflow:'hidden'}}>
+              <div style={{height:'100%',borderRadius:4,width:`${Math.min(pctAderenciaView,100)}%`,background:corPct(pctAderenciaView)}}></div>
             </div>
           </div>
         </div>
 
         {/* Meta por mês */}
-        <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'20px 24px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e',marginBottom:16}}>📅 Meta Apurada por Mês</div>
+        <div style={cardStyle}>
+          <div style={{...H_CARD,display:'flex',alignItems:'center',gap:8,marginBottom:16}}><CalendarDays {...ICON} /> Meta Apurada por Mês</div>
           {mesesComMetaView.length === 0 ? (
-            <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'24px 0'}}>Nenhuma meta apurada ainda</div>
+            <div style={{color:'var(--vg-muted)',fontSize:14,textAlign:'center',padding:'24px 0'}}>Nenhuma meta apurada ainda</div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               {mesesComMetaView.map(([mes, val]) => {
                 const maxVal = Math.max(...mesesComMetaView.map(([,v])=>v), 1);
                 const pct    = (val/maxVal)*100;
-                // Destaca o mês com a MAIOR meta apurada (verde forte); os demais em verde claro.
+                // Destaca o mês com a MAIOR meta apurada (marca); os demais em tom neutro.
                 const isMax  = val >= maxVal;
-                const corTexto = isMax ? '#15803d' : '#4a5068';
-                const corBarra = isMax ? '#16a34a' : '#86efac';
+                const corBarra = isMax ? 'var(--vg-brand-500)' : 'var(--vg-brand-400)';
                 return (
                   <div key={mes}>
                     <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                      <span style={{fontSize:'0.78rem',fontWeight:isMax?700:500,color:corTexto}}>
-                        {fmtMes(mes+'-01')}{isMax?' ← maior':''}
+                      <span style={{fontSize:13,fontWeight:isMax?600:500,color:isMax?'var(--vg-ink)':'var(--vg-ink-secondary)'}}>
+                        {fmtMes(mes+'-01')}{isMax?' · maior':''}
                       </span>
-                      <span style={{fontSize:'0.78rem',fontWeight:700,color:isMax?'#15803d':'#16a34a'}}>{fmt(val)}</span>
+                      <span className="vg-num" style={{fontSize:13,fontWeight:600,color:'var(--vg-ink)'}}>{fmt(val)}</span>
                     </div>
-                    <div style={{background:'#f0f2f8',borderRadius:4,height:8,overflow:'hidden'}}>
+                    <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:8,overflow:'hidden'}}>
                       <div style={{height:'100%',width:`${pct}%`,background:corBarra,borderRadius:4,transition:'width 0.8s'}}></div>
                     </div>
                   </div>
@@ -646,37 +669,39 @@ export default function HomePage() {
       </div>
 
       {/* Top 3 vendedores */}
-      <div style={{background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'20px 24px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',marginBottom:24}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-          <div style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>{equipeAtiva ? `👥 Vendedores — ${equipeAtiva}` : '🏆 Top Vendedores — Meta Apurada'}</div>
-          <Link href="/vendedor" style={{color:'#b45309',fontSize:'0.78rem',fontWeight:600,textDecoration:'none'}}>Ver ranking completo →</Link>
+      <div style={{...cardStyle,marginBottom:24}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{...H_CARD,display:'flex',alignItems:'center',gap:8}}>
+            {equipeAtiva ? <Users {...ICON} /> : <Trophy {...ICON} />} {equipeAtiva ? `Vendedores — ${equipeAtiva}` : 'Top Vendedores — Meta Apurada'}
+          </div>
+          <Link href="/vendedor" style={{display:'inline-flex',alignItems:'center',gap:4,color:'var(--vg-brand-700)',fontSize:13,fontWeight:600,textDecoration:'none'}}>Ver ranking completo <ArrowRight size={14} strokeWidth={2} /></Link>
         </div>
         {top3View.length === 0 ? (
-          <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'16px 0'}}>Nenhum dado ainda</div>
+          <div style={{color:'var(--vg-muted)',fontSize:14,textAlign:'center',padding:'16px 0'}}>Nenhum dado ainda</div>
         ) : (
-          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div>
             {top3View.map((vend,i) => {
-              const medal      = i===0?'🥇':i===1?'🥈':'🥉';
               const validaMesV = (vend.meta_inicio ? String(vend.meta_inicio).substring(0,7) : '2026-01');
               const validaV    = validaMesV > '2026-01' ? validaMesV : '2026-01';
               const qtdV       = (mesesComLib||mesesDisp||[]).filter(m => m >= validaV).length || 1;
               const metaAcum   = (vend.meta_mensal||0) * qtdV;
               const pct        = metaAcum > 0 ? (vend.metaApurada/metaAcum)*100 : 0;
               const cor        = corPct(pct);
+              const top3       = i < 3;
               return (
-                <div key={vend.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:i===0?'rgba(240,180,41,0.05)':'#f9fafb',borderRadius:10,border:`1px solid ${i===0?'rgba(240,180,41,0.2)':'#f0f2f8'}`}}>
-                  <span style={{fontSize:'1.3rem'}}>{medal}</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:'0.88rem',color:'#1a1d2e'}}>{vend.nome}</div>
-                    <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>{vend.equipe||vend.gestor||'—'}</div>
+                <div key={vend.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderTop:i>0?'1px solid var(--vg-border)':'none'}}>
+                  <span className="vg-num" style={{fontFamily:OUTFIT,fontWeight:700,fontSize:top3?18:14,color:top3?'var(--vg-brand-500)':'var(--vg-muted)',width:24,textAlign:'center',flexShrink:0}}>{i+1}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:14,color:'var(--vg-ink)'}}>{vend.nome}</div>
+                    <div style={{color:'var(--vg-muted)',fontSize:12}}>{vend.equipe||vend.gestor||'—'}</div>
                   </div>
                   <div style={{textAlign:'right',minWidth:100}}>
-                    <div style={{fontWeight:700,color:'#34d399',fontSize:'0.9rem'}}>{fmt(vend.metaApurada)}</div>
-                    {metaAcum > 0 && <div style={{fontSize:'0.68rem',color:cor,fontWeight:600}}>{fmtPct(pct)} da meta</div>}
+                    <div className="vg-num" style={{fontWeight:600,color:'var(--vg-ink)',fontSize:14,fontFamily:OUTFIT}}>{fmt(vend.metaApurada)}</div>
+                    {metaAcum > 0 && <div className="vg-num" style={{fontSize:12,color:cor,fontWeight:600}}>{fmtPct(pct)} da meta</div>}
                   </div>
                   {metaAcum > 0 && (
                     <div style={{width:60}}>
-                      <div style={{background:'#f0f2f8',borderRadius:4,height:6,overflow:'hidden'}}>
+                      <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:6,overflow:'hidden'}}>
                         <div style={{height:'100%',width:`${Math.min(pct,100)}%`,background:cor,borderRadius:4}}></div>
                       </div>
                     </div>
@@ -727,71 +752,68 @@ export default function HomePage() {
         });
 
         return (
-          <div style={{background:'#ffffff',border:'1px solid rgba(220,38,38,0.2)',borderRadius:12,marginBottom:16,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+          <div style={{...cardStyle,padding:0,overflow:'hidden',marginBottom:16}}>
             {/* Header do card */}
-            <div style={{background:'rgba(220,38,38,0.04)',borderBottom:'1px solid rgba(220,38,38,0.12)',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+            <div style={{borderBottom:'1px solid var(--vg-border)',padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
               <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <span style={{fontSize:'1.3rem'}}>🔍</span>
+                <Search {...ICON} color="var(--vg-ink-secondary)" />
                 <div>
-                  <div style={{fontWeight:700,color:'#d97706',fontSize:'0.9rem'}}>
-                    🔍 Análise da Equipe — Vendedores com Meta
-                  </div>
-                  <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:1,display:'flex',gap:10,flexWrap:'wrap'}}>
-                    {ok > 0 && <span style={{color:'#16a34a',fontWeight:600}}>✅ {ok} no verde</span>}
-                    {abaixo.length > 0 && <span style={{color: criticos > 0 ? '#dc2626' : '#d97706',fontWeight:600}}>⚠️ {abaixo.length} abaixo de 80%{criticos > 0 ? ` (${criticos} crítico${criticos>1?'s':''})` : ''}</span>}
-                    {semMeta.length > 0 && <span style={{color:'#6b7280',fontWeight:500}}>— {semMeta.length} sem meta cadastrada</span>}
+                  <div style={{...H_CARD}}>Análise da Equipe — Vendedores com Meta</div>
+                  <div style={{...CAPTION,marginTop:2,display:'flex',gap:10,flexWrap:'wrap'}}>
+                    {ok > 0 && <span style={{color:'var(--vg-success-fg)',fontWeight:600}}>{ok} no verde</span>}
+                    {abaixo.length > 0 && <span style={{color: criticos > 0 ? 'var(--vg-danger-fg)' : 'var(--vg-warning-fg)',fontWeight:600}}>{abaixo.length} abaixo de 80%{criticos > 0 ? ` (${criticos} crítico${criticos>1?'s':''})` : ''}</span>}
+                    {semMeta.length > 0 && <span style={{color:'var(--vg-muted)',fontWeight:500}}>· {semMeta.length} sem meta cadastrada</span>}
                   </div>
                 </div>
               </div>
-              <Link href="/vendedor" style={{color:'#dc2626',fontSize:'0.75rem',fontWeight:600,textDecoration:'none',background:'rgba(220,38,38,0.08)',padding:'5px 12px',borderRadius:6,border:'1px solid rgba(220,38,38,0.2)'}}>
-                Ver detalhes →
+              <Link href="/vendedor" style={{display:'inline-flex',alignItems:'center',gap:4,color:'var(--vg-danger-fg)',fontSize:13,fontWeight:600,textDecoration:'none',background:'var(--vg-danger-bg)',padding:'6px 12px',borderRadius:'var(--vg-radius)'}}>
+                Ver detalhes <ArrowRight size={14} strokeWidth={2} />
               </Link>
             </div>
             {/* Lista de vendedores */}
-            <div style={{padding:'12px 20px',display:'flex',flexDirection:'column',gap:6}}>
+            <div style={{padding:'4px 20px'}}>
               {abaixo.length === 0 && (
-                <div style={{textAlign:'center',padding:'16px 0',color:'#16a34a',fontWeight:600,fontSize:'0.85rem'}}>
-                  ✅ Todos os vendedores com meta estão acima de 80%
+                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'16px 0',color:'var(--vg-success-fg)',fontWeight:600,fontSize:14}}>
+                  <CheckCircle2 size={16} strokeWidth={2} /> Todos os vendedores com meta estão acima de 80%
                 </div>
               )}
               {abaixo.map((cons,i) => {
-                const cor = cons.pct < 50 ? '#dc2626' : cons.pct < 65 ? '#ea580c' : '#d97706';
-                const bgBar = cons.pct < 50 ? 'rgba(220,38,38,0.08)' : cons.pct < 65 ? 'rgba(234,88,12,0.06)' : 'rgba(217,119,6,0.06)';
+                const cor = cons.pct < 50 ? 'var(--vg-danger-fg)' : 'var(--vg-warning-fg)';
                 return (
-                  <div key={cons.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:bgBar,borderRadius:8}}>
-                    <div style={{width:28,height:28,borderRadius:'50%',background:cor+'20',border:`1.5px solid ${cor}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.7rem',fontWeight:800,color:cor,flexShrink:0}}>
+                  <div key={cons.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderTop:i>0?'1px solid var(--vg-border)':'none'}}>
+                    <div style={{width:26,height:26,borderRadius:'50%',background:'var(--vg-neutral-bg)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:cor,flexShrink:0}} className="vg-num">
                       {i+1}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontWeight:600,fontSize:'0.82rem',color:'#1a1d2e',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cons.nome}</div>
-                      <div style={{color:'#8b92b0',fontSize:'0.68rem'}}>{cons.equipe||'—'}</div>
+                      <div style={{fontWeight:600,fontSize:14,color:'var(--vg-ink)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cons.nome}</div>
+                      <div style={{color:'var(--vg-muted)',fontSize:12}}>{cons.equipe||'—'}</div>
                     </div>
                     <div style={{minWidth:120}}>
-                      <div style={{background:'#f0f2f8',borderRadius:3,height:5,overflow:'hidden',marginBottom:2}}>
-                        <div style={{height:'100%',width:`${Math.min(cons.pct,100)}%`,background:cor,borderRadius:3}}></div>
+                      <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:5,overflow:'hidden',marginBottom:2}}>
+                        <div style={{height:'100%',width:`${Math.min(cons.pct,100)}%`,background:cor,borderRadius:4}}></div>
                       </div>
-                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.65rem'}}>
-                        <span style={{color:cor,fontWeight:700}}>{fmtPct(cons.pct)}</span>
-                        <span style={{color:'#9ca3af'}}>{fmt(cons.apurado)}</span>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                        <span className="vg-num" style={{color:cor,fontWeight:600}}>{fmtPct(cons.pct)}</span>
+                        <span className="vg-num" style={{color:'var(--vg-muted)'}}>{fmt(cons.apurado)}</span>
                       </div>
                     </div>
                   </div>
                 );
               })}
               {abaixo.length > 6 && (
-                <div style={{textAlign:'center',padding:'6px 0',color:'#9ca3af',fontSize:'0.73rem',borderTop:'1px solid #f0f2f8',marginTop:2}}>
+                <div style={{textAlign:'center',padding:'8px 0',color:'var(--vg-muted)',fontSize:12,borderTop:'1px solid var(--vg-border)'}}>
                   + {abaixo.length - 6} outros vendedores abaixo da meta
                 </div>
               )}
             </div>
             {/* Vendedores sem meta */}
             {semMeta.length > 0 && (
-              <div style={{borderTop:'1px solid #f0f2f8',padding:'10px 20px',background:'#fafafa'}}>
-                <div style={{fontSize:'0.7rem',color:'#9ca3af',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}}>Sem meta cadastrada:</div>
+              <div style={{borderTop:'1px solid var(--vg-border)',padding:'12px 20px',background:'var(--vg-surface-muted)'}}>
+                <div style={{...LABEL,marginBottom:6}}>Sem meta cadastrada:</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                   {semMeta.map(cons => (
-                    <span key={cons.id} style={{background:'#f0f2f8',border:'1px solid #e4e7ef',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',color:'#6b7280'}}>
-                      {cons.nome} <span style={{color:'#b0b7cc',fontSize:'0.65rem'}}>({cons.equipe||'—'})</span>
+                    <span key={cons.id} style={{background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderRadius:'var(--vg-radius-sm)',padding:'3px 8px',fontSize:12,color:'var(--vg-ink-secondary)'}}>
+                      {cons.nome} <span style={{color:'var(--vg-muted)'}}>({cons.equipe||'—'})</span>
                     </span>
                   ))}
                 </div>
@@ -800,12 +822,12 @@ export default function HomePage() {
 
             {/* Rodapé com resumo por equipe */}
             {Object.keys(porEquipe).length > 0 && (
-              <div style={{borderTop:'1px solid #f0f2f8',padding:'8px 20px',display:'flex',gap:8,flexWrap:'wrap',background:'#fafafa'}}>
-                <span style={{color:'#9ca3af',fontSize:'0.68rem',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,alignSelf:'center'}}>Por equipe:</span>
+              <div style={{borderTop:'1px solid var(--vg-border)',padding:'10px 20px',display:'flex',gap:8,flexWrap:'wrap',background:'var(--vg-surface-muted)'}}>
+                <span style={{...LABEL,alignSelf:'center'}}>Por equipe:</span>
                 {Object.entries(porEquipe).map(([eq, data]) => {
-                  const cor = data.piorPct < 50 ? '#dc2626' : data.piorPct < 65 ? '#ea580c' : '#d97706';
+                  const cor = data.piorPct < 50 ? 'var(--vg-danger-fg)' : 'var(--vg-warning-fg)';
                   return (
-                    <span key={eq} style={{background:cor+'12',border:`1px solid ${cor}25`,borderRadius:5,padding:'2px 8px',fontSize:'0.7rem',color:cor,fontWeight:600}}>
+                    <span key={eq} style={{background:'var(--vg-neutral-bg)',border:'1px solid var(--vg-border)',borderRadius:'var(--vg-radius-sm)',padding:'3px 8px',fontSize:12,color:cor,fontWeight:600}}>
                       {eq}: {data.count} vendedor{data.count>1?'es':''}
                     </span>
                   );
@@ -818,16 +840,16 @@ export default function HomePage() {
 
       {/* Alerta empresas sem movimentação */}
       {semMovCriticoView > 0 && (
-        <div style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:12,padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14}}>
-          <div style={{fontSize:'1.8rem'}}>⚠️</div>
+        <div style={{background:'var(--vg-danger-bg)',border:'1px solid var(--vg-danger-fg)',borderRadius:'var(--vg-radius-lg)',padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14}}>
+          <AlertTriangle size={22} strokeWidth={1.75} color="var(--vg-danger-fg)" style={{flexShrink:0}} />
           <div style={{flex:1}}>
-            <div style={{fontWeight:700,color:'#dc2626',marginBottom:2}}>
+            <div style={{fontFamily:OUTFIT,fontWeight:600,color:'var(--vg-danger-fg)',marginBottom:2}}>
               {semMovCriticoView} empresa{semMovCriticoView>1?'s':''} nunca movimentaram desde o início
             </div>
-            <div style={{color:'#6b7280',fontSize:'0.82rem'}}>Revise a carteira e entre em contato com essas empresas.</div>
+            <div style={{color:'var(--vg-ink-secondary)',fontSize:14}}>Revise a carteira e entre em contato com essas empresas.</div>
           </div>
-          <Link href="/vendedor" style={{background:'#dc2626',color:'white',borderRadius:8,padding:'8px 16px',textDecoration:'none',fontSize:'0.82rem',fontWeight:600,whiteSpace:'nowrap'}}>
-            Ver Carteira →
+          <Link href="/vendedor" style={{display:'inline-flex',alignItems:'center',gap:5,background:'var(--vg-danger-fg)',color:'#fff',borderRadius:'var(--vg-radius)',padding:'9px 16px',textDecoration:'none',fontSize:14,fontWeight:600,whiteSpace:'nowrap'}}>
+            Ver Carteira <ArrowRight size={14} strokeWidth={2} />
           </Link>
         </div>
       )}
