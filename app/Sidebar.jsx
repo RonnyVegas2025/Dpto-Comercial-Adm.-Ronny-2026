@@ -3,42 +3,13 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, PERFIS } from './context/AuthContext';
-
-const nav = [
-  { href: '/inicio',             icon: '◈',  label: 'Início',        pagina: 'inicio'             },
-  { href: '/painel',             icon: '🎛️', label: 'Painel',        pagina: 'painel'             },
-  { href: '/vendedor',           icon: '👤', label: 'Vendedor',      pagina: 'vendedor'           },
-  { href: '/movimentacoes',      icon: '📥', label: 'Importações',   pagina: 'movimentacoes'      },
-  { href: '/importar-base',      icon: '🗂️', label: 'Base Empresas', pagina: 'movimentacoes'      },
-  // Importador novo de spread (um mês por arquivo, só linhas com valor).
-  // Substitui o antigo /importar-spreads, mantido apenas por referência na home.
-  { href: '/importar-spread',    icon: '💹', label: 'Importar Spread', pagina: 'importar-spread'   },
-  { href: '/gestao',             icon: '⚙️', label: 'Gestão',        pagina: 'gestao'             },
-  { href: '/relatorios',         icon: '📋', label: 'Relatórios',    pagina: 'relatorios'         },
-  { href: '/fechamento-meta',    icon: '🔒', label: 'Fechamento Meta', pagina: 'fechamento-meta'  },
-  { href: '/dashboard-diretor',  icon: '📊', label: 'Dashboard Diretor', pagina: 'dashboard-diretor' },
-  { href: '/cartoes-vegas',      icon: '🃏', label: 'Cartões Vegas',     pagina: 'cartoes-vegas'      },
-  { href: '/rentabilidade-nova', icon: '📈', label: 'Rentabilidade',    pagina: 'rentabilidade-nova' },
-  { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
-  // Agregados migrados para projeto separado — itens ocultos do menu.
-  // Rotas e arquivos preservados; reativar removendo o comentário.
-  // { href: '/agregados',          icon: '💚', label: 'Produtos Agregados', pagina: 'agregados'      },
-  // { href: '/agregados-cadastro', icon: '📝', label: 'Cadastro Agregados', pagina: 'agregados-cadastro' },
-  { href: '/adm-comercial',      icon: '🏢', label: 'Adm Comercial', pagina: 'adm-comercial'      },
-];
+import { navVisivel } from './navItems';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile, podeVer, logout } = useAuth();
 
-  const perfisAdmin = ['diretoria', 'gestor_master'];
-  const isAdmin = perfisAdmin.includes(profile?.perfil);
-
-  const navFiltrado = nav.filter(item => {
-    if (item.href === '/inicio' && isAdmin)  return false;
-    if (item.href === '/painel' && !isAdmin) return false;
-    return podeVer(item.pagina);
-  });
+  const navFiltrado = navVisivel(profile, podeVer);
 
   const corPerfil = {
     gestor_master:        '#f0b429',

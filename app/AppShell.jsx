@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './Sidebar';
+import { primeiraRotaPermitida } from './navItems';
 
 export default function AppShell({ children }) {
   const { user, profile, loading, podeVer } = useAuth();
@@ -21,27 +22,17 @@ export default function AppShell({ children }) {
       return;
     }
 
-    // Logado e está na página de login → redireciona para home correta
+    // Logado e está na página de login → primeira página permitida (ou ?next=, se houver)
     if (user && isLoginPage) {
-      const perfil = profile?.perfil;
-      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor', 'administrativo'];
-      if (perfil && perfisRestritos.includes(perfil)) {
-        router.replace('/inicio');
-      } else {
-        router.replace('/painel');
-      }
+      let next = null;
+      try { next = new URLSearchParams(window.location.search).get('next'); } catch (_) {}
+      router.replace(next && next.startsWith('/') ? next : primeiraRotaPermitida(profile, podeVer));
       return;
     }
 
-    // ✅ Logado e está na raiz "/" → redireciona para home correta
+    // ✅ Logado e está na raiz "/" → primeira página permitida
     if (user && pathname === '/') {
-      const perfil = profile?.perfil;
-      const perfisRestritos = ['gestor_comercial', 'supervisor_comercial', 'vendedor', 'administrativo'];
-      if (perfil && perfisRestritos.includes(perfil)) {
-        router.replace('/inicio');
-      } else {
-        router.replace('/painel');
-      }
+      router.replace(primeiraRotaPermitida(profile, podeVer));
       return;
     }
   }, [user, loading, isLoginPage, pathname, profile, router]);
