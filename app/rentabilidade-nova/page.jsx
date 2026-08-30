@@ -177,13 +177,14 @@ export default function RentabilidadeNova() {
       const taxa = Number(e.taxa_negativa) || 0;
       if(somenteTaxa && !(taxa > 0)) continue;
       const recarga = recargaSel(e);
-      if(recarga <= 0) continue;
+      const recComercios = comerciosSel(e); // valor importado, não multiplicar
+      // Inclui quem teve recarga OU spread no período (o gasto no comércio pode ser em outro mês).
+      if(recarga <= 0 && recComercios <= 0) continue;
       const taxaPos = Number(e.taxa_positiva) || 0;
       const taxaBand = Number(e.taxa_bandeira) || 0;
       const custo = recarga * taxa;
       const recTaxa = recarga * taxaPos;
       const recBand = recarga * taxaBand;
-      const recComercios = comerciosSel(e); // valor importado, não multiplicar
       const receita = recTaxa + recBand + recComercios;
       base.push({
         id:e.id, produto_id:e.produto_id, nome:e.nome, categoria:e.categoria, produto:e.produto_contratado,
