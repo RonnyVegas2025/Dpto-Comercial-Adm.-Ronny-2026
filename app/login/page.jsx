@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -27,166 +28,115 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      background: '#f5f6fa',
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
-      {/* Painel esquerdo — decorativo */}
-      <div style={{
-        flex: 1,
-        background: 'linear-gradient(135deg, #1a1d2e 0%, #2d3250 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 48,
-        display: 'flex',
-      }}
-        className="login-left"
-      >
-        <div style={{ maxWidth: 400, color: '#ffffff' }}>
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ background: '#f0b429', borderRadius: 12, width: 48, height: 48,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.4rem', fontWeight: 900, marginBottom: 20 }}>V</div>
-            <h1 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px',
-              fontFamily: "'Syne', sans-serif" }}>Vegas Card</h1>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', margin: 0 }}>
-              Gestão Comercial
+    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', background:'var(--vg-bg)', fontFamily:"'Inter', sans-serif" }}>
+      {/* Faixa de assinatura no topo */}
+      <div style={{ height:3, background:'var(--vg-gradient)', width:'100%', flexShrink:0 }} />
+
+      <div style={{ flex:1, display:'flex' }}>
+        {/* ESQUERDA — painel institucional */}
+        <div className="login-left" style={{
+          flex:'0 0 45%', background:'var(--vg-brand-800)', color:'#fff',
+          display:'flex', flexDirection:'column', justifyContent:'space-between',
+          padding:'56px 56px 40px', boxSizing:'border-box',
+        }}>
+          <div style={{ maxWidth:460 }}>
+            <h1 style={{ fontFamily:"'Outfit', sans-serif", fontSize:32, lineHeight:'42px', fontWeight:600, margin:0 }}>
+              Vegas Card — Gestão Comercial
+            </h1>
+            <p style={{ color:'rgba(255,255,255,0.7)', fontSize:14, lineHeight:'22px', margin:'18px 0 0', maxWidth:400 }}>
+              Ambiente interno. Os dados exibidos são confidenciais e o acesso é registrado.
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {[
-              { icon: '📊', title: 'Dashboard Completo', desc: 'Acompanhe performance e metas em tempo real' },
-              { icon: '🏢', title: 'Gestão de Empresas',  desc: 'Controle carteira de cartões e agregados' },
-              { icon: '📦', title: 'Produtos Agregados', desc: 'WellHub, Total Pass, Telemedicina e mais' },
-              { icon: '📋', title: 'Relatórios',         desc: 'Exportações e conferências mensais' },
-            ].map(item => (
-              <div key={item.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '1.2rem', marginTop: 1 }}>{item.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{item.title}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', marginTop: 2 }}>{item.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:12, letterSpacing:0.4 }}>Vegas Card — uso interno</div>
         </div>
-      </div>
 
-      {/* Painel direito — formulário */}
-      <div style={{
-        width: 480,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 48,
-        background: '#ffffff',
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ width: '100%', maxWidth: 360 }}>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1a1d2e',
-            margin: '0 0 6px', fontFamily: "'Syne', sans-serif" }}>
-            Bem-vindo de volta
-          </h2>
-          <p style={{ color: '#8b92b0', fontSize: '0.85rem', margin: '0 0 32px' }}>
-            Entre com suas credenciais para acessar o sistema
-          </p>
+        {/* DIREITA — autenticação */}
+        <div className="login-right" style={{
+          flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+          padding:'48px 24px', boxSizing:'border-box', background:'var(--vg-bg)',
+        }}>
+          <div style={{ width:'100%', maxWidth:400 }}>
+            <img src="/logo-vegas.png" alt="Vegas Card"
+              style={{ display:'block', width:240, maxWidth:'70%', height:'auto', objectFit:'contain', margin:'0 auto 12px' }} />
 
-          {erro && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fca5a5',
-              borderRadius: 8, padding: '10px 14px', color: '#dc2626',
-              fontSize: '0.82rem', marginBottom: 20 }}>
-              ⚠️ {erro}
-            </div>
-          )}
+            <h2 style={{ fontFamily:"'Outfit', sans-serif", fontSize:24, lineHeight:'32px', fontWeight:600, color:'var(--vg-ink)', margin:'0 0 6px', textAlign:'center' }}>
+              Vegas Card
+            </h2>
+            <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'0 0 28px', textAlign:'center' }}>
+              Acesse com seu e-mail corporativo.
+            </p>
 
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={sL}>E-mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                style={sI}
-                autoComplete="email"
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label style={sL}>Senha</label>
-              <div style={{ position: 'relative' }}>
+            <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <div>
+                <label style={sL}>E-mail</label>
                 <input
-                  type={mostrarSenha ? 'text' : 'password'}
-                  value={senha}
-                  onChange={e => setSenha(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ ...sI, paddingRight: 44 }}
-                  autoComplete="current-password"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  style={sI}
+                  autoComplete="email"
+                  autoFocus
                 />
-                <button type="button"
-                  onClick={() => setMostrarSenha(v => !v)}
-                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#8b92b0', fontSize: '0.85rem' }}>
-                  {mostrarSenha ? '🙈' : '👁'}
-                </button>
               </div>
-            </div>
 
-            <button type="submit" disabled={loading}
-              style={{
-                background: loading ? '#d1d5e8' : '#f0b429',
-                color: '#000',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                marginTop: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                transition: 'background 0.15s',
-              }}>
-              {loading ? (
-                <>
-                  <div style={{ width: 16, height: 16, border: '2px solid rgba(0,0,0,0.2)',
-                    borderTop: '2px solid #000', borderRadius: '50%',
-                    animation: 'spin 0.7s linear infinite' }}></div>
-                  Entrando...
-                </>
-              ) : 'Entrar →'}
-            </button>
-          </form>
+              <div>
+                <label style={sL}>Senha</label>
+                <div style={{ display:'flex', alignItems:'center', gap:8, background:'#fff', border:'1px solid var(--vg-border-field)', borderRadius:'var(--vg-radius)', padding:'0 14px' }}>
+                  <input
+                    type={mostrarSenha ? 'text' : 'password'}
+                    value={senha}
+                    onChange={e => setSenha(e.target.value)}
+                    placeholder="••••••••"
+                    style={{ flex:1, border:'none', outline:'none', background:'transparent', color:'var(--vg-ink)', fontSize:15, fontFamily:"'Inter', sans-serif", padding:'12px 0' }}
+                    autoComplete="current-password"
+                  />
+                  <button type="button" onClick={() => setMostrarSenha(v => !v)}
+                    aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                    title={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:44, height:44, background:'none', border:'none', cursor:'pointer', color:'var(--vg-muted)' }}>
+                    {mostrarSenha ? <EyeOff size={18} strokeWidth={1.75} /> : <Eye size={18} strokeWidth={1.75} />}
+                  </button>
+                </div>
+                {erro && (
+                  <div style={{ color:'var(--vg-danger-fg)', fontSize:13, lineHeight:'20px', marginTop:8 }}>{erro}</div>
+                )}
+              </div>
 
-          <p style={{ color: '#b0b7cc', fontSize: '0.72rem', textAlign: 'center',
-            marginTop: 32, lineHeight: 1.6 }}>
-            Acesso restrito a colaboradores Vegas Card.<br/>
-            Problemas? Fale com o administrador do sistema.
-          </p>
+              <button type="submit" disabled={loading}
+                style={{
+                  width:'100%', background:'var(--vg-brand-500)', color:'#fff', border:'none',
+                  borderRadius:'var(--vg-radius)', padding:'13px', fontWeight:600, fontSize:15,
+                  fontFamily:"'Inter', sans-serif", cursor: loading ? 'default' : 'pointer',
+                  opacity: loading ? 0.7 : 1, marginTop:4,
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:8, minHeight:48,
+                }}>
+                {loading ? (
+                  <>
+                    <span style={{ width:16, height:16, border:'2px solid rgba(255,255,255,0.4)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
+                    Entrando…
+                  </>
+                ) : 'Entrar'}
+              </button>
+            </form>
+
+            <p style={{ color:'var(--vg-muted)', fontSize:12, lineHeight:'20px', textAlign:'center', margin:'28px 0 0' }}>
+              Acesso restrito a colaboradores Vegas Card.<br/>
+              Problemas? Fale com o administrador do sistema.
+            </p>
+            <p style={{ color:'var(--vg-muted)', fontSize:12, textAlign:'center', margin:'16px 0 0' }}>v0.1.0</p>
+          </div>
         </div>
       </div>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 768px) { .login-left { display: none !important; } }
-        input:focus { border-color: #f0b429 !important; outline: none; box-shadow: 0 0 0 3px rgba(240,180,41,0.1); }
+        input:focus { border-color: var(--vg-brand-500) !important; outline: none; }
       `}</style>
     </div>
   );
 }
 
-const sL = { display: 'block', color: '#4a5068', fontSize: '0.8rem', fontWeight: 600, marginBottom: 6 };
-const sI = { width: '100%', background: '#f9fafb', border: '1px solid #e4e7ef', borderRadius: 8,
-  padding: '10px 14px', color: '#1a1d2e', fontSize: '0.9rem', fontFamily: 'inherit',
-  boxSizing: 'border-box', transition: 'border-color 0.15s' };
-
+const sL = { display:'block', color:'var(--vg-ink-secondary)', fontSize:12, lineHeight:'18px', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:6 };
+const sI = { width:'100%', background:'#fff', border:'1px solid var(--vg-border-field)', borderRadius:'var(--vg-radius)', padding:'12px 14px', color:'var(--vg-ink)', fontSize:15, fontFamily:"'Inter', sans-serif", boxSizing:'border-box' };
