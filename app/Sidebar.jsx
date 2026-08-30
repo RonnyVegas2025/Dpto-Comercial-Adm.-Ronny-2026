@@ -18,6 +18,7 @@ const nav = [
   { href: '/fechamento-meta',    icon: '🔒', label: 'Fechamento Meta', pagina: 'fechamento-meta'  },
   { href: '/dashboard-diretor',  icon: '📊', label: 'Dashboard Diretor', pagina: 'dashboard-diretor' },
   { href: '/cartoes-vegas',      icon: '🃏', label: 'Cartões Vegas',     pagina: 'cartoes-vegas'      },
+  { href: '/rentabilidade-nova', icon: '📈', label: 'Rentabilidade',    pagina: 'rentabilidade-nova' },
   { href: '/relatorio-empresas', icon: '📑', label: 'Rel. Empresas', pagina: 'relatorio_empresas' },
   // Agregados migrados para projeto separado — itens ocultos do menu.
   // Rotas e arquivos preservados; reativar removendo o comentário.

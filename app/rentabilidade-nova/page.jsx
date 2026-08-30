@@ -321,8 +321,8 @@ export default function RentabilidadeNova() {
       {/* Cabeçalho */}
       <div style={{ marginBottom:20 }}>
         <div style={{ ...CAPTION, marginBottom:6 }}>Vegas Card / Rentabilidade</div>
-        <h1 style={{ fontFamily:OUTFIT, fontSize:24, lineHeight:'32px', fontWeight:600, color:'var(--vg-ink)', margin:0 }}>Custo por Taxa Negativa</h1>
-        <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'6px 0 0' }}>Custo sobre o crédito inserido — etapa 1 (receita/spread na etapa 2)</p>
+        <h1 style={{ fontFamily:OUTFIT, fontSize:24, lineHeight:'32px', fontWeight:600, color:'var(--vg-ink)', margin:0 }}>Rentabilidade</h1>
+        <p style={{ color:'var(--vg-ink-secondary)', fontSize:14, lineHeight:'22px', margin:'6px 0 0' }}>Receita, custo e spread líquido por diretoria e empresa</p>
       </div>
 
       {/* Filtro de meses */}
