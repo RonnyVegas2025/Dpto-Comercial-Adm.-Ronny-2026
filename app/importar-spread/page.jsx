@@ -15,12 +15,14 @@ const fmt    = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',curr
 const fmtInt = (v) => Number(v||0).toLocaleString('pt-BR');
 const fmtMes = (d) => { if(!d) return '—'; const [y,m]=String(d).split('-'); const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']; return `${ms[parseInt(m)-1]}/${y}`; };
 
-function cleanNum(v) {
-  if (v === null || v === undefined || v === '-' || v === '') return 0;
-  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+// Retorna o número da célula (incluindo negativos e zero); null se vazia ou não numérica.
+function parseValor(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
   const s = String(v).replace(/R\$\s*/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+  if (s === '' || s === '-') return null;
   const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
+  return isNaN(n) ? null : n;
 }
 
 // HEADER (Date do xlsx com cellDates, ou serial Excel) → competência YYYY-MM-01. null se não for data.
@@ -55,7 +57,7 @@ function parseSpread(ws, xlsxLib) {
   header.forEach((h,i) => { const c = headerParaCompetencia(h); if(c) { idxData = i; competencia = c; } });
   if (idxData < 0) return null;
 
-  let totalLinhas = 0, ignoradas = 0;
+  let totalLinhas = 0, positivos = 0, negativos = 0, zerados = 0, vazias = 0;
   const registros = [];
   for (let r = 1; r < matrix.length; r++) {
     const row = matrix[r] || [];
@@ -63,12 +65,14 @@ function parseSpread(ws, xlsxLib) {
     if (!prodId) continue;
     totalLinhas++;
     const nome  = String(row[idxEmp] || '').trim();
-    const valor = cleanNum(row[idxData]);
-    if (!(valor > 0)) { ignoradas++; continue; }
+    const valor = parseValor(row[idxData]);
+    if (valor === null) { vazias++; continue; } // só descarta vazio ou não-numérico
+    if (valor > 0) positivos++; else if (valor < 0) negativos++; else zerados++;
     registros.push({ produto_id: prodId, empresa_nome: nome, competencia, spread: valor });
   }
-  registros.sort((a,b) => b.spread - a.spread);
-  return { competencia, totalLinhas, ignoradas, registros };
+  // Ordena por valor ABSOLUTO — negativos grandes aparecem entre os maiores.
+  registros.sort((a,b) => Math.abs(b.spread) - Math.abs(a.spread));
+  return { competencia, totalLinhas, positivos, negativos, zerados, vazias, registros };
 }
 
 export default function ImportarSpread() {
@@ -214,11 +218,13 @@ export default function ImportarSpread() {
           </div>
 
           {/* Resumo */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px,1fr))', gap:14, marginBottom:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px,1fr))', gap:14, marginBottom:20 }}>
             <Resumo label="Linhas no arquivo" valor={fmtInt(prev.totalLinhas)} />
-            <Resumo label="Com valor" valor={fmtInt(prev.comValor)} cor="var(--vg-success-fg)" />
-            <Resumo label="Ignoradas (zeradas)" valor={fmtInt(prev.ignoradas)} cor="var(--vg-muted)" />
-            <Resumo label="Total do spread" valor={fmt(prev.totalSpread)} cor="var(--vg-brand-700)" />
+            <Resumo label="Positivos" valor={fmtInt(prev.positivos)} cor="var(--vg-success-fg)" />
+            <Resumo label="Negativos" valor={fmtInt(prev.negativos)} cor="var(--vg-danger-fg)" />
+            <Resumo label="Zerados" valor={fmtInt(prev.zerados)} cor="var(--vg-muted)" />
+            <Resumo label="Ignoradas (vazias)" valor={fmtInt(prev.vazias)} cor="var(--vg-muted)" />
+            <Resumo label="Total do spread" valor={fmt(prev.totalSpread)} cor={prev.totalSpread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-brand-700)'} />
           </div>
 
           {/* Avisos */}
@@ -235,8 +241,8 @@ export default function ImportarSpread() {
             </div>
           )}
 
-          {/* 15 primeiras com valor */}
-          <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, margin:'8px 0 8px' }}>15 maiores spreads</div>
+          {/* 15 maiores por valor absoluto (negativos em vermelho) */}
+          <div style={{ ...CAPTION, textTransform:'uppercase', letterSpacing:0.6, margin:'8px 0 8px' }}>15 maiores spreads (por valor absoluto)</div>
           <div style={{ overflowX:'auto', border:'1px solid var(--vg-border)', borderRadius:'var(--vg-radius)' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
               <thead>
@@ -251,7 +257,7 @@ export default function ImportarSpread() {
                   <tr key={i} style={{ borderTop:'1px solid var(--vg-border)' }}>
                     <td style={{ ...s.td, textAlign:'right', color:'var(--vg-muted)' }} className="vg-num">{r.produto_id}</td>
                     <td style={{ ...s.td, fontWeight:500, color:'var(--vg-ink)' }}>{r.empresa_nome || '—'}</td>
-                    <td style={{ ...s.td, textAlign:'right', color:'var(--vg-success-fg)', fontWeight:600 }} className="vg-num">{fmt(r.spread)}</td>
+                    <td style={{ ...s.td, textAlign:'right', color: r.spread<0 ? 'var(--vg-danger-fg)' : r.spread>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)', fontWeight:600 }} className="vg-num">{fmt(r.spread)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -309,7 +315,7 @@ export default function ImportarSpread() {
         </div>
         <ul style={{ margin:0, paddingLeft:20, color:'var(--vg-ink-secondary)', fontSize:13, lineHeight:2 }}>
           <li>Um arquivo = um mês. A competência vem da <strong>data no cabeçalho</strong> da última coluna (Formato B).</li>
-          <li>Chave de gravação: <strong>produto_id + competência</strong>. Linhas com valor zero são <strong>ignoradas</strong>.</li>
+          <li>Chave de gravação: <strong>produto_id + competência</strong>. Valores negativos e zerados também são importados — <strong>só linhas vazias</strong> são ignoradas.</li>
           <li>Reimportar o mesmo mês <strong>apaga e substitui</strong> as linhas daquela competência.</li>
           <li>Bandeira e taxa negativa <strong>não</strong> são gravadas aqui — a página de Rentabilidade as calcula sobre a recarga.</li>
         </ul>
