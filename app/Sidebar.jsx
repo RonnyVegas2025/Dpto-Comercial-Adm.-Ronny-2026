@@ -67,6 +67,11 @@ export default function Sidebar() {
           <div style={{ background:cor, color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:'0.62rem', fontWeight:700, display:'inline-block', marginTop:4 }}>
             {PERFIS[profile.perfil] || profile.perfil}
           </div>
+          {/* Perfil: acessível a QUALQUER usuário autenticado, fora do filtro podeVer(). */}
+          <Link href="/perfil" style={{ display:'flex', alignItems:'center', gap:6, marginTop:8, textDecoration:'none',
+            color: pathname?.startsWith('/perfil') ? '#b45309' : '#6b7280', fontFamily:"'DM Sans',sans-serif", fontSize:'0.72rem', fontWeight:600 }}>
+            <span style={{ fontSize:'0.72rem' }}>⚙️</span> Meu perfil e senha
+          </Link>
         </div>
       )}
 
