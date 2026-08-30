@@ -135,9 +135,22 @@ export default function RentabilidadeNova() {
           (libByProd[l.produto_id][m] || 0) + (l.total_liberado || 0);
       }
 
+      // Spread importado dos comércios (valor absoluto, não percentual) por produto → mês.
+      const spreadsRows = await fetchEmPartes(prodIds, (ids) =>
+        supabase.from('spreads').select('produto_id,competencia,spread_planilha')
+          .in('produto_id', ids)
+          .gte('competencia', PERIODO_INI+'-01').lte('competencia', PERIODO_FIM+'-31'), 200);
+      const spreadByProd = {};
+      for(const sp of spreadsRows) {
+        const m = sp.competencia?.substring(0,7);
+        if(!m || m < PERIODO_INI || m > PERIODO_FIM) continue;
+        (spreadByProd[sp.produto_id] = spreadByProd[sp.produto_id] || {})[m] =
+          (spreadByProd[sp.produto_id][m] || 0) + (Number(sp.spread_planilha) || 0);
+      }
+
       const mesesUnion = [...new Set(libs.map(l => l.competencia?.substring(0,7)).filter(m => m && m >= PERIODO_INI && m <= PERIODO_FIM))].sort();
 
-      setDados({ empresas, libByProd, receitaConfig: { com: comReceita, total: totalCad } });
+      setDados({ empresas, libByProd, spreadByProd, receitaConfig: { com: comReceita, total: totalCad } });
       setMeses(mesesUnion);
     } catch(err) { console.error(err); }
     setLoading(false);
@@ -145,14 +158,16 @@ export default function RentabilidadeNova() {
 
   const view = useMemo(() => {
     if(!dados) return null;
-    const { empresas, libByProd, receitaConfig } = dados;
+    const { empresas, libByProd, spreadByProd } = dados;
 
     const modoGeral = dirsSel.size === 0;
     const inEscopo  = (dir) => modoGeral || dirsSel.has(dir);
     const selMonths = mesesSel.size ? meses.filter(m => mesesSel.has(m)) : meses;
 
-    const recargaMes = (e, m) => (libByProd[e.produto_id]?.[m] || 0);
-    const recargaSel = (e) => selMonths.reduce((s,m) => s + recargaMes(e,m), 0);
+    const recargaMes  = (e, m) => (libByProd[e.produto_id]?.[m] || 0);
+    const recargaSel  = (e) => selMonths.reduce((s,m) => s + recargaMes(e,m), 0);
+    const comerciosMes = (e, m) => (spreadByProd[e.produto_id]?.[m] || 0);
+    const comerciosSel = (e) => selMonths.reduce((s,m) => s + comerciosMes(e,m), 0);
 
     // Base (meses selecionados + escopo + toggle): empresas com recarga no período.
     const base = [];
@@ -168,20 +183,22 @@ export default function RentabilidadeNova() {
       const custo = recarga * taxa;
       const recTaxa = recarga * taxaPos;
       const recBand = recarga * taxaBand;
-      const receita = recTaxa + recBand;
+      const recComercios = comerciosSel(e); // valor importado, não multiplicar
+      const receita = recTaxa + recBand + recComercios;
       base.push({
         id:e.id, produto_id:e.produto_id, nome:e.nome, categoria:e.categoria, produto:e.produto_contratado,
         dir, gestor:e.consultor_principal?.gestor || null, vendedor:e.consultor_principal?.nome || '—',
-        taxa, taxaPos, taxaBand, recarga, custo, recTaxa, recBand, receita, spread: receita - custo,
+        taxa, taxaPos, taxaBand, recarga, custo, recTaxa, recBand, recComercios, receita, spread: receita - custo,
       });
     }
 
-    const totalRecarga  = base.reduce((s,e) => s + e.recarga, 0);
-    const totalCusto    = base.reduce((s,e) => s + e.custo, 0);
-    const totalRecTaxa  = base.reduce((s,e) => s + e.recTaxa, 0);
-    const totalRecBand  = base.reduce((s,e) => s + e.recBand, 0);
-    const totalReceita  = totalRecTaxa + totalRecBand;
-    const totalSpread   = totalReceita - totalCusto;
+    const totalRecarga    = base.reduce((s,e) => s + e.recarga, 0);
+    const totalCusto      = base.reduce((s,e) => s + e.custo, 0);
+    const totalRecTaxa    = base.reduce((s,e) => s + e.recTaxa, 0);
+    const totalRecBand    = base.reduce((s,e) => s + e.recBand, 0);
+    const totalRecComercios = base.reduce((s,e) => s + e.recComercios, 0);
+    const totalReceita    = totalRecTaxa + totalRecBand + totalRecComercios;
+    const totalSpread     = totalReceita - totalCusto;
     const pct           = totalRecarga > 0 ? totalCusto/totalRecarga*100 : 0;
     const margem        = totalRecarga > 0 ? totalSpread/totalRecarga*100 : 0;
     const totalEmpresas = base.length;
@@ -190,18 +207,20 @@ export default function RentabilidadeNova() {
     // Evolução: todos os meses disponíveis (respeita escopo + toggle, ignora o filtro de meses).
     const baseEvol = empresas.filter(e => inEscopo(e.consultor_principal?.diretor || null) && (!somenteTaxa || (Number(e.taxa_negativa)||0) > 0));
     const perMonth = meses.map(m => {
-      let recarga=0, custo=0, recTaxa=0, recBand=0, comTaxaM=0;
+      let recarga=0, custo=0, recTaxa=0, recBand=0, recComerc=0, comTaxaM=0;
       for(const e of baseEvol) {
-        const r = recargaMes(e, m);
-        if(r <= 0) continue;
+        const r  = recargaMes(e, m);
+        const cm = comerciosMes(e, m);
+        if(r <= 0 && cm <= 0) continue;
         const taxa = Number(e.taxa_negativa) || 0;
         recarga += r; custo += r*taxa;
         recTaxa += r*(Number(e.taxa_positiva)||0);
         recBand += r*(Number(e.taxa_bandeira)||0);
-        if(taxa > 0) comTaxaM++;
+        recComerc += cm; // spread importado dos comércios (valor absoluto)
+        if(taxa > 0 && r > 0) comTaxaM++;
       }
-      const receita = recTaxa + recBand, spread = receita - custo;
-      return { mes:m, recarga, custo, recTaxa, recBand, receita, spread, pct: recarga>0 ? custo/recarga*100 : 0, margem: recarga>0 ? spread/recarga*100 : 0, comTaxa:comTaxaM };
+      const receita = recTaxa + recBand + recComerc, spread = receita - custo;
+      return { mes:m, recarga, custo, recTaxa, recBand, recComerc, receita, spread, pct: recarga>0 ? custo/recarga*100 : 0, margem: recarga>0 ? spread/recarga*100 : 0, comTaxa:comTaxaM };
     });
 
     // Por diretoria + gestor (a partir da base), com vendedores.
@@ -223,8 +242,20 @@ export default function RentabilidadeNova() {
 
     const empresasTab = [...base].sort((a,b) => b.custo - a.custo);
 
+    // Aviso: sobre empresas COM recarga no período, quantas já têm alguma receita
+    // (taxa positiva/bandeira cadastrada OU spread de comércio importado no período).
+    let comRecargaCnt = 0, comReceitaCnt = 0;
+    for(const e of empresas) {
+      if(recargaSel(e) <= 0) continue;
+      comRecargaCnt++;
+      const temTaxa   = (Number(e.taxa_positiva)||0) > 0 || (Number(e.taxa_bandeira)||0) > 0;
+      const temComerc = comerciosSel(e) > 0;
+      if(temTaxa || temComerc) comReceitaCnt++;
+    }
+    const receitaConfig = { com: comReceitaCnt, total: comRecargaCnt };
+
     return {
-      totalRecarga, totalCusto, totalReceita, totalRecTaxa, totalRecBand, totalSpread,
+      totalRecarga, totalCusto, totalReceita, totalRecTaxa, totalRecBand, totalRecComercios, totalSpread,
       pct, margem, totalEmpresas, comTaxa, perMonth, gestores, empresasTab, modoGeral,
       receitaConfig,
     };
@@ -270,7 +301,8 @@ export default function RentabilidadeNova() {
       'Taxa Neg. (%)': Number(((e.taxa||0)*100).toFixed(4)),
       'Taxa Pos. (%)': Number(((e.taxaPos||0)*100).toFixed(4)),
       'Bandeira (%)': Number(((e.taxaBand||0)*100).toFixed(4)),
-      'Recarga': Number(e.recarga.toFixed(2)), 'Receita': Number(e.receita.toFixed(2)),
+      'Recarga': Number(e.recarga.toFixed(2)), 'Spread Comércios': Number((e.recComercios||0).toFixed(2)),
+      'Receita': Number(e.receita.toFixed(2)),
       'Custo': Number(e.custo.toFixed(2)), 'Spread': Number(e.spread.toFixed(2)),
     }));
     const ws = XLSX.utils.json_to_sheet(linhas);
@@ -336,7 +368,7 @@ export default function RentabilidadeNova() {
       {/* Cards do topo */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:16, marginBottom:16 }}>
         <div style={cardStyle}><Metrica icon={<Wallet {...ICON} />} label="Recarga Total" valor={fmt(v.totalRecarga)} corValor={corAba} /></div>
-        <div style={cardStyle}><Metrica icon={<TrendingUp {...ICON} color="var(--vg-success-fg)" />} label="Receita" valor={fmt(v.totalReceita)} corValor="var(--vg-success-fg)" sub={`taxa ${fmt(v.totalRecTaxa)} · bandeira ${fmt(v.totalRecBand)}`} /></div>
+        <div style={cardStyle}><Metrica icon={<TrendingUp {...ICON} color="var(--vg-success-fg)" />} label="Receita" valor={fmt(v.totalReceita)} corValor="var(--vg-success-fg)" sub={`taxa ${fmt(v.totalRecTaxa)} · bandeira ${fmt(v.totalRecBand)} · comércios ${fmt(v.totalRecComercios)}`} /></div>
         <div style={cardStyle}><Metrica icon={<TrendingDown {...ICON} color="var(--vg-danger-fg)" />} label="Custo (Taxa Negativa)" valor={fmt(v.totalCusto)} corValor="var(--vg-danger-fg)" /></div>
         <div style={{ ...cardStyle, border:'1px solid var(--vg-brand-500)' }}><Metrica icon={<Wallet {...ICON} color="var(--vg-brand-500)" />} label="Spread Líquido" valor={fmt(v.totalSpread)} destaque corValor={v.totalSpread<0 ? 'var(--vg-danger-fg)' : 'var(--vg-brand-700)'} /></div>
         <div style={cardStyle}><Metrica icon={<Percent {...ICON} />} label="Margem" valor={fmtPct(v.margem)} corValor={v.margem<0 ? 'var(--vg-danger-fg)' : 'var(--vg-ink)'} sub={recorteLabel} /></div>
@@ -492,6 +524,7 @@ export default function RentabilidadeNova() {
                 <th style={{ ...s.th, textAlign:'right' }}>Taxa Pos. %</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Bandeira %</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Recarga</th>
+                <th style={{ ...s.th, textAlign:'right' }}>Spread Comércios</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Receita</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Custo</th>
                 <th style={{ ...s.th, textAlign:'right' }}>Spread</th>
@@ -499,7 +532,7 @@ export default function RentabilidadeNova() {
             </thead>
             <tbody>
               {empresasPag.length === 0 && (
-                <tr><td colSpan={14} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhuma empresa encontrada.</td></tr>
+                <tr><td colSpan={15} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhuma empresa encontrada.</td></tr>
               )}
               {empresasPag.map(e => (
                 <tr key={e.id} style={{ borderTop:'1px solid var(--vg-border)' }}>
@@ -514,6 +547,7 @@ export default function RentabilidadeNova() {
                   <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtTaxa(e.taxaPos)}</td>
                   <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtTaxa(e.taxaBand)}</td>
                   <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmt(e.recarga)}</td>
+                  <td style={{ ...s.td, textAlign:'right', color: e.recComercios>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)' }} className="vg-num">{fmt(e.recComercios)}</td>
                   <td style={{ ...s.td, textAlign:'right', color: e.receita>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)' }} className="vg-num">{fmt(e.receita)}</td>
                   <td style={{ ...s.td, textAlign:'right', color: e.custo>0 ? 'var(--vg-danger-fg)' : 'var(--vg-muted)', fontWeight:600 }} className="vg-num">{fmt(e.custo)}</td>
                   <td style={{ ...s.td, textAlign:'right', fontWeight:600, color: e.spread<0 ? 'var(--vg-danger-fg)' : e.spread>0 ? 'var(--vg-success-fg)' : 'var(--vg-muted)' }} className="vg-num">{fmt(e.spread)}</td>
