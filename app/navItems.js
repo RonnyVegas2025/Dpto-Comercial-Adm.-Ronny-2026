@@ -35,8 +35,28 @@ export function navVisivel(profile, podeVer) {
   });
 }
 
-// Primeira rota que o usuário pode ver, na ordem do menu; /sem-acesso se nenhuma.
-export function primeiraRotaPermitida(profile, podeVer) {
-  const visiveis = navVisivel(profile, podeVer);
+// Permissão EFETIVA por página, direto do mapa permissoes (não usa o podeVer,
+// que trata 'inicio' como sempre-true e depende de estado assíncrono). 'inicio'
+// segue acessível como home pessoal a quem está logado — igual ao podeVer.
+function temPermissao(profile, permissoes, pagina) {
+  if (profile?.perfil === 'gestor_master') return true;
+  if (pagina === 'inicio') return true;
+  return permissoes?.[pagina]?.pode_ver === true;
+}
+
+// Rotas visíveis a partir do mapa de permissões (para o redirect pós-login).
+export function rotasVisiveis(profile, permissoes) {
+  const perfisAdmin = ['diretoria', 'gestor_master'];
+  const isAdmin = perfisAdmin.includes(profile?.perfil);
+  return nav.filter(item => {
+    if (item.href === '/inicio' && isAdmin)  return false;
+    if (item.href === '/painel' && !isAdmin) return false;
+    return temPermissao(profile, permissoes, item.pagina);
+  });
+}
+
+// Primeira rota do menu com permissão efetiva, na ordem do menu; /sem-acesso se nenhuma.
+export function primeiraRotaPermitida(profile, permissoes) {
+  const visiveis = rotasVisiveis(profile, permissoes);
   return visiveis.length ? visiveis[0].href : '/sem-acesso';
 }

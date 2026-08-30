@@ -4,10 +4,10 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './Sidebar';
-import { primeiraRotaPermitida } from './navItems';
+import { primeiraRotaPermitida, rotasVisiveis } from './navItems';
 
 export default function AppShell({ children }) {
-  const { user, profile, loading, podeVer } = useAuth();
+  const { user, profile, loading, podeVer, permissoes } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
 
@@ -26,16 +26,30 @@ export default function AppShell({ children }) {
     if (user && isLoginPage) {
       let next = null;
       try { next = new URLSearchParams(window.location.search).get('next'); } catch (_) {}
-      router.replace(next && next.startsWith('/') ? next : primeiraRotaPermitida(profile, podeVer));
+      const destino = next && next.startsWith('/') ? next : primeiraRotaPermitida(profile, permissoes);
+      // TEMPORÁRIO: confirmar comportamento em produção antes de remover.
+      console.log('[AppShell] pós-login → destino:', destino, '| visíveis:', rotasVisiveis(profile, permissoes).map(r => r.href), '| perfil:', profile?.perfil);
+      router.replace(destino);
       return;
     }
 
     // ✅ Logado e está na raiz "/" → primeira página permitida
     if (user && pathname === '/') {
-      router.replace(primeiraRotaPermitida(profile, podeVer));
+      router.replace(primeiraRotaPermitida(profile, permissoes));
       return;
     }
-  }, [user, loading, isLoginPage, pathname, profile, router]);
+
+    // Auto-recuperação: preso em /sem-acesso mas há rota permitida (ex.: permissões
+    // carregaram depois do primeiro cálculo). Reavalia quando `permissoes` muda.
+    if (user && pathname === '/sem-acesso') {
+      const destino = primeiraRotaPermitida(profile, permissoes);
+      if (destino !== '/sem-acesso') {
+        console.log('[AppShell] /sem-acesso → recupera para:', destino);
+        router.replace(destino);
+      }
+      return;
+    }
+  }, [user, loading, isLoginPage, pathname, profile, permissoes, router]);
 
   // Verifica permissão para a rota atual
   useEffect(() => {
