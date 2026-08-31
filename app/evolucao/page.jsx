@@ -47,11 +47,11 @@ function tendencia(vals) {
 }
 
 const TEND = {
-  up:   { color: '#16a34a', label: '↑ Crescendo' },
-  down: { color: '#dc2626', label: '↓ Caindo' },
-  flat: { color: '#6b7280', label: '→ Estável' },
-  new:  { color: '#2563eb', label: '✦ Nova' },
-  none: { color: '#4b5563', label: '— Sem movimentação' },
+  up:   { color: 'var(--vg-success-fg)', label: '↑ Crescendo' },
+  down: { color: 'var(--vg-danger-fg)', label: '↓ Caindo' },
+  flat: { color: 'var(--vg-muted)', label: '→ Estável' },
+  new:  { color: 'var(--vg-info-fg)', label: '✦ Nova' },
+  none: { color: 'var(--vg-muted)', label: '— Sem movimentação' },
 };
 
 const POR_PAGINA = 12;
@@ -162,18 +162,18 @@ function metaGravadaDaEmpresa(e, metasGravadas) {
 
 function BadgeMeta({ meta, pct }) {
   if (!meta || meta.regra === null) {
-    return <span style={{ color: '#374151', fontSize: '0.72rem' }}>—</span>;
+    return <span style={{ color: 'var(--vg-border)', fontSize: '0.72rem' }}>—</span>;
   }
 
   if (meta.elegivel) {
     // CALCULADO, aguardando confirmação (ainda sem linha em valor_meta_empresa) → ÂMBAR
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-        <span style={{ background: 'rgba(240,180,41,0.15)', border: '1px solid rgba(240,180,41,0.45)', color: '#f0b429', borderRadius: 5, padding: '2px 7px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+        <span style={{ background: 'var(--vg-brand-50)', border: '1px solid var(--vg-brand-500)', color: 'var(--vg-brand-500)', borderRadius: 5, padding: '2px 7px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
           ⏳ Aguardando confirmação
         </span>
-        <span style={{ color: '#f0b429', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
-        <span style={{ color: '#9ca3af', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
+        <span style={{ color: 'var(--vg-brand-500)', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
+        <span style={{ color: 'var(--vg-ink-secondary)', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
           {meta.regra === 'beneficio' ? '1ª rec.' : '3º mês'} · {fmtMes(meta.mesAlvo)}{pct < 100 ? ` · ${pct}%` : ''}
         </span>
       </div>
@@ -184,12 +184,12 @@ function BadgeMeta({ meta, pct }) {
   const barW = (meta.progresso / meta.precisam) * 100;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 90 }}>
-      <span style={{ color: '#6b7280', fontSize: '0.7rem', fontWeight: 600 }}>
+      <span style={{ color: 'var(--vg-muted)', fontSize: '0.7rem', fontWeight: 600 }}>
         {meta.regra === 'beneficio' ? 'Aguardando 1ª rec.' : `${meta.progresso}/${meta.precisam} meses`}
       </span>
       {meta.regra === 'convenio' && (
-        <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 3, height: 4, width: 80, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${barW}%`, background: meta.progresso >= 2 ? '#f0b429' : '#4b5563', borderRadius: 3 }} />
+        <div style={{ background: 'var(--vg-surface-muted)', borderRadius: 3, height: 4, width: 80, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${barW}%`, background: meta.progresso >= 2 ? 'var(--vg-brand-500)' : 'var(--vg-muted)', borderRadius: 3 }} />
         </div>
       )}
     </div>
@@ -209,29 +209,29 @@ function Paginacao({ pagina, total, onChange }) {
       {pages.map(p => <button key={p} style={{ ...ps.btn, ...(p === pagina ? ps.ativo : {}) }} onClick={() => onChange(p)}>{p}</button>)}
       {end < total && <><span style={ps.dots}>…</span><button style={ps.btn} onClick={() => onChange(total)}>{total}</button></>}
       <button style={{ ...ps.btn, ...(pagina === total ? ps.disabled : {}) }} onClick={() => onChange(pagina + 1)} disabled={pagina === total}>›</button>
-      <span style={{ color: '#4b5563', fontSize: '0.75rem', marginLeft: 4 }}>de {total}</span>
+      <span style={{ color: 'var(--vg-muted)', fontSize: '0.75rem', marginLeft: 4 }}>de {total}</span>
     </div>
   );
 }
 
 function BannerFiltros({ filtros, onLimpar }) {
   const tags = [];
-  if (filtros.diretor   !== 'todos') tags.push({ label: `Diretor: ${filtros.diretor}`,       cor: '#a78bfa' });
-  if (filtros.gestor    !== 'todos') tags.push({ label: `Gestor: ${filtros.gestor}`,          cor: '#60a5fa' });
-  if (filtros.produto   !== 'todos') tags.push({ label: `Produto: ${filtros.produto}`,        cor: '#a78bfa' });
-  if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,           cor: '#f97316' });
-  if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: '#34d399' });
-  if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: '#f0b429' });
-  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? '#16a34a' : '#dc2626' });
+  if (filtros.diretor   !== 'todos') tags.push({ label: `Diretor: ${filtros.diretor}`,       cor: 'var(--vg-brand-400)' });
+  if (filtros.gestor    !== 'todos') tags.push({ label: `Gestor: ${filtros.gestor}`,          cor: 'var(--vg-info-fg)' });
+  if (filtros.produto   !== 'todos') tags.push({ label: `Produto: ${filtros.produto}`,        cor: 'var(--vg-brand-400)' });
+  if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,           cor: 'var(--vg-brand-500)' });
+  if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: 'var(--vg-success-fg)' });
+  if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: 'var(--vg-brand-500)' });
+  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? 'var(--vg-success-fg)' : 'var(--vg-danger-fg)' });
   if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
   if (filtros.metaStatus !== 'todos') {
     const metaLabels = { na_meta: '✅ Confirmadas na meta', aguardando: '⏳ Aguardando confirmação', pendente: '⏳ Pendente elegibilidade', fora: '— Fora da meta' };
-    const metaCores  = { na_meta: '#34d399', aguardando: '#f0b429', pendente: '#f0b429', fora: '#6b7280' };
-    tags.push({ label: metaLabels[filtros.metaStatus] || filtros.metaStatus, cor: metaCores[filtros.metaStatus] || '#6b7280' });
+    const metaCores  = { na_meta: 'var(--vg-success-fg)', aguardando: 'var(--vg-brand-500)', pendente: 'var(--vg-brand-500)', fora: 'var(--vg-muted)' };
+    tags.push({ label: metaLabels[filtros.metaStatus] || filtros.metaStatus, cor: metaCores[filtros.metaStatus] || 'var(--vg-muted)' });
   }
-  if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: '#34d399' });
-  if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: '#fbbf24' });
-  if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: '#e8eaf0' });
+  if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: 'var(--vg-success-fg)' });
+  if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: 'var(--vg-brand-500)' });
+  if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: 'var(--vg-ink)' });
   if (tags.length === 0) return null;
 
   return (
@@ -251,19 +251,19 @@ function BannerFiltros({ filtros, onLimpar }) {
 }
 
 const bb = {
-  wrap:   { display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, flexWrap: 'wrap' },
+  wrap:   { display: 'flex', alignItems: 'center', gap: 10, background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, flexWrap: 'wrap' },
   icone:  { fontSize: '0.9rem' },
-  label:  { color: '#6b7280', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' },
+  label:  { color: 'var(--vg-muted)', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap' },
   tags:   { display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 },
   tag:    { border: '1px solid', borderRadius: 6, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' },
-  limpar: { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '4px 12px', color: '#f87171', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  limpar: { background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '4px 12px', color: 'var(--vg-danger-fg)', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
 
 // ID da empresa com destaque + botão copiar (✅ por 1.5s ao copiar)
 function IdCopiavel({ id }) {
   const [copiado, setCopiado] = useState(false);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#a0a8c0', fontSize: '0.7rem' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--vg-ink)', fontSize: '0.7rem' }}>
       <span>ID {id}</span>
       <span
         title="Copiar ID"
@@ -402,10 +402,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}>
-          Exibindo <strong style={{ color: '#e8eaf0' }}>{listaPagina.length}</strong> de <strong style={{ color: '#e8eaf0' }}>{lista.length}</strong> empresas
+        <div style={{ color: 'var(--vg-muted)', fontSize: '0.78rem' }}>
+          Exibindo <strong style={{ color: 'var(--vg-ink)' }}>{listaPagina.length}</strong> de <strong style={{ color: 'var(--vg-ink)' }}>{lista.length}</strong> empresas
           {totalMetaApurado > 0 && (
-            <span style={{ marginLeft: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 6, padding: '2px 10px', color: '#34d399', fontSize: '0.72rem', fontWeight: 600 }}>
+            <span style={{ marginLeft: 12, background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', borderRadius: 6, padding: '2px 10px', color: 'var(--vg-success-fg)', fontSize: '0.72rem', fontWeight: 600 }}>
               ✅ {naMeta} na meta · {fmt(totalMetaApurado)} apurado
             </span>
           )}
@@ -413,22 +413,22 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
         <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
       </div>
       {selecionadasArr.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 10, padding: '10px 16px', marginBottom: 12 }}>
-          <span style={{ color: '#f0b429', fontWeight: 700, fontSize: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--vg-brand-50)', border: '1px solid var(--vg-brand-500)', borderRadius: 10, padding: '10px 16px', marginBottom: 12 }}>
+          <span style={{ color: 'var(--vg-brand-500)', fontWeight: 700, fontSize: '0.85rem' }}>
             {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} selecionada{selecionadasArr.length > 1 ? 's' : ''} · Total {fmt(totalSelecionado)}
           </span>
           <div style={{ flex: 1 }} />
           <button onClick={() => setSelecionados(new Set())}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 14px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+            style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 8, padding: '6px 14px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
             Limpar seleção
           </button>
           <button onClick={() => { setLoteResultado(null); setLoteAberto(true); }}
-            style={{ background: '#16a34a', border: 'none', borderRadius: 8, padding: '6px 16px', color: '#fff', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            style={{ background: 'var(--vg-success-fg)', border: 'none', borderRadius: 8, padding: '6px 16px', color: '#fff', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
             ✓ Confirmar {selecionadasArr.length} selecionada{selecionadasArr.length > 1 ? 's' : ''}
           </button>
         </div>
       )}
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '60vh', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '60vh', border: '1px solid var(--vg-surface-muted)', borderRadius: 10 }}>
         <table style={s.table}>
           <thead>
             <tr>
@@ -436,7 +436,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                 <th style={{ ...s.th, width: 34, textAlign: 'center' }}>
                   <input type="checkbox" checked={todasPaginaSel} onChange={toggleTodasPagina}
                     title="Selecionar todas as aguardando desta página"
-                    style={{ cursor: 'pointer', accentColor: '#f0b429' }} disabled={paginaAguardando.length === 0} />
+                    style={{ cursor: 'pointer', accentColor: 'var(--vg-brand-500)' }} disabled={paginaAguardando.length === 0} />
                 </th>
               )}
               <th style={s.th}>Empresa</th>
@@ -447,12 +447,12 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               {col('gestor')       && <th style={s.th}>Gestor</th>}
               {col('diretor')      && <th style={s.th}>Diretor</th>}
               {col('meses')   && meses.map(m => mostraMes(m) ? <th key={m} style={{ ...s.th, textAlign: 'right' }}>{fmtMes(m)}</th> : null)}
-              {col('previsto') && <th style={{ ...s.th, textAlign: 'right', color: '#a78bfa' }}>Previsto/mês</th>}
+              {col('previsto') && <th style={{ ...s.th, textAlign: 'right', color: 'var(--vg-brand-400)' }}>Previsto/mês</th>}
               {col('total')    && <th style={{ ...s.th, textAlign: 'right' }}>Movimentado</th>}
               {col('status')   && <th style={{ ...s.th, textAlign: 'center' }}>Status</th>}
               {col('tendencia')&& <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>}
-              {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.2)', color: '#34d399', minWidth: 120 }}>🎯 Meta</th>}
-              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.2)', color: '#fbbf24', minWidth: 130 }}>📈 Upsell</th>}
+              {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)', minWidth: 120 }}>🎯 Meta</th>}
+              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-warning-fg)', color: 'var(--vg-brand-500)', minWidth: 130 }}>📈 Upsell</th>}
             </tr>
           </thead>
           <tbody>
@@ -477,8 +477,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               const temMetaGravada = !!metaGravadaDe(e);
               const isModalAberto  = modalMeta?._key === e._key;
               const rowBg = (meta?.elegivel || temMetaGravada)
-                ? (i % 2 === 0 ? 'rgba(52,211,153,0.04)' : 'rgba(52,211,153,0.02)')
-                : (i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent');
+                ? (i % 2 === 0 ? 'var(--vg-success-bg)' : 'var(--vg-success-bg)')
+                : (i % 2 === 0 ? 'var(--vg-surface-muted)' : 'transparent');
               return (
                 <React.Fragment key={e._key}>
                 <tr style={{ background: rowBg, opacity: !e.creditou ? 0.6 : 1 }}>
@@ -486,7 +486,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     <td style={{ ...s.td, textAlign: 'center' }}>
                       {aguardandoDe(e) && (
                         <input type="checkbox" checked={selecionados.has(e._key)} onChange={() => toggleSel(e._key)}
-                          style={{ cursor: 'pointer', accentColor: '#f0b429' }} />
+                          style={{ cursor: 'pointer', accentColor: 'var(--vg-brand-500)' }} />
                       )}
                     </td>
                   )}
@@ -495,28 +495,28 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div>
                         <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
-                          style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
-                          onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
-                          onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                          style={{ fontWeight: 600, color: 'var(--vg-ink)', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
+                          onMouseEnter={ev => ev.currentTarget.style.color='var(--vg-success-fg)'}
+                          onMouseLeave={ev => ev.currentTarget.style.color='var(--vg-ink)'}>
                           {e.nome} ↗
                         </a>
                         <IdCopiavel id={e.produto_id} />
                       </div>
                     </div>
                   </td>
-                  {col('categoria')    && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>}
-                  {col('produto')      && <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.produto}</td>}
-                  {col('datacadastro') && <td style={{ ...s.td, color: '#60a5fa', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                  {col('categoria')    && <td style={{ ...s.td, color: 'var(--vg-ink-secondary)', fontSize: '0.78rem' }}>{e.categoria}</td>}
+                  {col('produto')      && <td style={{ ...s.td, color: 'var(--vg-brand-400)', fontSize: '0.78rem' }}>{e.produto}</td>}
+                  {col('datacadastro') && <td style={{ ...s.td, color: 'var(--vg-info-fg)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                     {e.data_cadastro ? fmtMes(e.data_cadastro.substring(0,7)+'-01') : '—'}
                   </td>}
                   {col('vendedor')  && <td style={{ ...s.td, fontSize: '0.78rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {e.vendedor}
-                      {e._pct < 100 && <span style={{ background: 'rgba(240,180,41,0.12)', color: '#f0b429', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
+                      {e._pct < 100 && <span style={{ background: 'var(--vg-brand-50)', color: 'var(--vg-brand-500)', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
                     </div>
                   </td>}
-                  {col('gestor')   && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>}
-                  {col('diretor')  && <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.diretor||'—'}</td>}
+                  {col('gestor')   && <td style={{ ...s.td, color: 'var(--vg-ink-secondary)', fontSize: '0.78rem' }}>{e.gestor}</td>}
+                  {col('diretor')  && <td style={{ ...s.td, color: 'var(--vg-ink-secondary)', fontSize: '0.78rem' }}>{e.diretor||'—'}</td>}
                   {col('meses') && meses.map(m => {
                     if (!mostraMes(m)) return null;
                     const mi = meses.indexOf(m);
@@ -530,9 +530,9 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     // Pega o valor específico deste mês de meta (para mostrar no tooltip)
                     const entradaMeta = (metasGravadas[`all__${e.id}`] || []).find(x => x.competencia_meta?.substring(0,7) === m?.substring(0,7));
                     return (
-                      <td key={m} style={{ ...s.td, textAlign: 'right', background: isMesAlvo ? 'rgba(52,211,153,0.08)' : undefined }}>
+                      <td key={m} style={{ ...s.td, textAlign: 'right', background: isMesAlvo ? 'var(--vg-success-bg)' : undefined }}>
                         {v > 0
-                          ? <span style={{ color: '#34d399', fontWeight: isMesAlvo ? 700 : 500 }}>
+                          ? <span style={{ color: 'var(--vg-success-fg)', fontWeight: isMesAlvo ? 700 : 500 }}>
                               {fmt(v)}
                               {isMesAlvo && (
                                 <span title={entradaMeta ? `Meta: ${fmt(entradaMeta.valor_meta)} (${entradaMeta.regra})` : 'Na meta'}
@@ -541,15 +541,15 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                                 </span>
                               )}
                             </span>
-                          : <span style={{ color: '#374151' }}>—</span>}
+                          : <span style={{ color: 'var(--vg-border)' }}>—</span>}
                       </td>
                     );
                   })}
-                  {col('previsto') && <td style={{ ...s.td, textAlign: 'right', color: '#a78bfa', fontWeight: 600 }}>
+                  {col('previsto') && <td style={{ ...s.td, textAlign: 'right', color: 'var(--vg-brand-400)', fontWeight: 600 }}>
                     {e.previsto > 0 ? fmt(e.previsto) : '—'}
                   </td>}
                   {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>
-                    {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: '#374151' }}>—</span>}
+                    {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: 'var(--vg-border)' }}>—</span>}
                   </td>}                  {col('status') && <td style={{ ...s.td, textAlign: 'center' }}>
                     {e.creditou
                       ? <span style={s.badgeGreen}>✅ Movimentou</span>
@@ -559,7 +559,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
                   </td>}
                   {/* ── COLUNA META — clicável abre gestão em nova aba ── */}
-                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
+                  {col('meta') && <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid var(--vg-success-bg)' }}>
                     {temMetaGravada ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
                         {/* Mostra TODAS as entradas de meta da empresa */}
@@ -578,15 +578,15 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             .sort((a,b) => (a.competencia_meta||'').localeCompare(b.competencia_meta||''));
                           return todasEntradas;
                         })().map((entrada, idx, arr) => (
-                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', width: '100%' }}>
-                            <span style={{ background: entrada.regra === 'upsell' ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.15)', border: `1px solid ${entrada.regra === 'upsell' ? 'rgba(251,191,36,0.4)' : 'rgba(52,211,153,0.4)'}`, color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid var(--vg-surface-muted)' : 'none', width: '100%' }}>
+                            <span style={{ background: entrada.regra === 'upsell' ? 'var(--vg-warning-bg)' : 'var(--vg-success-bg)', border: `1px solid ${entrada.regra === 'upsell' ? 'var(--vg-warning-fg)' : 'var(--vg-success-fg)'}`, color: entrada.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                               {entrada.regra === 'upsell' ? '📈' : '✅'} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
                             </span>
-                            <span style={{ color: entrada.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
+                            <span style={{ color: entrada.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
                           </div>
                         ))}
                         <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#4b5563', fontSize: '0.58rem', marginTop: 2, textDecoration: 'none' }}>
+                          style={{ color: 'var(--vg-muted)', fontSize: '0.58rem', marginTop: 2, textDecoration: 'none' }}>
                           ✏️ editar ↗
                         </a>
                       </div>
@@ -595,7 +595,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         <BadgeMeta meta={meta} pct={e._pct} />
                         {aguardandoDe(e) && (
                           <button onClick={() => abrirConfirm(e)}
-                            style={{ marginTop: 2, background: 'rgba(240,180,41,0.15)', border: '1px solid rgba(240,180,41,0.5)', borderRadius: 5, padding: '3px 10px', color: '#f0b429', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            style={{ marginTop: 2, background: 'var(--vg-brand-50)', border: '1px solid var(--vg-brand-500)', borderRadius: 5, padding: '3px 10px', color: 'var(--vg-brand-500)', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                             ✓ Confirmar na meta
                           </button>
                         )}
@@ -606,26 +606,26 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
 
                 {/* Diálogo inline de confirmação individual */}
                 {confirmRow?._key === e._key && col('meta') && (
-                  <tr key={e._key + '-confirm'} style={{ background: 'rgba(240,180,41,0.04)' }}>
+                  <tr key={e._key + '-confirm'} style={{ background: 'var(--vg-brand-50)' }}>
                     <td colSpan={99} style={{ padding: '0 12px 12px' }}>
-                      <div style={{ background: '#0f1923', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 12, padding: '16px 20px' }}>
+                      <div style={{ background: 'var(--vg-bg)', border: '1px solid var(--vg-brand-500)', borderRadius: 12, padding: '16px 20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                           <div>
-                            <div style={{ fontWeight: 700, color: '#f0b429', fontSize: '0.9rem', marginBottom: 3 }}>
+                            <div style={{ fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '0.9rem', marginBottom: 3 }}>
                               🎯 Confirmar na meta — {e.nome}
                             </div>
-                            <div style={{ color: '#6b7280', fontSize: '0.72rem' }}>
-                              ID {e.produto_id} · {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · <strong style={{ color: '#e8eaf0' }}>{fmtMes((String(meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</strong>
-                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct ?? 100}%)
+                            <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem' }}>
+                              ID {e.produto_id} · {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · <strong style={{ color: 'var(--vg-ink)' }}>{fmtMes((String(meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</strong>
+                              {' '}· Consultor: <strong style={{ color: 'var(--vg-ink)' }}>{e.vendedor || '—'}</strong> ({e._pct ?? 100}%)
                             </div>
                           </div>
                           <button onClick={() => setConfirmRow(null)}
-                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', color: '#6b7280', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                            style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 6, padding: '4px 10px', color: 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
                             ✕ Fechar
                           </button>
                         </div>
 
-                        {confirmErro && <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: '#f87171', fontSize: '0.78rem' }}>{confirmErro}</div>}
+                        {confirmErro && <div style={{ background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: 'var(--vg-danger-fg)', fontSize: '0.78rem' }}>{confirmErro}</div>}
 
                         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
@@ -635,25 +635,25 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                               { label: 'Valor da meta',     val: meta?.valorMeta },
                             ].map(o => (
                               <div key={o.label}>
-                                <div style={{ color: '#6b7280', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6 }}>{o.label}</div>
-                                <div style={{ color: '#e8eaf0', fontWeight: 700, fontSize: '0.85rem' }}>{fmt(o.val || 0)}</div>
+                                <div style={{ color: 'var(--vg-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6 }}>{o.label}</div>
+                                <div style={{ color: 'var(--vg-ink)', fontWeight: 700, fontSize: '0.85rem' }}>{fmt(o.val || 0)}</div>
                               </div>
                             ))}
                           </div>
                           <div style={{ minWidth: 180 }}>
-                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 5 }}>Valor que entra na meta *</label>
+                            <label style={{ display: 'block', color: 'var(--vg-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 5 }}>Valor que entra na meta *</label>
                             <input type="number" step="0.01" value={confirmValor}
                               onChange={ev => setConfirmValor(ev.target.value)}
-                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(240,180,41,0.4)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
+                              style={{ width: '100%', background: 'var(--vg-surface)', border: '1px solid var(--vg-brand-500)', borderRadius: 8, padding: '8px 12px', color: 'var(--vg-ink)', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
                               autoFocus />
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <button onClick={() => setConfirmRow(null)}
-                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 18px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
+                              style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 8, padding: '10px 18px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
                               Cancelar
                             </button>
                             <button onClick={executarConfirm} disabled={confirmando || confirmValor === ''}
-                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: confirmValor === '' ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', opacity: confirmValor === '' ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                              style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: confirmValor === '' ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', opacity: confirmValor === '' ? 0.5 : 1, whiteSpace: 'nowrap' }}>
                               {confirmando ? 'Confirmando...' : '✓ Confirmar'}
                             </button>
                           </div>
@@ -665,38 +665,38 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
 
                 {/* Modal inline desabilitado — usa página de gestão */}
                 {false && isModalAberto && col('meta') && (
-                  <tr key={e._key + '-modal'} style={{ background: 'rgba(52,211,153,0.03)' }}>
+                  <tr key={e._key + '-modal'} style={{ background: 'var(--vg-success-bg)' }}>
                     <td colSpan={99} style={{ padding: '0 12px 12px' }}>
-                      <div style={{ background: '#0f1923', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 12, padding: '16px 20px', animation: 'fadeIn 0.2s ease' }}>
+                      <div style={{ background: 'var(--vg-bg)', border: '1px solid var(--vg-success-fg)', borderRadius: 12, padding: '16px 20px', animation: 'fadeIn 0.2s ease' }}>
                         {/* Cabeçalho do modal */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
                           <div>
-                            <div style={{ fontWeight: 700, color: metaForm.regra === 'upsell' ? '#fbbf24' : '#34d399', fontSize: '0.88rem', marginBottom: 3 }}>
+                            <div style={{ fontWeight: 700, color: metaForm.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', fontSize: '0.88rem', marginBottom: 3 }}>
                               {metaForm.regra === 'upsell' ? '📈 Upsell detectado' : temMetaGravada ? '🎯 Editar meta' : '🎯 Marcar na meta'} — {e.nome}
                             </div>
-                            <div style={{ color: '#4b5563', fontSize: '0.72rem' }}>
+                            <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem' }}>
                               {metaForm.regra === 'upsell'
-                                ? <>📈 Crescimento ≥45% · <strong style={{color:'#fbbf24'}}>{fmtMes((String(metaForm.mesAlvoOverride||'2000-01')).substring(0,7)+'-01')}</strong> · Meta original preservada</>
+                                ? <>📈 Crescimento ≥45% · <strong style={{color:'var(--vg-brand-500)'}}>{fmtMes((String(metaForm.mesAlvoOverride||'2000-01')).substring(0,7)+'-01')}</strong> · Meta original preservada</>
                                 : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((String(meta.mesAlvo||'2000-01')).substring(0,7)+'-01')}</> : <span>—</span>
                               }
-                              {' '}· Consultor: <strong style={{ color: '#e8eaf0' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
+                              {' '}· Consultor: <strong style={{ color: 'var(--vg-ink)' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
                             </div>
                           </div>
                           <button onClick={() => setModalMeta(null)}
-                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', color: '#6b7280', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
+                            style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 6, padding: '4px 10px', color: 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
                             ✕ Fechar
                           </button>
                         </div>
 
-                        {erroMeta && <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: '#f87171', fontSize: '0.78rem' }}>{erroMeta}</div>}
+                        {erroMeta && <div style={{ background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, color: 'var(--vg-danger-fg)', fontSize: '0.78rem' }}>{erroMeta}</div>}
 
                         {/* Campos */}
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                           <div style={{ minWidth: 200 }}>
-                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Valor que entra na meta *</label>
+                            <label style={{ display: 'block', color: 'var(--vg-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Valor que entra na meta *</label>
                             <input type="number" step="0.01" value={metaForm.valor}
                               onChange={ev => setMetaForm(f => ({ ...f, valor: ev.target.value }))}
-                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
+                              style={{ width: '100%', background: 'var(--vg-surface)', border: '1px solid var(--vg-success-fg)', borderRadius: 8, padding: '8px 12px', color: 'var(--vg-ink)', fontSize: '0.9rem', fontFamily: 'inherit', boxSizing: 'border-box', fontWeight: 700 }}
                               placeholder="Ex: 4398.00" autoFocus />
                             {/* Atalhos */}
                             <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
@@ -706,16 +706,16 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                                 { label: 'Consid.',  val: meta?.valorConsid },
                               ].filter(o => o.val > 0).filter((o,i,a) => a.findIndex(x=>x.val===o.val)===i).map(o => (
                                 <button key={o.label} onClick={() => setMetaForm(f => ({ ...f, valor: o.val }))}
-                                  style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 5, padding: '2px 8px', color: '#34d399', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 600 }}>
+                                  style={{ background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', borderRadius: 5, padding: '2px 8px', color: 'var(--vg-success-fg)', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'inherit', fontWeight: 600 }}>
                                   {o.label}: {fmt(o.val)}
                                 </button>
                               ))}
                             </div>
                           </div>
                           <div style={{ minWidth: 200 }}>
-                            <label style={{ display: 'block', color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Regra</label>
+                            <label style={{ display: 'block', color: 'var(--vg-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Regra</label>
                             <select value={metaForm.regra} onChange={ev => setMetaForm(f => ({ ...f, regra: ev.target.value }))}
-                              style={{ width: '100%', background: '#1a2332', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 8, padding: '8px 12px', color: '#e8eaf0', fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }}>
+                              style={{ width: '100%', background: 'var(--vg-surface)', border: '1px solid var(--vg-success-fg)', borderRadius: 8, padding: '8px 12px', color: 'var(--vg-ink)', fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }}>
                               <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
                               <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
                               <option value="manual">✏️ Inclusão Manual</option>
@@ -724,19 +724,19 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <button onClick={salvarMeta} disabled={salvandoMeta || !metaForm.valor}
-                              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                              style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
                               {salvandoMeta ? 'Salvando...' : temMetaGravada ? '💾 Atualizar' : '🎯 Confirmar'}
                             </button>
                             {temMetaGravada && (
                               <button onClick={() => removerMeta(e)}
-                                style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, padding: '10px 16px', color: '#f87171', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                style={{ background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '10px 16px', color: 'var(--vg-danger-fg)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                                 🗑 Remover
                               </button>
                             )}
                             <a href={`/gestao/${e.id}`} target="_blank"
-                              style={{ color: '#6b7280', fontSize: '0.72rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
-                              onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
-                              onMouseLeave={ev => ev.currentTarget.style.color='#6b7280'}>
+                              style={{ color: 'var(--vg-muted)', fontSize: '0.72rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                              onMouseEnter={ev => ev.currentTarget.style.color='var(--vg-success-fg)'}
+                              onMouseLeave={ev => ev.currentTarget.style.color='var(--vg-muted)'}>
                               ↗ Abrir ficha completa
                             </a>
                           </div>
@@ -749,21 +749,21 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                 {col('upsell') && (() => {
                   const up = e._upsell;
                   return (
-                    <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid rgba(251,191,36,0.1)' }}>
+                    <td style={{ ...s.td, textAlign: 'center', borderLeft: '2px solid var(--vg-warning-bg)' }}>
                       {up ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-                          <span style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          <span style={{ background: 'var(--vg-warning-bg)', border: '1px solid var(--vg-warning-fg)', color: 'var(--vg-brand-500)', borderRadius: 5, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
                             ↑ +{up.crescPct}% · {fmtMes(up.mes+'-01')}
                           </span>
-                          <span style={{ color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
-                          <span style={{ color: '#6b7280', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
+                          <span style={{ color: 'var(--vg-brand-500)', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(up.valor)}</span>
+                          <span style={{ color: 'var(--vg-muted)', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
                           <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
-                            style={{ marginTop: 2, display: 'block', textAlign: 'center', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 5, padding: '3px 10px', color: '#fbbf24', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
+                            style={{ marginTop: 2, display: 'block', textAlign: 'center', background: 'var(--vg-warning-bg)', border: '1px solid var(--vg-warning-fg)', borderRadius: 5, padding: '3px 10px', color: 'var(--vg-brand-500)', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
                             + Adicionar na meta ↗
                           </a>
                         </div>
                       ) : (
-                        <span style={{ color: '#1f2937', fontSize: '0.72rem' }}>—</span>
+                        <span style={{ color: 'var(--vg-border)', fontSize: '0.72rem' }}>—</span>
                       )}
                     </td>
                   );
@@ -773,7 +773,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
             })}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
+            <tr style={{ borderTop: '2px solid var(--vg-border)', background: 'var(--vg-brand-50)' }}>
               <td colSpan={
                 1 + (algumAguardando?1:0) +
                 (col('categoria')?1:0) +
@@ -781,21 +781,21 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                 (col('vendedor')?1:0) +
                 (col('gestor')?1:0) +
                 (col('diretor')?1:0)
-              } style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>
+              } style={{ ...s.td, fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '0.82rem', paddingTop: 14 }}>
                 TOTAL ({lista.length} empresas)
               </td>
               {col('meses') && totaisMes.map((t, i) => mostraMes(meses[i]) ? (
-                <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>
-                  {t > 0 ? fmt(t) : <span style={{ color: '#374151' }}>—</span>}
+                <td key={i} style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: 'var(--vg-brand-500)', paddingTop: 14 }}>
+                  {t > 0 ? fmt(t) : <span style={{ color: 'var(--vg-border)' }}>—</span>}
                 </td>
               ) : null)}
-              {col('previsto') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#a78bfa', paddingTop: 14 }}>
+              {col('previsto') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: 'var(--vg-brand-400)', paddingTop: 14 }}>
                 {fmt(lista.reduce((s,e)=>s+(e.previsto||0),0))}
               </td>}
-              {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totalGeral)}</td>}
+              {col('total') && <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: 'var(--vg-brand-500)', paddingTop: 14 }}>{fmt(totalGeral)}</td>}
               {(col('status') || col('tendencia')) && <td colSpan={(col('status')?1:0)+(col('tendencia')?1:0)} style={{ ...s.td, paddingTop: 14 }} />}
               {col('meta') && (
-                <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: '#34d399', paddingTop: 14, borderLeft: '2px solid rgba(52,211,153,0.1)' }}>
+                <td style={{ ...s.td, textAlign: 'center', fontWeight: 700, color: 'var(--vg-success-fg)', paddingTop: 14, borderLeft: '2px solid var(--vg-success-bg)' }}>
                   {totalMetaApurado > 0 ? fmt(totalMetaApurado) : '—'}
                 </td>
               )}
@@ -807,18 +807,18 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
 
       {/* Diálogo de confirmação em lote */}
       {loteAberto && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(28,31,59,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
           onClick={() => { if (!loteProcessando) { setLoteAberto(false); setLoteResultado(null); } }}>
           <div onClick={ev => ev.stopPropagation()}
-            style={{ background: '#0f1923', border: '1px solid rgba(240,180,41,0.35)', borderRadius: 14, padding: '20px 24px', width: 'min(560px, 96vw)', maxHeight: '84vh', display: 'flex', flexDirection: 'column' }}>
+            style={{ background: 'var(--vg-bg)', border: '1px solid var(--vg-brand-500)', borderRadius: 14, padding: '20px 24px', width: 'min(560px, 96vw)', maxHeight: '84vh', display: 'flex', flexDirection: 'column' }}>
             {!loteResultado ? (
               <>
-                <div style={{ fontWeight: 700, color: '#f0b429', fontSize: '1rem', marginBottom: 4 }}>✓ Confirmar {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} na meta</div>
-                <div style={{ color: '#6b7280', fontSize: '0.78rem', marginBottom: 14 }}>Total: <strong style={{ color: '#34d399' }}>{fmt(totalSelecionado)}</strong> · usa o valor calculado de cada empresa</div>
-                <div style={{ overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
+                <div style={{ fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '1rem', marginBottom: 4 }}>✓ Confirmar {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} na meta</div>
+                <div style={{ color: 'var(--vg-muted)', fontSize: '0.78rem', marginBottom: 14 }}>Total: <strong style={{ color: 'var(--vg-success-fg)' }}>{fmt(totalSelecionado)}</strong> · usa o valor calculado de cada empresa</div>
+                <div style={{ overflowY: 'auto', border: '1px solid var(--vg-border)', borderRadius: 10 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <thead>
-                      <tr style={{ position: 'sticky', top: 0, background: '#141c26' }}>
+                      <tr style={{ position: 'sticky', top: 0, background: 'var(--vg-bg)' }}>
                         <th style={{ ...s.th, padding: '8px 12px' }}>Empresa</th>
                         <th style={{ ...s.th, padding: '8px 12px' }}>Mês</th>
                         <th style={{ ...s.th, padding: '8px 12px', textAlign: 'right' }}>Valor</th>
@@ -826,10 +826,10 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     </thead>
                     <tbody>
                       {selecionadasArr.map(e => (
-                        <tr key={e._key} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <td style={{ ...s.td, padding: '8px 12px', color: '#e8eaf0' }}>{e.nome}<span style={{ color: '#6b7280', fontSize: '0.68rem' }}> · ID {e.produto_id}</span></td>
-                          <td style={{ ...s.td, padding: '8px 12px', color: '#9ca3af' }}>{fmtMes((String(e._meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</td>
-                          <td style={{ ...s.td, padding: '8px 12px', textAlign: 'right', color: '#f0b429', fontWeight: 700 }}>{fmt(e._meta?.valorMeta || 0)}</td>
+                        <tr key={e._key} style={{ borderTop: '1px solid var(--vg-surface-muted)' }}>
+                          <td style={{ ...s.td, padding: '8px 12px', color: 'var(--vg-ink)' }}>{e.nome}<span style={{ color: 'var(--vg-muted)', fontSize: '0.68rem' }}> · ID {e.produto_id}</span></td>
+                          <td style={{ ...s.td, padding: '8px 12px', color: 'var(--vg-ink-secondary)' }}>{fmtMes((String(e._meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</td>
+                          <td style={{ ...s.td, padding: '8px 12px', textAlign: 'right', color: 'var(--vg-brand-500)', fontWeight: 700 }}>{fmt(e._meta?.valorMeta || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -837,31 +837,31 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
                   <button onClick={() => setLoteAberto(false)} disabled={loteProcessando}
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 18px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
+                    style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 8, padding: '10px 18px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit' }}>
                     Cancelar
                   </button>
                   <button onClick={executarLote} disabled={loteProcessando}
-                    style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {loteProcessando ? 'Confirmando...' : `✓ Confirmar todas`}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '1rem', marginBottom: 6 }}>✓ {loteResultado.confirmadas} confirmada{loteResultado.confirmadas === 1 ? '' : 's'}</div>
+                <div style={{ fontWeight: 700, color: 'var(--vg-success-fg)', fontSize: '1rem', marginBottom: 6 }}>✓ {loteResultado.confirmadas} confirmada{loteResultado.confirmadas === 1 ? '' : 's'}</div>
                 {loteResultado.falhas?.length > 0 && (
                   <div style={{ marginTop: 6 }}>
-                    <div style={{ color: '#f87171', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>{loteResultado.falhas.length} falha{loteResultado.falhas.length === 1 ? '' : 's'}:</div>
+                    <div style={{ color: 'var(--vg-danger-fg)', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>{loteResultado.falhas.length} falha{loteResultado.falhas.length === 1 ? '' : 's'}:</div>
                     <div style={{ maxHeight: '40vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {loteResultado.falhas.map((f, i) => (
-                        <div key={i} style={{ color: '#9ca3af', fontSize: '0.76rem' }}>• {f.nome} (ID {f.id}) — {f.erro}</div>
+                        <div key={i} style={{ color: 'var(--vg-ink-secondary)', fontSize: '0.76rem' }}>• {f.nome} (ID {f.id}) — {f.erro}</div>
                       ))}
                     </div>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
                   <button onClick={() => { setLoteAberto(false); setLoteResultado(null); }}
-                    style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit' }}>
+                    style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit' }}>
                     Fechar
                   </button>
                 </div>
@@ -884,12 +884,12 @@ function TabelaCruzamento({ lista, meses }) {
   const totEsp  = listaSorted.reduce((s, e) => s + ((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length), 0);
   const totCred = listaSorted.reduce((s, e) => s + e.totalCreditado, 0);
   const pctGeral = totEsp > 0 ? (totCred / totEsp) * 100 : 0;
-  const corGeral = pctGeral >= 80 ? '#16a34a' : pctGeral >= 40 ? '#f0b429' : '#dc2626';
+  const corGeral = pctGeral >= 80 ? 'var(--vg-success-fg)' : pctGeral >= 40 ? 'var(--vg-brand-500)' : 'var(--vg-danger-fg)';
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ color: '#6b7280', fontSize: '0.78rem' }}><strong style={{ color: '#e8eaf0' }}>{listaSorted.length}</strong> empresas com potencial cadastrado</div>
+        <div style={{ color: 'var(--vg-muted)', fontSize: '0.78rem' }}><strong style={{ color: 'var(--vg-ink)' }}>{listaSorted.length}</strong> empresas com potencial cadastrado</div>
         <Paginacao pagina={pagina} total={totalPaginas} onChange={setPagina} />
       </div>
       <div style={{ overflowX: 'auto' }}>
@@ -900,33 +900,33 @@ function TabelaCruzamento({ lista, meses }) {
           <tbody>
             {listaPagina.map((e, i) => {
               const pct = e.pctPot || 0;
-              const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f0b429' : '#dc2626';
+              const cor = pct >= 80 ? 'var(--vg-success-fg)' : pct >= 40 ? 'var(--vg-brand-500)' : 'var(--vg-danger-fg)';
               const stLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
               return (
-                <tr key={e._key} style={i % 2 === 0 ? { background: 'rgba(255,255,255,0.02)' } : {}}>
+                <tr key={e._key} style={i % 2 === 0 ? { background: 'var(--vg-surface-muted)' } : {}}>
                   <td style={s.td}>
-                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: '#e8eaf0', textDecoration: 'none', cursor: 'pointer' }}
-                      onMouseEnter={ev => ev.currentTarget.style.color='#34d399'}
-                      onMouseLeave={ev => ev.currentTarget.style.color='#e8eaf0'}>
+                    <a href={`/gestao/${e.id}`} style={{ fontWeight: 600, color: 'var(--vg-ink)', textDecoration: 'none', cursor: 'pointer' }}
+                      onMouseEnter={ev => ev.currentTarget.style.color='var(--vg-success-fg)'}
+                      onMouseLeave={ev => ev.currentTarget.style.color='var(--vg-ink)'}>
                       {e.nome}
                     </a>
                     <IdCopiavel id={e.produto_id} />
                   </td>
-                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.categoria}</td>
+                  <td style={{ ...s.td, color: 'var(--vg-ink-secondary)', fontSize: '0.78rem' }}>{e.categoria}</td>
                   <td style={{ ...s.td, fontSize: '0.78rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {e.vendedor}
-                      {e._pct < 100 && <span style={{ background: 'rgba(240,180,41,0.12)', color: '#f0b429', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
+                      {e._pct < 100 && <span style={{ background: 'var(--vg-brand-50)', color: 'var(--vg-brand-500)', borderRadius: 4, padding: '1px 6px', fontSize: '0.65rem', fontWeight: 700 }}>{e._pct}%</span>}
                     </div>
                   </td>
-                  <td style={{ ...s.td, color: '#9ca3af', fontSize: '0.78rem' }}>{e.gestor}</td>
-                  <td style={{ ...s.td, color: '#a78bfa', fontSize: '0.78rem' }}>{e.diretor}</td>
+                  <td style={{ ...s.td, color: 'var(--vg-ink-secondary)', fontSize: '0.78rem' }}>{e.gestor}</td>
+                  <td style={{ ...s.td, color: 'var(--vg-brand-400)', fontSize: '0.78rem' }}>{e.diretor}</td>
                   <td style={s.td}>{fmt(e.potencial_movimentacao)}</td>
-                  <td style={{ ...s.td, color: '#f0b429' }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length)}</td>
-                  <td style={{ ...s.td, color: '#34d399', fontWeight: 600 }}>{fmt(e.totalCreditado)}</td>
+                  <td style={{ ...s.td, color: 'var(--vg-brand-500)' }}>{fmt((e.potencial_movimentacao || 0) * (e.peso_categoria || 1) * meses.length)}</td>
+                  <td style={{ ...s.td, color: 'var(--vg-success-fg)', fontWeight: 600 }}>{fmt(e.totalCreditado)}</td>
                   <td style={{ ...s.td, color: cor, fontWeight: 700 }}>{fmtPct(pct)}</td>
                   <td style={{ ...s.td, minWidth: 100 }}>
-                    <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                    <div style={{ background: 'var(--vg-surface-muted)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                       <div style={{ background: cor, height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4 }} />
                     </div>
                   </td>
@@ -936,11 +936,11 @@ function TabelaCruzamento({ lista, meses }) {
             })}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)', background: 'rgba(240,180,41,0.05)' }}>
-              <td colSpan={5} style={{ ...s.td, fontWeight: 700, color: '#f0b429', fontSize: '0.82rem', paddingTop: 14 }}>TOTAL ({listaSorted.length} empresas)</td>
-              <td style={{ ...s.td, fontWeight: 700, color: '#f0b429', paddingTop: 14 }}>{fmt(totPot)}</td>
-              <td style={{ ...s.td, color: '#f0b429', fontWeight: 700, paddingTop: 14 }}>{fmt(totEsp)}</td>
-              <td style={{ ...s.td, color: '#34d399', fontWeight: 700, paddingTop: 14 }}>{fmt(totCred)}</td>
+            <tr style={{ borderTop: '2px solid var(--vg-border)', background: 'var(--vg-brand-50)' }}>
+              <td colSpan={5} style={{ ...s.td, fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '0.82rem', paddingTop: 14 }}>TOTAL ({listaSorted.length} empresas)</td>
+              <td style={{ ...s.td, fontWeight: 700, color: 'var(--vg-brand-500)', paddingTop: 14 }}>{fmt(totPot)}</td>
+              <td style={{ ...s.td, color: 'var(--vg-brand-500)', fontWeight: 700, paddingTop: 14 }}>{fmt(totEsp)}</td>
+              <td style={{ ...s.td, color: 'var(--vg-success-fg)', fontWeight: 700, paddingTop: 14 }}>{fmt(totCred)}</td>
               <td style={{ ...s.td, fontWeight: 700, color: corGeral, paddingTop: 14 }}>{fmtPct(pctGeral)}</td>
               <td colSpan={2} style={{ ...s.td, paddingTop: 14 }} />
             </tr>
@@ -1491,7 +1491,7 @@ export default function Evolucao() {
 
   if (loading) return (
     <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ textAlign: 'center' }}><div style={s.spin}></div><div style={{ color: '#6b7280' }}>Carregando...</div></div>
+      <div style={{ textAlign: 'center' }}><div style={s.spin}></div><div style={{ color: 'var(--vg-muted)' }}>Carregando...</div></div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -1507,28 +1507,28 @@ export default function Evolucao() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        select option { background: #1e2435 !important; color: #e8eaf0 !important; }
+        select option { background: var(--vg-surface) !important; color: var(--vg-ink) !important; }
       `}</style>
 
       {/* Header */}
       <div style={s.header}>
         <div>
-          <div style={s.tag}>♠ Vegas Card</div>
+          <div style={s.tag}>Vegas Card / Evolução</div>
           <h1 style={s.title}>Evolução de Novas Empresas</h1>
           <p style={s.sub}>Todas as categorias — acompanhe quem movimentou e quem ainda não movimentou</p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={exportarExcel} disabled={!xlsxLib || listaFiltrada.length===0}
-            style={{ ...s.linkBtnGreen, background:'rgba(52,211,153,0.08)', borderColor:'rgba(52,211,153,0.2)', color:'#34d399', cursor:'pointer', border:'1px solid rgba(52,211,153,0.2)', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
+            style={{ ...s.linkBtnGreen, background:'var(--vg-success-bg)', borderColor:'var(--vg-success-fg)', color:'var(--vg-success-fg)', cursor:'pointer', border:'1px solid var(--vg-success-fg)', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
             📥 Exportar Excel ({listaFiltrada.length})
           </button>
           <button onClick={recarregar} disabled={recarregando}
-            style={{ ...s.linkBtnGreen, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid rgba(52,211,153,0.2)', opacity: recarregando ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ ...s.linkBtnGreen, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid var(--vg-success-fg)', opacity: recarregando ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ display: 'inline-block', animation: recarregando ? 'spin 0.8s linear infinite' : 'none' }}>🔄</span>
             {recarregando ? 'Atualizando...' : 'Atualizar'}
           </button>
           <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
-          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'#60a5fa', borderColor:'rgba(96,165,250,0.2)', background:'rgba(96,165,250,0.08)' }}>💳 Importar Liberações</a>
+          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'var(--vg-info-fg)', borderColor:'var(--vg-info-fg)', background:'var(--vg-info-bg)' }}>💳 Importar Liberações</a>
         </div>
       </div>
 
@@ -1543,54 +1543,54 @@ export default function Evolucao() {
     {new Set(listaFiltrada.map(e => e.id)).size} empresas distintas
   </span>
 </div>
-        <div style={{ ...s.kpi, borderColor: 'rgba(22,163,74,0.35)' }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-success-fg)' }}>
           <span style={s.kpiLabel}>Movimentaram</span>
-          <span style={{ ...s.kpiVal, color: '#16a34a' }}>{kpis.creditaram}</span>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-success-fg)' }}>{kpis.creditaram}</span>
           <span style={s.kpiSub}>{fmtPct(kpis.pctAtivacao)} de ativação</span>
         </div>
-        <div style={{ ...s.kpi, borderColor: 'rgba(220,38,38,0.35)' }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-danger-fg)' }}>
           <span style={s.kpiLabel}>Sem Movimentação</span>
-          <span style={{ ...s.kpiVal, color: '#dc2626' }}>{kpis.semCredito}</span>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-danger-fg)' }}>{kpis.semCredito}</span>
           <span style={s.kpiSub}>ainda não movimentaram</span>
         </div>
-        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)' }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-brand-500)' }}>
           <span style={s.kpiLabel}>Total Movimentado</span>
-          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{fmt(kpis.totalCred)}</span>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-brand-500)' }}>{fmt(kpis.totalCred)}</span>
           <span style={s.kpiSub}>{meses.length} meses · todas as categorias</span>
         </div>
         {/* NOVO: KPI Total Previsto */}
-        <div style={{ ...s.kpi, borderColor: 'rgba(167,139,250,0.35)' }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-brand-400)' }}>
           <span style={s.kpiLabel}>📊 Total Previsto</span>
-          <span style={{ ...s.kpiVal, color: '#a78bfa' }}>{fmt(kpis.totalPrevisto)}</span>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-brand-400)' }}>{fmt(kpis.totalPrevisto)}</span>
           <span style={s.kpiSub}>potencial × peso/mês</span>
         </div>
         {/* NOVOS KPIs de meta */}
-        <div style={{ ...s.kpi, borderColor: 'rgba(52,211,153,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('na_meta'); setAba('evolucao'); }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-success-fg)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('na_meta'); setAba('evolucao'); }}>
           <span style={s.kpiLabel}>✅ Na Meta</span>
           <span style={s.kpiVal}>
-            <span style={{ color: '#34d399' }}>{kpis.confirmadas}</span>
-            <span style={{ color: '#4b5563', fontSize: '0.85rem', fontWeight: 600 }}> · </span>
-            <span style={{ color: '#f0b429' }}>{kpis.aguardando}</span>
+            <span style={{ color: 'var(--vg-success-fg)' }}>{kpis.confirmadas}</span>
+            <span style={{ color: 'var(--vg-muted)', fontSize: '0.85rem', fontWeight: 600 }}> · </span>
+            <span style={{ color: 'var(--vg-brand-500)' }}>{kpis.aguardando}</span>
           </span>
           <span style={s.kpiSub}>
-            <span style={{ color: '#34d399' }}>{kpis.confirmadas} confirmadas</span>
-            <span style={{ color: '#6b7280' }}> · </span>
-            <span style={{ color: '#f0b429' }}>{kpis.aguardando} aguardando</span>
+            <span style={{ color: 'var(--vg-success-fg)' }}>{kpis.confirmadas} confirmadas</span>
+            <span style={{ color: 'var(--vg-muted)' }}> · </span>
+            <span style={{ color: 'var(--vg-brand-500)' }}>{kpis.aguardando} aguardando</span>
           </span>
         </div>
         {/* KPI Upsell */}
-        <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(251,191,36,0.2)', cursor: 'pointer', background: filtroUpsell ? 'rgba(251,191,36,0.08)' : '#161a26' }}
+        <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'var(--vg-warning-fg)' : 'var(--vg-warning-fg)', cursor: 'pointer', background: filtroUpsell ? 'var(--vg-warning-bg)' : 'var(--vg-surface)' }}
           onClick={() => { setFiltroUpsell(f => !f); setAba('evolucao'); }}>
           <span style={s.kpiLabel}>📈 Possível Upsell</span>
-          <span style={{ ...s.kpiVal, color: '#fbbf24' }}>{kpis.totalUpsell || 0}</span>
-          <span style={{ ...s.kpiSub, color: kpis.totalUpsell > 0 ? '#fbbf24' : '#4b5563' }}>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-brand-500)' }}>{kpis.totalUpsell || 0}</span>
+          <span style={{ ...s.kpiSub, color: kpis.totalUpsell > 0 ? 'var(--vg-brand-500)' : 'var(--vg-muted)' }}>
             {kpis.totalUpsell > 0 ? `≥45% acima da meta` : 'nenhum detectado'}
-            {filtroUpsell && <span style={{color:'#fbbf24',marginLeft:4,fontWeight:700}}>· ativo</span>}
+            {filtroUpsell && <span style={{color:'var(--vg-brand-500)',marginLeft:4,fontWeight:700}}>· ativo</span>}
           </span>
         </div>
-        <div style={{ ...s.kpi, borderColor: 'rgba(240,180,41,0.35)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
+        <div style={{ ...s.kpi, borderColor: 'var(--vg-brand-500)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
           <span style={s.kpiLabel}>⏳ Pendente Meta</span>
-          <span style={{ ...s.kpiVal, color: '#f0b429' }}>{kpis.pendenteMeta}</span>
+          <span style={{ ...s.kpiVal, color: 'var(--vg-brand-500)' }}>{kpis.pendenteMeta}</span>
           <span style={s.kpiSub}>aguardando elegibilidade</span>
         </div>
       </div>
@@ -1627,13 +1627,13 @@ export default function Evolucao() {
               <option value="todos">Todas as categorias</option>
               {opcoes.categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroProduto !== 'todos' ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroProduto !== 'todos' ? '#a78bfa' : '#e8eaf0' }}
+            <select style={{ ...s.sel, borderColor: filtroProduto !== 'todos' ? 'var(--vg-brand-400)' : 'var(--vg-border)', color: filtroProduto !== 'todos' ? 'var(--vg-brand-400)' : 'var(--vg-ink)' }}
               value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)}>
               <option value="todos">Todos os produtos</option>
               {opcoes.produtos.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             {/* NOVO: filtro por meta */}
-            <select style={{ ...s.sel, borderColor: filtroMeta !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMeta !== 'todos' ? '#34d399' : '#e8eaf0' }}
+            <select style={{ ...s.sel, borderColor: filtroMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-border)', color: filtroMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-ink)' }}
               value={filtroMeta} onChange={e => setFiltroMeta(e.target.value)}>
               <option value="todos">🎯 Todas (meta)</option>
               <option value="na_meta">✅ Confirmadas na meta</option>
@@ -1643,25 +1643,25 @@ export default function Evolucao() {
             </select>
             {/* Filtro upsell toggle */}
             <button onClick={() => setFiltroUpsell(f => !f)}
-              style={{ ...s.sel, cursor: 'pointer', fontFamily: 'inherit', background: filtroUpsell ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)', borderColor: filtroUpsell ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.12)', color: filtroUpsell ? '#fbbf24' : '#6b7280', fontWeight: filtroUpsell ? 700 : 400 }}>
+              style={{ ...s.sel, cursor: 'pointer', fontFamily: 'inherit', background: filtroUpsell ? 'var(--vg-warning-bg)' : 'var(--vg-surface-muted)', borderColor: filtroUpsell ? 'var(--vg-warning-fg)' : 'var(--vg-border)', color: filtroUpsell ? 'var(--vg-brand-500)' : 'var(--vg-muted)', fontWeight: filtroUpsell ? 700 : 400 }}>
               📈 {filtroUpsell ? '✓ Upsell' : 'Upsell'}
             </button>
           </div>
           {/* Linha 2: hierarquia + ordenar */}
           <div style={s.filtroRow}>
-            <select style={{ ...s.sel, borderColor: 'rgba(167,139,250,0.4)', color: filtroDiretor !== 'todos' ? '#a78bfa' : '#e8eaf0' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: 'var(--vg-brand-400)', color: filtroDiretor !== 'todos' ? 'var(--vg-brand-400)' : 'var(--vg-ink)' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
               <option value="todos">Todos os diretores</option>
               {opcoes.diretores.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroGestor !== 'todos' ? '#60a5fa' : '#e8eaf0' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-border)', color: filtroGestor !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-ink)' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
               <option value="todos">{filtroDiretor === 'todos' ? 'Todos os gestores' : `Gestores de ${filtroDiretor}`}</option>
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'var(--vg-brand-500)' : 'var(--vg-border)', color: filtroDepto !== 'todos' ? 'var(--vg-brand-500)' : 'var(--vg-ink)' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
               <option value="todos">Todas as equipes</option>
               {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-border)', color: filtroVendedor !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-ink)' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
               <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
               {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
@@ -1680,11 +1680,11 @@ export default function Evolucao() {
 
             {/* Filtro por mês de cadastro — select compacto */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: '#60a5fa', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>📅 Cadastro em:</span>
+              <span style={{ color: 'var(--vg-info-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>📅 Cadastro em:</span>
               <select
                 value={filtroMesCadastro}
                 onChange={e => setFiltroMesCadastro(e.target.value)}
-                style={{ ...s.sel, borderColor: filtroMesCadastro !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMesCadastro !== 'todos' ? '#60a5fa' : '#e8eaf0', minWidth: 160 }}>
+                style={{ ...s.sel, borderColor: filtroMesCadastro !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-border)', color: filtroMesCadastro !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-ink)', minWidth: 160 }}>
                 <option value="todos">Todos os meses</option>
                 {mesesCadastro.map(m => {
                   const qtd = listaCompleta.filter(e => e.mesCadastro === m).length;
@@ -1707,11 +1707,11 @@ export default function Evolucao() {
               const mesesUnicos = [...new Set([...mesesCalc, ...mesesGrav])].sort();
               return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: '#34d399', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>🎯 Mês da meta:</span>
+                  <span style={{ color: 'var(--vg-success-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>🎯 Mês da meta:</span>
                   <select
                     value={filtroMesMeta}
                     onChange={e => setFiltroMesMeta(e.target.value)}
-                    style={{ ...s.sel, borderColor: filtroMesMeta !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroMesMeta !== 'todos' ? '#34d399' : '#e8eaf0', minWidth: 200 }}>
+                    style={{ ...s.sel, borderColor: filtroMesMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-border)', color: filtroMesMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-ink)', minWidth: 200 }}>
                     <option value="todos">Todos os meses</option>
                     {mesesUnicos.map(m => {
                       const totalMes = listaCompleta.reduce((s, e) => {
@@ -1739,25 +1739,25 @@ export default function Evolucao() {
               <button
                 onClick={() => setMesesDrop(v => !v)}
                 style={{ ...s.sel, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                  borderColor: mesesOcultos.size > 0 ? 'rgba(240,180,41,0.5)' : 'rgba(255,255,255,0.12)',
-                  color: mesesOcultos.size > 0 ? '#f0b429' : '#e8eaf0', whiteSpace: 'nowrap' }}>
+                  borderColor: mesesOcultos.size > 0 ? 'var(--vg-brand-500)' : 'var(--vg-border)',
+                  color: mesesOcultos.size > 0 ? 'var(--vg-brand-500)' : 'var(--vg-ink)', whiteSpace: 'nowrap' }}>
                 📅 Meses ({meses.length - mesesOcultos.size}/{meses.length}) ▾
               </button>
               {mesesDrop && (
                 <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 50, minWidth: 180,
-                  background: '#12151c', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10,
-                  padding: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
+                  background: 'var(--vg-bg)', border: '1px solid var(--vg-border)', borderRadius: 10,
+                  padding: 10, boxShadow: '0 8px 30px rgba(28,31,59,0.18)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                     <button onClick={() => setMesesOcultos(new Set())}
-                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: '#34d399' }}>Todos</button>
+                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: 'var(--vg-success-fg)' }}>Todos</button>
                     <button onClick={() => setMesesOcultos(new Set(meses))}
-                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: '#f87171' }}>Nenhum</button>
+                      style={{ ...s.sel, padding: '3px 8px', fontSize: '0.68rem', cursor: 'pointer', color: 'var(--vg-danger-fg)' }}>Nenhum</button>
                   </div>
                   {meses.map(m => {
                     const marcado = !mesesOcultos.has(m);
                     return (
                       <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px',
-                        cursor: 'pointer', fontSize: '0.78rem', color: '#e8eaf0' }}>
+                        cursor: 'pointer', fontSize: '0.78rem', color: 'var(--vg-ink)' }}>
                         <input type="checkbox" checked={marcado}
                           onChange={() => setMesesOcultos(prev => {
                             const n = new Set(prev);
@@ -1778,10 +1778,10 @@ export default function Evolucao() {
 
               {/* Por página */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: '#6b7280', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Por página:</span>
+                <span style={{ color: 'var(--vg-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Por página:</span>
                 {[12, 24, 50, 100].map(n => (
                   <button key={n} onClick={() => setPorPagina(n)}
-                    style={{ background: porPagina === n ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${porPagina === n ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '5px 10px', color: porPagina === n ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: porPagina === n ? 700 : 400 }}>
+                    style={{ background: porPagina === n ? 'var(--vg-brand-50)' : 'var(--vg-surface-muted)', border: `1px solid ${porPagina === n ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`, borderRadius: 6, padding: '5px 10px', color: porPagina === n ? 'var(--vg-brand-500)' : 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: porPagina === n ? 700 : 400 }}>
                     {n}
                   </button>
                 ))}
@@ -1790,29 +1790,29 @@ export default function Evolucao() {
               {/* Seletor de colunas */}
               <div style={{ position: 'relative' }}>
               <button onClick={() => setPainelColunas(p => !p)}
-                style={{ background: painelColunas ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${painelColunas ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '7px 14px', color: painelColunas ? '#f0b429' : '#9ca3af', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                style={{ background: painelColunas ? 'var(--vg-brand-50)' : 'var(--vg-surface-muted)', border: `1px solid ${painelColunas ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`, borderRadius: 8, padding: '7px 14px', color: painelColunas ? 'var(--vg-brand-500)' : 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 ⚙️ Colunas selecionadas: {colunasVisiveis.size} de {COLUNAS_DEF.length}
                 <span style={{ fontSize: '0.65rem' }}>{painelColunas ? '▲' : '▼'}</span>
               </button>
 
               {painelColunas && (
-                <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 100, background: '#161a26', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 16, minWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+                <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 100, background: 'var(--vg-surface)', border: '1px solid var(--vg-border)', borderRadius: 12, padding: 16, minWidth: 320, boxShadow: '0 8px 32px rgba(28,31,59,0.18)' }}>
                   {/* Presets */}
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid var(--vg-border)', paddingBottom: 10 }}>
                     {[['padrao','Padrão'],['minimo','Mínimo'],['todas','Todas']].map(([key,label]) => (
                       <button key={key} onClick={() => setColunasVisiveis(new Set(PRESETS[key]))}
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 12px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: 600 }}>
+                        style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 6, padding: '4px 12px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: 600 }}>
                         {label}
                       </button>
                     ))}
-                    <span style={{ color: '#4b5563', fontSize: '0.7rem', marginLeft: 4, display: 'flex', alignItems: 'center' }}>ou escolha:</span>
+                    <span style={{ color: 'var(--vg-muted)', fontSize: '0.7rem', marginLeft: 4, display: 'flex', alignItems: 'center' }}>ou escolha:</span>
                   </div>
                   {/* Checkboxes por grupo */}
                   {['Identificação','Comercial','Movimentação','Meta'].map(grupo => {
                     const cols = COLUNAS_DEF.filter(c => c.grupo === grupo);
                     return (
                       <div key={grupo} style={{ marginBottom: 10 }}>
-                        <div style={{ color: '#6b7280', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>{grupo}</div>
+                        <div style={{ color: 'var(--vg-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>{grupo}</div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           {cols.map(col => {
                             const ativo = colunasVisiveis.has(col.key);
@@ -1823,7 +1823,7 @@ export default function Evolucao() {
                                   if (ativo) next.delete(col.key); else next.add(col.key);
                                   setColunasVisiveis(next);
                                 }}
-                                style={{ background: ativo ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${ativo ? 'rgba(240,180,41,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: '4px 10px', color: ativo ? '#f0b429' : '#6b7280', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: ativo ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                style={{ background: ativo ? 'var(--vg-brand-50)' : 'var(--vg-surface-muted)', border: `1px solid ${ativo ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`, borderRadius: 6, padding: '4px 10px', color: ativo ? 'var(--vg-brand-500)' : 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: ativo ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {ativo ? '✓' : '○'} {col.label}
                               </button>
                             );
@@ -1833,7 +1833,7 @@ export default function Evolucao() {
                     );
                   })}
                   <button onClick={() => setPainelColunas(false)}
-                    style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 14px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', width: '100%' }}>
+                    style={{ marginTop: 6, background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 7, padding: '5px 14px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', width: '100%' }}>
                     ✕ Fechar
                   </button>
                 </div>
@@ -2009,20 +2009,20 @@ export default function Evolucao() {
             {kpis.porMes.map(m => (
               <div key={m.mes} style={s.mesCard}>
                 <div style={s.mesBadge}>{fmtMes(m.mes)}</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#34d399', margin: '12px 0 4px' }}>{fmt(m.total)}</div>
-                <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{m.empresas} empresas creditando</div>
-                <div style={{ color: '#4b5563', fontSize: '0.75rem', marginTop: 2 }}>{kpis.total - m.empresas} sem crédito neste mês</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--vg-success-fg)', margin: '12px 0 4px' }}>{fmt(m.total)}</div>
+                <div style={{ color: 'var(--vg-ink-secondary)', fontSize: '0.8rem' }}>{m.empresas} empresas creditando</div>
+                <div style={{ color: 'var(--vg-muted)', fontSize: '0.75rem', marginTop: 2 }}>{kpis.total - m.empresas} sem crédito neste mês</div>
                 <div style={{ marginTop: 12 }}>
-                  <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                    <div style={{ background: '#34d399', height: '100%', width: `${kpis.total > 0 ? (m.empresas / kpis.total) * 100 : 0}%` }} />
+                  <div style={{ background: 'var(--vg-surface-muted)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                    <div style={{ background: 'var(--vg-success-fg)', height: '100%', width: `${kpis.total > 0 ? (m.empresas / kpis.total) * 100 : 0}%` }} />
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.72rem', marginTop: 4 }}>{kpis.total > 0 ? fmtPct((m.empresas / kpis.total) * 100) : '0%'} de ativação</div>
+                  <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem', marginTop: 4 }}>{kpis.total > 0 ? fmtPct((m.empresas / kpis.total) * 100) : '0%'} de ativação</div>
                 </div>
               </div>
             ))}
           </div>
           <div style={{ marginTop: 32 }}>
-            <div style={{ fontWeight: 700, marginBottom: 16, color: '#e8eaf0' }}>Distribuição de Tendências</div>
+            <div style={{ fontWeight: 700, marginBottom: 16, color: 'var(--vg-ink)' }}>Distribuição de Tendências</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {['up','down','flat','new','none'].map(t => {
                 const count = listaFiltrada.filter(e => e.tend === t).length;
@@ -2032,7 +2032,7 @@ export default function Evolucao() {
                     onClick={() => { setFiltroTend(t); setAba('evolucao'); }}>
                     <div style={{ color: ts.color, fontWeight: 700, fontSize: '1.6rem' }}>{count}</div>
                     <div style={{ color: ts.color, fontSize: '0.85rem', marginTop: 6 }}>{ts.label}</div>
-                    <div style={{ color: '#4b5563', fontSize: '0.72rem', marginTop: 4 }}>clique para filtrar</div>
+                    <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem', marginTop: 4 }}>clique para filtrar</div>
                   </div>
                 );
               })}
@@ -2045,23 +2045,23 @@ export default function Evolucao() {
       {aba === 'cruzamento' && (
         <div style={s.card}>
           <div style={s.cardTitle}>🎯 Potencial vs Creditado</div>
-          <div style={{ color: '#6b7280', fontSize: '0.82rem', marginTop: 6, marginBottom: 16 }}>
+          <div style={{ color: 'var(--vg-muted)', fontSize: '0.82rem', marginTop: 6, marginBottom: 16 }}>
             Empresas com potencial cadastrado · {meses.length} meses de referência
           </div>
           <div style={{ ...s.filtroRow, marginBottom: 16 }}>
-            <select style={{ ...s.sel, borderColor: filtroDiretor !== 'todos' ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.12)', color: filtroDiretor !== 'todos' ? '#a78bfa' : '#e8eaf0' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroDiretor !== 'todos' ? 'var(--vg-brand-400)' : 'var(--vg-border)', color: filtroDiretor !== 'todos' ? 'var(--vg-brand-400)' : 'var(--vg-ink)' }} value={filtroDiretor} onChange={e => setFiltroDiretor(e.target.value)}>
               <option value="todos">Todos os diretores</option>
               {opcoes.diretores.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'rgba(96,165,250,0.5)' : 'rgba(255,255,255,0.12)', color: filtroGestor !== 'todos' ? '#60a5fa' : '#e8eaf0' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroGestor !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-border)', color: filtroGestor !== 'todos' ? 'var(--vg-info-fg)' : 'var(--vg-ink)' }} value={filtroGestor} onChange={e => setFiltroGestor(e.target.value)}>
               <option value="todos">{filtroDiretor === 'todos' ? 'Todos os gestores' : `Gestores de ${filtroDiretor}`}</option>
               {opcoes.gestores.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)', color: filtroDepto !== 'todos' ? '#f97316' : '#e8eaf0' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroDepto !== 'todos' ? 'var(--vg-brand-500)' : 'var(--vg-border)', color: filtroDepto !== 'todos' ? 'var(--vg-brand-500)' : 'var(--vg-ink)' }} value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
               <option value="todos">Todas as equipes</option>
               {opcoes.deptos.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'rgba(52,211,153,0.5)' : 'rgba(255,255,255,0.12)', color: filtroVendedor !== 'todos' ? '#34d399' : '#e8eaf0' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
+            <select style={{ ...s.sel, borderColor: filtroVendedor !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-border)', color: filtroVendedor !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-ink)' }} value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)}>
               <option value="todos">{filtroGestor === 'todos' ? 'Todos os vendedores' : `Vendedores de ${filtroGestor}`}</option>
               {opcoes.vendedores.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
@@ -2074,40 +2074,40 @@ export default function Evolucao() {
 }
 
 const ps = {
-  btn:      { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '5px 10px', color: '#9ca3af', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', minWidth: 32 },
-  ativo:    { background: 'rgba(240,180,41,0.2)', borderColor: 'rgba(240,180,41,0.5)', color: '#f0b429', fontWeight: 700 },
+  btn:      { background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 7, padding: '5px 10px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', minWidth: 32 },
+  ativo:    { background: 'var(--vg-brand-500)', borderColor: 'var(--vg-brand-500)', color: 'var(--vg-brand-500)', fontWeight: 700 },
   disabled: { opacity: 0.3, cursor: 'default' },
-  dots:     { color: '#4b5563', fontSize: '0.82rem', padding: '0 2px' },
+  dots:     { color: 'var(--vg-muted)', fontSize: '0.82rem', padding: '0 2px' },
 };
 
 const s = {
-  page:         { maxWidth: 1400, margin: '0 auto', padding: '24px 24px', fontFamily: "'DM Sans', sans-serif", color: '#e8eaf0', background: '#0a0c10', minHeight: '100vh', boxSizing: 'border-box' },
+  page:         { maxWidth: 1400, margin: '0 auto', padding: '24px 24px', fontFamily: "'Inter', sans-serif", color: 'var(--vg-ink)', background: 'var(--vg-bg)', minHeight: '100vh', boxSizing: 'border-box' },
   header:       { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 16 },
-  tag:          { color: '#34d399', fontWeight: 800, fontSize: '0.9rem', letterSpacing: 2, marginBottom: 12, textTransform: 'uppercase' },
-  title:        { fontSize: '1.8rem', fontWeight: 700, margin: '0 0 8px' },
-  sub:          { color: '#6b7280', fontSize: '0.9rem' },
-  linkBtnGreen: { background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 10, padding: '10px 20px', color: '#34d399', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 },
+  tag:          { color: 'var(--vg-muted)', fontWeight: 600, fontSize: 12, letterSpacing: '0.05em', marginBottom: 8, textTransform: 'uppercase' },
+  title:        { fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700, margin: '0 0 8px', color: 'var(--vg-ink)' },
+  sub:          { color: 'var(--vg-ink-secondary)', fontSize: '0.9rem' },
+  linkBtnGreen: { background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', borderRadius: 10, padding: '10px 20px', color: 'var(--vg-success-fg)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 },
   kpis:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 },
-  kpi:          { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 3 },
-  kpiLabel:     { color: '#6b7280', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1 },
-  kpiVal:       { fontSize: '1.2rem', fontWeight: 700 },
-  kpiSub:       { color: '#4b5563', fontSize: '0.72rem' },
+  kpi:          { background: 'var(--vg-surface)', border: '1px solid var(--vg-surface-muted)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 3 },
+  kpiLabel:     { color: 'var(--vg-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1 },
+  kpiVal:       { fontFamily: "'Outfit', sans-serif", fontSize: '1.2rem', fontWeight: 700 },
+  kpiSub:       { color: 'var(--vg-muted)', fontSize: '0.72rem' },
   tabs:         { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  tab:          { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 16px', color: '#6b7280', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
-  tabAtiva:     { background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' },
-  card:         { background: '#161a26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 28, marginBottom: 24 },
-  cardTitle:    { fontSize: '1rem', fontWeight: 700 },
+  tab:          { background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-surface-muted)', borderRadius: 10, padding: '8px 16px', color: 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit' },
+  tabAtiva:     { background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)' },
+  card:         { background: 'var(--vg-surface)', border: '1px solid var(--vg-surface-muted)', borderRadius: 16, padding: 28, marginBottom: 24 },
+  cardTitle:    { fontFamily: "'Outfit', sans-serif", fontSize: '1rem', fontWeight: 700, color: 'var(--vg-ink)' },
   filtroRow:    { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 },
-  busca:        { flex: '1 1 220px', background: '#1e2435', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '9px 14px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' },
-  sel:          { background: '#1e2435', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '9px 14px', color: '#e8eaf0', fontSize: '0.85rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' },
+  busca:        { flex: '1 1 220px', background: 'var(--vg-surface)', border: '1px solid var(--vg-border)', borderRadius: 10, padding: '9px 14px', color: 'var(--vg-ink)', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' },
+  sel:          { background: 'var(--vg-surface)', border: '1px solid var(--vg-border)', borderRadius: 10, padding: '9px 14px', color: 'var(--vg-ink)', fontSize: '0.85rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' },
   table:        { width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' },
-  th:           { padding: '8px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 0.5, position: 'sticky', top: 0, background: '#161a26', zIndex: 2 },
-  td:           { padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' },
-  badgeGreen:   { background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.3)', color: '#16a34a', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
-  badgeRed:     { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', color: '#f87171', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
-  mesCard:      { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', flex: '1 1 180px', minWidth: 180 },
-  mesBadge:     { display: 'inline-block', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', borderRadius: 8, padding: '4px 12px', fontSize: '0.85rem', fontWeight: 700 },
-  spin:         { width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid #34d399', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
+  th:           { padding: '8px 12px', textAlign: 'left', color: 'var(--vg-muted)', fontWeight: 500, borderBottom: '1px solid var(--vg-surface-muted)', whiteSpace: 'nowrap', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 0.5, position: 'sticky', top: 0, background: 'var(--vg-surface)', zIndex: 2 },
+  td:           { padding: '10px 12px', borderBottom: '1px solid var(--vg-surface-muted)', whiteSpace: 'nowrap' },
+  badgeGreen:   { background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  badgeRed:     { background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', color: 'var(--vg-danger-fg)', borderRadius: 6, padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 },
+  mesCard:      { background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-surface-muted)', borderRadius: 14, padding: '20px 24px', flex: '1 1 180px', minWidth: 180 },
+  mesBadge:     { display: 'inline-block', background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)', borderRadius: 8, padding: '4px 12px', fontSize: '0.85rem', fontWeight: 700 },
+  spin:         { width: 40, height: 40, border: '3px solid var(--vg-border)', borderTop: '3px solid var(--vg-success-fg)', borderRadius: '50%', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
 };
 
 // cache bust 2026-08-03T19:52:42Z
