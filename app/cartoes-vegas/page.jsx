@@ -111,6 +111,7 @@ export default function CartoesVegas() {
   const [mesesSel, setMesesSel] = useState(() => new Set()); // vazio = Todos
   const [dirsSel, setDirsSel] = useState(() => new Set()); // vazio = Geral (todas)
   const [expandidos, setExpandidos] = useState(new Set());
+  const [blocoPor, setBlocoPor] = useState('gestor'); // 'gestor' | 'depto' — visão do bloco de gestores
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { carregar(); }, []);
@@ -127,7 +128,7 @@ export default function CartoesVegas() {
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')),
-        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,setor,meta_mensal,meta_inicio,ativo')),
+        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,equipe,setor,meta_mensal,meta_inicio,ativo')),
       ]);
 
       const empIds  = empresas.map(e => e.id);
@@ -325,26 +326,45 @@ export default function CartoesVegas() {
     // Bloco — comparativo por diretoria (aba Geral)
     const diretorias = DIRETORIAS.map(d => ({ dir:d, ...sumBy(statAll, c => c.diretor === d) }));
 
-    // Bloco — gestores da diretoria (abas de diretoria)
-    let gestores = [];
+    // Bloco — agrupamento do "bloco de gestores". Mesma agregacao (sumBy + statAll +
+    // metaPeriodoCons + mediaMensal), parametrizada pela chave: por gestor OU por
+    // departamento (consultores.equipe). Nada e reimplementado.
+    const buildGrupo = ({ key, nome, diretor, metaAplic, cons, pred }) => {
+      const st = sumBy(statAll, pred);
+      const metaPeriodo = cons.reduce((s,c) => s + metaPeriodoCons(c), 0);
+      const metaMensal  = cons.reduce((s,c) => s + (c.meta_mensal||0), 0);
+      const vendedores = cons.map(c => {
+        const raw = statAll[c.id];
+        const sv = raw ? { esperado:raw.esperado, mov:raw.mov, meta:raw.meta, contratos:raw.contratos.size } : { esperado:0, mov:0, meta:0, contratos:0 };
+        const mp = metaPeriodoCons(c);
+        return { id:c.id, nome:c.nome, gestor:c.gestor||'—', diretor:c.diretor, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, media: mediaMensal(sv.meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? sv.meta/mp*100 : null };
+      }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
+      return { key, nome, diretor, metaAplic, ...st, metaPeriodo, metaMensal, media: mediaMensal(st.meta, metaPeriodo, metaMensal), pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
+    };
+
+    let gestores = [], departamentos = [];
     if(!modoGeral) {
       const consDir = consultores.filter(c => dirsSel.has(c.diretor) && c.ativo);
-      // Pares (diretoria, gestor) distintos — evita fundir gestores homônimos de diretorias diferentes.
-      const pares = [...new Set(consDir.filter(c => c.gestor).map(c => `${c.diretor} ${c.gestor}`))];
+      // Por gestor — pares (diretoria, gestor) distintos (comportamento atual, inalterado).
+      const pares = [...new Set(consDir.filter(c => c.gestor).map(c => `${c.diretor} ${c.gestor}`))];
       gestores = pares.map(par => {
-        const [dir, g] = par.split(' ');
-        const cons  = consDir.filter(c => c.diretor === dir && c.gestor === g);
-        const st    = sumBy(statAll, c => c.gestor === g && c.diretor === dir);
-        const metaPeriodo = cons.reduce((s,c) => s + metaPeriodoCons(c), 0);
-        const metaMensal  = cons.reduce((s,c) => s + (c.meta_mensal||0), 0);
-        const vendedores = cons.map(c => {
-          const raw = statAll[c.id];
-          const sv = raw ? { esperado:raw.esperado, mov:raw.mov, meta:raw.meta, contratos:raw.contratos.size } : { esperado:0, mov:0, meta:0, contratos:0 };
-          const mp = metaPeriodoCons(c);
-          return { id:c.id, nome:c.nome, ...sv, metaPeriodo:mp, metaMensal:c.meta_mensal||0, media: mediaMensal(sv.meta, mp, c.meta_mensal||0), pctMeta: mp>0 ? sv.meta/mp*100 : null };
-        }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
-        return { key:`${dir}::${g}`, gestor:g, diretor:dir, ...st, metaPeriodo, metaMensal, media: mediaMensal(st.meta, metaPeriodo, metaMensal), pctMeta: metaPeriodo>0 ? st.meta/metaPeriodo*100 : null, vendedores };
+        const [dir, g] = par.split(' ');
+        return buildGrupo({
+          key:`${dir}::${g}`, nome:g, diretor:dir, metaAplic:metaAplicavel(dir),
+          cons: consDir.filter(c => c.diretor === dir && c.gestor === g),
+          pred: c => c.gestor === g && c.diretor === dir,
+        });
       }).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
+      // Por departamento — agrupa por consultores.equipe (cruza diretorias). No escopo
+      // selecionado, soma tudo daquela equipe sem separar por gestor. Sem equipe => "(sem equipe)".
+      const eqDe = (c) => c.equipe || '(sem equipe)';
+      const equipes = [...new Set(consDir.map(eqDe))];
+      departamentos = equipes.map(eq => buildGrupo({
+        key:`dep::${eq}`, nome:eq, diretor:null,
+        metaAplic: consDir.some(c => eqDe(c) === eq && metaAplicavel(c.diretor)),
+        cons: consDir.filter(c => eqDe(c) === eq),
+        pred: c => eqDe(c) === eq && inEscopo(c.diretor),
+      })).sort((a,b) => b.mov - a.mov || b.meta - a.meta);
     }
 
     // Bloco — distribuição por produto (respeita escopo + período)
@@ -424,7 +444,7 @@ export default function CartoesVegas() {
     });
 
     return {
-      card2, cardFech, novo, diretorias, gestores, produtos, ranking, metaSerie,
+      card2, cardFech, novo, diretorias, gestores, departamentos, produtos, ranking, metaSerie,
       ultimoMes, movDisponivel, periodoMeses,
       alim: { licit:alimLicitMov, total:alimTotalMov },
     };
@@ -449,6 +469,13 @@ export default function CartoesVegas() {
   // Meta se aplica quando o escopo inclui alguma diretoria não-Licitação (Geral, ou qualquer ≠ Sartori).
   const metaAplic = modoGeral || dirsArr.some(d => metaAplicavel(d));
   const corAba = dirsSel.size === 1 ? CORES_DIR[dirsArr[0]] : 'var(--vg-brand-500)';
+  // Bloco de gestores: alterna entre visão por gestor e por departamento (equipe).
+  const isDepto     = blocoPor === 'depto';
+  const blocoData   = isDepto ? v.departamentos : v.gestores;
+  const blocoTitulo = isDepto ? 'Departamentos' : 'Gestores';
+  const blocoColuna = isDepto ? 'Departamento' : 'Gestor';
+  // Departamento cruza diretorias quando o escopo tem mais de uma diretoria selecionada.
+  const deptoCruzaDir = isDepto && dirsSel.size > 1;
   const escopoTxt = modoGeral ? 'Todas as diretorias'
     : dirsSel.size === 1 ? `Diretoria ${dirsArr[0]}`
     : `Diretorias ${dirsArr.join(' + ')}`;
@@ -604,16 +631,31 @@ export default function CartoesVegas() {
       {!modoGeral && (
         <div style={{ ...cardStyle, padding:0, overflow:'hidden', marginBottom:24 }}>
           <div style={{ padding:'24px 24px 4px' }}>
-            <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-              <Users {...ICON} color={corAba} /> Gestores · {escopoTxt}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:4 }}>
+              <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8 }}>
+                <Users {...ICON} color={corAba} /> {blocoTitulo} · {escopoTxt}
+              </div>
+              <div style={{ display:'inline-flex', gap:6 }}>
+                {[{ k:'gestor', t:'Por gestor' }, { k:'depto', t:'Por departamento' }].map(op => {
+                  const on = blocoPor === op.k;
+                  return (
+                    <button key={op.k} onClick={()=>{ setBlocoPor(op.k); setExpandidos(new Set()); }}
+                      style={{ background: on ? 'var(--vg-brand-50)' : 'var(--vg-surface)', border:`1px solid ${on ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`,
+                        color: on ? 'var(--vg-brand-700)' : 'var(--vg-ink-secondary)', borderRadius:'var(--vg-radius)', padding:'6px 14px',
+                        fontSize:13, fontWeight: on ? 600 : 500, fontFamily:"'Inter', sans-serif", cursor:'pointer', outline:'none' }}>
+                      {op.t}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ ...CAPTION, marginBottom:12 }}>Clique em um gestor para abrir os vendedores</div>
+            <div style={{ ...CAPTION, marginBottom:12 }}>Clique em um {isDepto ? 'departamento' : 'gestor'} para abrir os vendedores</div>
           </div>
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
               <thead>
                 <tr>
-                  <th style={s.th}>Gestor</th>
+                  <th style={s.th}>{blocoColuna}</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Contratos</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Esperado / mês</th>
                   <th style={{ ...s.th, textAlign:'right' }}>Meta apurada</th>
@@ -624,12 +666,12 @@ export default function CartoesVegas() {
                 </tr>
               </thead>
               <tbody>
-                {v.gestores.length === 0 && (
-                  <tr><td colSpan={8} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum gestor na seleção.</td></tr>
+                {blocoData.length === 0 && (
+                  <tr><td colSpan={8} style={{ ...s.td, textAlign:'center', color:'var(--vg-muted)' }}>Nenhum {isDepto ? 'departamento' : 'gestor'} na seleção.</td></tr>
                 )}
-                {v.gestores.map(g => {
+                {blocoData.map(g => {
                   const aberto = expandidos.has(g.key);
-                  const gAplic = metaAplicavel(g.diretor);
+                  const gAplic = g.metaAplic;
                   return (
                     <Fragment key={g.key}>
                       <tr onClick={()=>toggle(g.key)}
@@ -637,8 +679,8 @@ export default function CartoesVegas() {
                         <td style={{ ...s.td, fontWeight:600, color:'var(--vg-ink)' }}>
                           <span style={{ display:'inline-flex', alignItems:'center', gap:7 }}>
                             {aberto ? <ChevronDown size={15} strokeWidth={2} color="var(--vg-muted)" /> : <ChevronRight size={15} strokeWidth={2} color="var(--vg-muted)" />}
-                            {g.gestor}
-                            {dirsSel.size > 1 && <span style={{ ...CAPTION, background:'var(--vg-neutral-bg)', color:CORES_DIR[g.diretor], borderRadius:6, padding:'1px 8px', fontWeight:600 }}>{g.diretor}</span>}
+                            {g.nome}
+                            {!isDepto && dirsSel.size > 1 && <span style={{ ...CAPTION, background:'var(--vg-neutral-bg)', color:CORES_DIR[g.diretor], borderRadius:6, padding:'1px 8px', fontWeight:600 }}>{g.diretor}</span>}
                           </span>
                         </td>
                         <td style={{ ...s.td, textAlign:'right' }} className="vg-num">{fmtInt(g.contratos)}</td>
@@ -656,7 +698,12 @@ export default function CartoesVegas() {
                       </tr>
                       {aberto && g.vendedores.map(vd => (
                         <tr key={`${g.key}-${vd.id}`} style={{ borderTop:'1px solid var(--vg-border)', background:'var(--vg-surface-muted)' }}>
-                          <td style={{ ...s.td, paddingLeft:44, color:'var(--vg-ink-secondary)' }}>{vd.nome}</td>
+                          <td style={{ ...s.td, paddingLeft:44, color:'var(--vg-ink-secondary)' }}>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                              {vd.nome}
+                              {deptoCruzaDir && <span style={{ ...CAPTION, background:'var(--vg-neutral-bg)', color:CORES_DIR[vd.diretor]||'var(--vg-muted)', borderRadius:6, padding:'1px 8px', fontWeight:600 }}>{vd.gestor}</span>}
+                            </span>
+                          </td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmtInt(vd.contratos)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{fmt(vd.esperado)}</td>
                           <td style={{ ...s.td, textAlign:'right', color:'var(--vg-ink-secondary)' }} className="vg-num">{gAplic ? fmt(vd.meta) : '—'}</td>
