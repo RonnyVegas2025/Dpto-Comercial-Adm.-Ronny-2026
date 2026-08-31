@@ -26,6 +26,9 @@ const corSem  = (p) => p>=80 ? 'var(--vg-success-fg)' : p>=50 ? 'var(--vg-warnin
 
 const fmt    = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const fmtPct = (v) => `${Number(v||0).toFixed(1)}%`;
+// Fonte responsiva ao comprimento do valor formatado — evita a quebra no meio
+// do número em valores de 8+ dígitos. Mesmo padrão de app/cartoes-vegas/page.jsx.
+const fitKpi = (str) => { const n = String(str).length; if (n <= 12) return 24; if (n <= 16) return 20; return 17; };
 const fmtMes = (d) => {
   if (!d) return '—';
   const [y, m] = String(d).substring(0,7).split('-');
@@ -485,6 +488,11 @@ export default function HomePage() {
     : metaTotal;
   const pctMetaView      = metaTotalView > 0 ? (metaApuradaView / metaTotalView) * 100 : 0;
   const mesesComMetaView = Object.entries(metaPorMesView).sort((a,b) => a[0].localeCompare(b[0])).slice(-5);
+  // Período coberto pelo acumulado (chaves de metaPorMes já disponíveis) — só rótulo.
+  const mesesMetaKeys = Object.keys(metaPorMesView).sort();
+  const periodoMetaApurada = mesesMetaKeys.length
+    ? `acumulado ${fmtMes(mesesMetaKeys[0])} a ${fmtMes(mesesMetaKeys[mesesMetaKeys.length-1])}`
+    : 'acumulado de todos os meses';
   const top3View = consEscopo
     .map(c => ({ ...c, metaApurada: (metaPorConsultor?.[c.id]) || 0 }))
     .filter(c => c.metaApurada > 0)
@@ -581,9 +589,9 @@ export default function HomePage() {
           },
           {
             Ico: Target, num: true,
-            label: 'Meta Apurada',
+            label: 'Meta Apurada (Acumulado)',
             val:   fmt(metaApuradaView),
-            sub:   `meta: ${fmt(metaTotalView)}/mês`,
+            sub:   periodoMetaApurada,
             subCor:'var(--vg-muted)',
           },
           {
@@ -603,7 +611,7 @@ export default function HomePage() {
         ].map((k,i) => (
           <div key={i} style={{...cardStyle,padding:20,animation:`fadeIn 0.4s ease ${i*0.05}s both`}}>
             <div style={{...LABEL,display:'flex',alignItems:'center',gap:6,marginBottom:8}}><k.Ico {...ICON} color="var(--vg-muted)" />{k.label}</div>
-            <div className={k.num ? 'vg-num' : undefined} style={{fontFamily:OUTFIT,fontSize:24,lineHeight:'32px',fontWeight:600,color:'var(--vg-ink)',marginBottom:4,overflowWrap:'anywhere'}}>{k.val}</div>
+            <div className={k.num ? 'vg-num' : undefined} style={{fontFamily:OUTFIT,fontSize:fitKpi(k.val),lineHeight:'32px',fontWeight:600,color:'var(--vg-ink)',marginBottom:4,whiteSpace:'nowrap'}}>{k.val}</div>
             <div className="vg-num" style={{fontSize:12,lineHeight:'18px',color:k.subCor,fontWeight:500}}>{k.sub}</div>
           </div>
         ))}
@@ -638,7 +646,8 @@ export default function HomePage() {
 
         {/* Meta por mês */}
         <div style={cardStyle}>
-          <div style={{...H_CARD,display:'flex',alignItems:'center',gap:8,marginBottom:16}}><CalendarDays {...ICON} /> Meta Apurada por Mês</div>
+          <div style={{...H_CARD,display:'flex',alignItems:'center',gap:8}}><CalendarDays {...ICON} /> Meta Apurada por Mês</div>
+          <div style={{...CAPTION,marginBottom:16,marginTop:2}}>apurado e elegível por mês</div>
           {mesesComMetaView.length === 0 ? (
             <div style={{color:'var(--vg-muted)',fontSize:14,textAlign:'center',padding:'24px 0'}}>Nenhuma meta apurada ainda</div>
           ) : (
