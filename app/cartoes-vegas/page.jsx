@@ -266,13 +266,6 @@ export default function CartoesVegas() {
     const scopePred = modoGeral ? null : (c => dirsSel.has(c.diretor));
     const card2 = sumBy(statAll, scopePred);
 
-    // Fechados no período: empresas cujo data_cadastro cai no período selecionado.
-    const fechadaNoPeriodo = (e) => { const dc = e.data_cadastro?.substring(0,7); return !!dc && periodoSet.has(dc); };
-    const fechados = empresas.filter(fechadaNoPeriodo);
-    const fechadosSet = new Set(fechados.map(e => e.id));
-    const statFech = buildStat(fechados, metaRowsPeriodo.filter(v => fechadosSet.has(v.empresa_id)));
-    const cardFech = sumBy(statFech, scopePred);
-
     // ── "Novo em 2026" — meta considerada (gravada + elegível não gravada), inclui licitação ──
     const libsList = {}; // produto -> [{comp, val}] ordenado asc
     for(const pid in libByProd) libsList[pid] = Object.entries(libByProd[pid]).map(([comp,val])=>({comp,val})).sort((a,b)=>a.comp.localeCompare(b.comp));
@@ -444,7 +437,7 @@ export default function CartoesVegas() {
     });
 
     return {
-      card2, cardFech, novo, diretorias, gestores, departamentos, produtos, ranking, metaSerie,
+      card2, novo, diretorias, gestores, departamentos, produtos, ranking, metaSerie,
       ultimoMes, movDisponivel, periodoMeses,
       alim: { licit:alimLicitMov, total:alimTotalMov },
     };
@@ -559,20 +552,6 @@ export default function CartoesVegas() {
           <Metrica icon={<TrendingUp {...ICON} color={corAba} />} label="Total" valor={fmt(v.novo.total)} destaque corValor={corAba} />
         </div>
         <div style={{ ...CAPTION, marginTop:16 }}>Inclui licitação — não entra na meta comercial.</div>
-      </div>
-
-      {/* CARD — Fechados no período */}
-      <div style={{ ...cardStyle, marginBottom:20 }}>
-        <div style={{ ...H_CARD, display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-          <FileText {...ICON} color={corAba} /> Fechados no Período
-        </div>
-        <div style={{ ...CAPTION, marginBottom:18 }}>Contratos cadastrados no período · {periodoLabel}{!modoGeral && ` · ${escopoTxt}`}</div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:20 }}>
-          <Metrica icon={<FileText {...ICON} />}   label="Contratos fechados"  valor={fmtInt(v.cardFech.contratos)} destaque corValor={corAba} />
-          <Metrica icon={<TrendingUp {...ICON} />} label="Mov. esperada (mês)" valor={fmt(v.cardFech.esperado)} />
-          <Metrica icon={<Target {...ICON} />}     label="Meta apurada"        valor={metaAplic ? fmt(v.cardFech.meta) : '—'} muted={!metaAplic} valorTitle={metaAplic ? undefined : 'Licitação não entra na meta comercial'} />
-          <Metrica icon={<Wallet {...ICON} />}     label={`Mov. real (${ultimoLabel})`} valor={movCell(v.cardFech.mov)} muted={!v.movDisponivel} />
-        </div>
       </div>
 
       {/* CARD — Total da carteira */}
