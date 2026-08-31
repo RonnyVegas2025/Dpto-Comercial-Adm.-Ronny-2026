@@ -984,7 +984,7 @@ export default function DashboardVendedor() {
           <>
             <div style={{marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:48,height:48,borderRadius:'50%',background:'var(--vg-brand-50)',border:'2px solid var(--vg-brand-500)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',fontWeight:700,color:'var(--vg-brand-500)'}}>
-                {consultorId ? consultor?.nome?.[0] : gestorFiltro==='Geral' ? '' : ''}
+                {consultorId ? consultor?.nome?.[0] : <Users size={22} strokeWidth={1.75} color="var(--vg-brand-500)" />}
               </div>
               <div>
                 <div style={{fontWeight:700,fontSize:'1.2rem'}}>
@@ -1030,9 +1030,9 @@ export default function DashboardVendedor() {
                 {!mesSelecionado && <div style={KSUB}>{ultimoMes2026k ? fmtMes(ultimoMes2026k+'-01') : ''} · total: {fmt(kpis.totalMovReal)}</div>}
                 {mesSelecionado && <div style={KSUB}>{fmtMes(mesSelecionado+'-01')}</div>}
               </div>
-              <div style={KCARD}>
+              <div style={{...KCARD,border:'1px solid var(--vg-brand-500)'}}>
                 <div style={KL}>Valor Apurado Meta</div>
-                <div className="vg-num" style={KV(apuradoV)}>{apuradoV}</div>
+                <div className="vg-num" style={KV(apuradoV,'var(--vg-brand-700)')}>{apuradoV}</div>
                 <div style={KSUB}>1ª rec. × peso / 3º mês convênio</div>
               </div>
               <div style={KCARD}>
@@ -1040,7 +1040,7 @@ export default function DashboardVendedor() {
                 <div className="vg-num" style={KV(metaTotalV)}>{metaTotalV}</div>
                 <div style={KSUB}>{fmt(kpis.metaMensalBase||0)}/mês</div>
               </div>
-              <div style={{...KCARD,border:`1px solid ${kpis.metaTotal>0?corApurado+'44':'var(--vg-border)'}`}}>
+              <div style={{...KCARD,border:`1px solid ${kpis.metaTotal>0?corMetaKpi:'var(--vg-border)'}`}}>
                 <div style={KL}>% Meta Atingida</div>
                 <div className="vg-num" style={KV(pctV,corMetaKpi)}>{pctV}</div>
                 <div style={KSUB}>apurado / meta</div>
@@ -1122,31 +1122,33 @@ export default function DashboardVendedor() {
                       // cálculo automático). Antes, com mês selecionado, usava totalValorMeta
                       // e perdia as empresas calculadas automaticamente.
                       const metaMes     = metaPorMes?.[m] || 0;
+                      const maxMetaMes  = Math.max(0, ...mesesDisp.map(mm => metaPorMes?.[mm]||0));
+                      const isMaxMeta   = metaMes > 0 && metaMes >= maxMetaMes;
                       return (
-                        <div key={m} style={{background:'var(--vg-bg)',border:'1px solid var(--vg-border)',borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190}}>
+                        <div key={m} style={{background:'var(--vg-bg)',border:`1px solid ${isMaxMeta?'var(--vg-brand-500)':'var(--vg-border)'}`,borderRadius:14,padding:'18px 22px',flex:'1 1 190px',minWidth:190,opacity:metaMes>0?1:0.6}}>
                           <div style={{display:'inline-block',background:'var(--vg-brand-50)',border:'1px solid var(--vg-brand-500)',color:'var(--vg-brand-700)',borderRadius:8,padding:'4px 12px',fontSize:'0.82rem',fontWeight:700,marginBottom:10}}>{fmtMes(m+'-01')}</div>
                           {metaMes > 0 ? (
                             <>
                               <div style={{fontSize:'0.65rem',color:'var(--vg-success-fg)',textTransform:'uppercase',letterSpacing:1,marginBottom:2,fontWeight:700}}>{LI(Target)} Meta Considerada</div>
-                              <div style={{fontSize:'1.4rem',fontWeight:800,color:'var(--vg-success-fg)',marginBottom:2}}>{fmt(metaMes)}</div>
+                              <div style={{fontFamily:OUTFIT,fontSize:20,fontWeight:700,color:'var(--vg-ink)',marginBottom:2}}>{fmt(metaMes)}</div>
                             </>
                           ) : (
                             <>
-                              <div style={{fontSize:'1.4rem',fontWeight:700,color:'var(--vg-brand-500)',marginBottom:2}}>{fmt(totalMes)}</div>
+                              <div style={{fontFamily:OUTFIT,fontSize:20,fontWeight:700,color:'var(--vg-muted)',marginBottom:2}}>{fmt(totalMes)}</div>
                               <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.72rem',marginBottom:4}}>{empresasMes} movimentando</div>
                             </>
                           )}
                           {metaMes > 0 ? (() => {
                             const metaDoMes = kpis.meta > 0 ? kpis.meta / (mesesDisp.filter(m2=>m2>='2026-01').length||1) : 0;
                             const pctMeta = metaDoMes > 0 ? (metaMes / metaDoMes) * 100 : 0;
-                            const corMeta = corPct(pctMeta);
+                            const corMeta = pctMeta>=100?'var(--vg-success-fg)':pctMeta>=70?'var(--vg-warning-fg)':'var(--vg-danger-fg)';
                             return (
                               <>
-                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.72rem',marginBottom:3}}>
-                                  <span style={{color:'var(--vg-ink-secondary)'}}>meta apurada vs meta/mês</span>
-                                  <span style={{color:corMeta,fontWeight:700}}>{fmtPct(pctMeta)}</span>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:3}}>
+                                  <span style={{color:'var(--vg-ink-secondary)',fontSize:'0.72rem'}}>meta apurada vs meta/mês</span>
+                                  <span style={{color:corMeta,fontWeight:600,fontSize:14}}>{fmtPct(pctMeta)}</span>
                                 </div>
-                                <div style={{background:'var(--vg-border)',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
+                                <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
                                   <div style={{height:'100%',width:`${Math.min(pctMeta,100)}%`,background:corMeta,borderRadius:4}}></div>
                                 </div>
                               </>
@@ -1157,7 +1159,7 @@ export default function DashboardVendedor() {
                                 <span style={{color:'var(--vg-ink-secondary)'}}>vs esperado</span>
                                 <span style={{color:corMes,fontWeight:700}}>{fmtPct(pctMes)}</span>
                               </div>
-                              <div style={{background:'var(--vg-border)',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
+                              <div style={{background:'var(--vg-neutral-bg)',borderRadius:4,height:5,overflow:'hidden',marginBottom:4}}>
                                 <div style={{height:'100%',width:`${Math.min(pctMes,100)}%`,background:corMes,borderRadius:4}}></div>
                               </div>
                             </>
@@ -1319,7 +1321,13 @@ export default function DashboardVendedor() {
                 }
                 const cats = Object.values(catMap).sort((a,b)=>b.movTotal-a.movTotal);
                 if (cats.length === 0) return <div style={{...s.card,textAlign:'center',padding:48,color:'var(--vg-ink-secondary)'}}>Sem categorias.</div>;
-                const PALETA = ['var(--vg-brand-500)','var(--vg-success-fg)','var(--vg-info-fg)','var(--vg-brand-400)','var(--vg-brand-500)','var(--vg-rose-400)','var(--vg-success-fg)','var(--vg-info-fg)'];
+                // Paleta de marca distinguível (nunca dois tons próximos em sequência).
+                // >4 categorias: repete as 4 clareadas via color-mix.
+                const PALETA = [
+                  'var(--vg-brand-500)','var(--vg-rose-400)','var(--vg-peach-400)','var(--vg-brand-400)',
+                  'color-mix(in srgb, var(--vg-brand-500) 55%, white)','color-mix(in srgb, var(--vg-rose-400) 55%, white)',
+                  'color-mix(in srgb, var(--vg-peach-400) 55%, white)','color-mix(in srgb, var(--vg-brand-400) 55%, white)',
+                ];
                 const COR_CATEGORIA = {};
                 [...cats].sort((a,b)=>b.esperadoMes-a.esperadoMes).forEach((cat,i)=>{ COR_CATEGORIA[cat.nome]=PALETA[i%PALETA.length]; });
                 function pizzaPath(inicio,fim,r=80,ri=40){
@@ -1341,7 +1349,7 @@ export default function DashboardVendedor() {
                           <thead><tr style={{borderBottom:'2px solid var(--vg-border)'}}>{['Categoria','Empresas','Sem Mov.','Movimentação Total Anual','Média/mês','Esperado/mês','% Realizado'].map(h=>(<th key={h} style={{padding:'8px 12px',color:'var(--vg-ink-secondary)',fontWeight:600,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>))}</tr></thead>
                           <tbody>
                             {cats.map((cat,i)=>{
-                              const pctReal=cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;const cor=corPct(pctReal);
+                              const pctReal=cat.esperadoAcum>0?(cat.movTotal/cat.esperadoAcum)*100:0;const cor=pctReal>=70?'var(--vg-success-fg)':pctReal>=40?'var(--vg-warning-fg)':'var(--vg-danger-fg)';
                               return(<tr key={cat.nome} style={{borderBottom:'1px solid var(--vg-surface-muted)',background:i%2===0?'rgba(28,31,59,0.01)':'white'}}>
                                 <td style={{padding:'10px 12px',fontWeight:600}}>{cat.nome}</td>
                                 <td style={{padding:'10px 12px',textAlign:'center'}}>{cat.empresas}</td>
@@ -1362,7 +1370,7 @@ export default function DashboardVendedor() {
                               <td style={{padding:'10px 12px',fontWeight:700,color:'var(--vg-info-fg)'}}>{fmt(Math.round(cats.reduce((s,c)=>s+c.movTotal,0)/qtdMeses2026))}</td>
                               <td style={{padding:'10px 12px',fontWeight:700,color:'var(--vg-brand-400)'}}>{fmt(cats.reduce((s,c)=>s+c.esperadoMes,0))}</td>
                               <td style={{padding:'10px 12px'}}>
-                                {(()=>{const totMov=cats.reduce((s,c)=>s+c.movTotal,0);const totEsp=cats.reduce((s,c)=>s+c.esperadoAcum,0);const pctT=totEsp>0?(totMov/totEsp)*100:0;const corT=corPct(pctT);return <span style={{color:corT,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctT)}</span>;})()}
+                                {(()=>{const totMov=cats.reduce((s,c)=>s+c.movTotal,0);const totEsp=cats.reduce((s,c)=>s+c.esperadoAcum,0);const pctT=totEsp>0?(totMov/totEsp)*100:0;const corT=pctT>=70?'var(--vg-success-fg)':pctT>=40?'var(--vg-warning-fg)':'var(--vg-danger-fg)';return <span style={{color:corT,fontWeight:700,fontSize:'0.78rem'}}>{fmtPct(pctT)}</span>;})()}
                               </td>
                             </tr>
                           </tfoot>
