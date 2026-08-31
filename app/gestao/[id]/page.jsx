@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const supabase = createClient(
@@ -25,21 +26,21 @@ const fmtMes  = (d) => {
 };
 
 const COR_CAT = {
-  'Benefícios':   { bg:'#eff6ff', text:'#2563eb', border:'#bfdbfe' },
-  'Bônus':        { bg:'#f5f3ff', text:'#7c3aed', border:'#ddd6fe' },
-  'Convênio':     { bg:'#f0fdf4', text:'#16a34a', border:'#86efac' },
-  'Mobilidade':   { bg:'#fff7ed', text:'#ea580c', border:'#fed7aa' },
-  'Taxa Negativa':{ bg:'#fef2f2', text:'#dc2626', border:'#fca5a5' },
+  'Benefícios':   { bg:'var(--vg-info-bg)', text:'var(--vg-info-fg)', border:'var(--vg-info-fg)' },
+  'Bônus':        { bg:'var(--vg-brand-50)', text:'var(--vg-brand-400)', border:'var(--vg-brand-400)' },
+  'Convênio':     { bg:'var(--vg-success-bg)', text:'var(--vg-success-fg)', border:'var(--vg-success-fg)' },
+  'Mobilidade':   { bg:'var(--vg-warning-bg)', text:'var(--vg-warning-fg)', border:'var(--vg-warning-fg)' },
+  'Taxa Negativa':{ bg:'var(--vg-danger-bg)', text:'var(--vg-danger-fg)', border:'var(--vg-danger-fg)' },
 };
 
 const TIPO_CRM = {
-  contato:    { icon:'📞', label:'Contato',     cor:'#2563eb' },
-  prazo:      { icon:'⏳', label:'Prazo Extra',  cor:'#f0b429' },
-  juros:      { icon:'💸', label:'Juros/Boleto', cor:'#7c3aed' },
-  reclamacao: { icon:'⚠️', label:'Reclamação',  cor:'#dc2626' },
-  negociacao: { icon:'🤝', label:'Negociação',  cor:'#16a34a' },
-  upsell:     { icon:'📈', label:'Up-sell',      cor:'#0891b2' },
-  outro:      { icon:'📌', label:'Outro',        cor:'#6b7280' },
+  contato:    { icon:'', label:'Contato',     cor:'var(--vg-info-fg)' },
+  prazo:      { icon:'', label:'Prazo Extra',  cor:'var(--vg-brand-500)' },
+  juros:      { icon:'', label:'Juros/Boleto', cor:'var(--vg-brand-400)' },
+  reclamacao: { icon:'', label:'Reclamação',  cor:'var(--vg-danger-fg)' },
+  negociacao: { icon:'', label:'Negociação',  cor:'var(--vg-success-fg)' },
+  upsell:     { icon:'', label:'Up-sell',      cor:'var(--vg-info-fg)' },
+  outro:      { icon:'', label:'Outro',        cor:'var(--vg-ink-secondary)' },
 };
 
 function calcularMetaAutomatica(empresa, movimentos, ajustes) {
@@ -207,7 +208,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
   const metaMap   = Object.fromEntries(valorMetas.map(v => [v.competencia_meta?.substring(0,10), v]));
   const libMap    = Object.fromEntries(movimentos.map(m => [m.competencia?.substring(0,10), m]));
 
-  // ── PATCH: Gera lista de todos os meses desde o cadastro até hoje ──────────
+  //  PATCH: Gera lista de todos os meses desde o cadastro até hoje 
   const mesesParaExibir = useMemo(() => {
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
@@ -402,33 +403,33 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
   if(loading) return (
     <div style={{...sp.page,display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>
-      <div style={{textAlign:'center'}}><div style={sp.spin}></div><div style={{color:'#8b92b0'}}>Carregando...</div></div>
+      <div style={{textAlign:'center'}}><div style={sp.spin}></div><div style={{color:'var(--vg-muted)'}}>Carregando...</div></div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   if(!empresa) return (
     <div style={{...sp.page,textAlign:'center',paddingTop:80}}>
-      <div style={{fontSize:'2.5rem',marginBottom:12}}>🔍</div>
-      <div style={{color:'#f87171',fontWeight:600}}>Empresa não encontrada</div>
+      <div style={{fontSize:'2.5rem',marginBottom:12}}></div>
+      <div style={{color:'var(--vg-danger-fg)',fontWeight:600}}>Empresa não encontrada</div>
       <button style={{...sp.btnSec,marginTop:20}} onClick={()=>router.push('/gestao')}>← Voltar</button>
     </div>
   );
 
-  const cor = COR_CAT[empresa.categoria] || {bg:'#f9fafb',text:'#6b7280',border:'#e4e7ef'};
+  const cor = COR_CAT[empresa.categoria] || {bg:'var(--vg-surface-muted)',text:'var(--vg-ink-secondary)',border:'var(--vg-border)'};
   const totalMovimentado = movimentos.reduce((s,m)=>s+m.total_liberado,0);
   const mesesAtivos = movimentos.filter(m=>m.total_liberado>0).length;
   const produtos_list = ['Benefícios','Bônus','Convênio','Mobilidade','Taxa Negativa'];
-  const MOTIVOS_LABEL = {upsell:'📈 Up-sell',ajuste:'✏️ Ajuste',negociacao:'🤝 Negociação',correcao:'🔧 Correção',outro:'📌 Outro'};
+  const MOTIVOS_LABEL = {upsell:' Up-sell',ajuste:' Ajuste',negociacao:' Negociação',correcao:' Correção',outro:' Outro'};
   const peso    = empresa.peso_categoria ?? 1;
   const pctCons = empresa.pct_principal  ?? 100;
   const cat     = (empresa.categoria||'').toLowerCase();
   const elegivel = cat.includes('benefi') || cat.includes('bonus') || cat.includes('bônus') || cat.includes('conv') || cat.includes('mobil');
 
   const abas = [
-    { key:'crm',        label:'📝 CRM',              badge: historico.length },
-    { key:'dados',      label:'✏️ Dados Cadastrais' },
-    { key:'movimentos', label:'📊 Movimentação' },
+    { key:'crm',        label:' CRM',              badge: historico.length },
+    { key:'dados',      label:' Dados Cadastrais' },
+    { key:'movimentos', label:' Movimentação' },
   ];
 
   return (
@@ -436,112 +437,112 @@ export default function GestaoEmpresaDetalhe({ params }) {
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-        input:focus,select:focus,textarea:focus{border-color:#f0b429!important;outline:none;}
-        .crm-item:hover{background:#f0f4ff!important;}
+        input:focus,select:focus,textarea:focus{border-color:var(--vg-brand-500)!important;outline:none;}
+        .crm-item:hover{background:var(--vg-info-bg)!important;}
       `}</style>
 
       {/* Header */}
       <div style={sp.header}>
         <div style={{display:'flex',alignItems:'flex-start',gap:16,flexWrap:'wrap'}}>
-          <button style={sp.btnBack} onClick={()=>router.push('/gestao')}>← Gestão</button>
+          <button style={{...sp.btnBack,display:'inline-flex',alignItems:'center',gap:6}} onClick={()=>router.push('/gestao')}><ArrowLeft size={15} strokeWidth={2} /> Gestão</button>
           <div>
-            <div style={sp.tag}>♠ Vegas Card · Gestão</div>
+            <div style={sp.tag}>Vegas Card / Gestão / {empresa.nome}</div>
             <h1 style={sp.title}>{empresa.nome}</h1>
             <div style={{display:'flex',gap:8,alignItems:'center',marginTop:6,flexWrap:'wrap'}}>
-              <span style={{color:'#8b92b0',fontSize:'0.8rem'}}>ID {empresa.produto_id}</span>
-              {empresa.cnpj&&<><span style={{color:'#d1d5e8'}}>·</span><span style={{color:'#8b92b0',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
+              <span style={{color:'var(--vg-muted)',fontSize:'0.8rem'}}>ID {empresa.produto_id}</span>
+              {empresa.cnpj&&<><span style={{color:'var(--vg-neutral-bg)'}}>·</span><span style={{color:'var(--vg-muted)',fontSize:'0.8rem'}}>{empresa.cnpj}</span></>}
               <span style={{background:cor.bg,color:cor.text,border:`1px solid ${cor.border}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>{empresa.categoria}</span>
-              <span style={{background:'rgba(240,180,41,0.1)',color:'#b45309',border:'1px solid rgba(240,180,41,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
-                ⚖️ Peso: {fmtPct(peso*100)}
+              <span style={{background:'rgba(77,86,161,0.1)',color:'var(--vg-brand-700)',border:'1px solid rgba(77,86,161,0.25)',borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
+                 Peso: {fmtPct(peso*100)}
               </span>
-              <span style={{background:empresa.ativo?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',color:empresa.ativo?'#16a34a':'#dc2626',border:`1px solid ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
-                {empresa.ativo?'● Ativa':'● Inativa'}
+              <span style={{background:empresa.ativo?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',color:empresa.ativo?'var(--vg-success-fg)':'var(--vg-danger-fg)',border:`1px solid ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`,borderRadius:6,padding:'3px 10px',fontSize:'0.72rem',fontWeight:700}}>
+                {empresa.ativo?' Ativa':' Inativa'}
               </span>
             </div>
           </div>
         </div>
         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-          {sucesso&&<span style={{color:'#16a34a',fontSize:'0.85rem',fontWeight:600}}>✅ Salvo!</span>}
-          {abaAtiva==='dados'&&!editando&&podeEditar&&<button style={sp.btnPri} onClick={()=>setEditando(true)}>✏️ Editar Dados</button>}
+          {sucesso&&<span style={{color:'var(--vg-success-fg)',fontSize:'0.85rem',fontWeight:600}}> Salvo!</span>}
+          {abaAtiva==='dados'&&!editando&&podeEditar&&<button style={sp.btnPri} onClick={()=>setEditando(true)}> Editar Dados</button>}
           {abaAtiva==='dados'&&editando&&podeEditar&&<>
             <button style={sp.btnSec} onClick={()=>{setEditando(false);setErro('');}}>Cancelar</button>
-            <button style={sp.btnPri} onClick={salvar} disabled={salvando}>{salvando?'Salvando...':'💾 Salvar'}</button>
+            <button style={sp.btnPri} onClick={salvar} disabled={salvando}>{salvando?'Salvando...':' Salvar'}</button>
           </>}
         </div>
       </div>
 
-      {erro&&<div style={sp.erroBox}>❌ {erro}</div>}
+      {erro&&<div style={sp.erroBox}> {erro}</div>}
 
       {/* Cards resumo */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:24}}>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Potencial Mensal</span>
-          <span style={{...sp.resumoV,color:'#16a34a'}}>{fmt(empresa.potencial_movimentacao)}</span>
+          <span style={{...sp.resumoV,color:'var(--vg-success-fg)'}}>{fmt(empresa.potencial_movimentacao)}</span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Resultado Esperado</span>
-          <span style={{...sp.resumoV,color:'#f0b429'}}>{fmt((empresa.potencial_movimentacao||0)*peso)}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>potencial × {fmtPct(peso*100)}</span>
+          <span style={{...sp.resumoV,color:'var(--vg-brand-500)'}}>{fmt((empresa.potencial_movimentacao||0)*peso)}</span>
+          <span style={{color:'var(--vg-muted)',fontSize:'0.68rem'}}>potencial × {fmtPct(peso*100)}</span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Total Movimentado</span>
-          <span style={{...sp.resumoV,color:'#2563eb'}}>{fmt(totalMovimentado)}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{mesesAtivos} meses ativos</span>
+          <span style={{...sp.resumoV,color:'var(--vg-info-fg)'}}>{fmt(totalMovimentado)}</span>
+          <span style={{color:'var(--vg-muted)',fontSize:'0.68rem'}}>{mesesAtivos} meses ativos</span>
         </div>
-        <div style={{...sp.resumoCard,border:totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid #e4e7ef',background:totalMetaApurado>0?'rgba(52,211,153,0.03)':'#fff'}}>
-          <span style={sp.resumoL}>🎯 Apurado na Meta</span>
-          <span style={{...sp.resumoV,color:totalMetaApurado>0?'#16a34a':'#d1d5e8'}}>
+        <div style={{...sp.resumoCard,border:totalMetaApurado>0?'1px solid rgba(52,211,153,0.3)':'1px solid var(--vg-border)',background:totalMetaApurado>0?'rgba(52,211,153,0.03)':'var(--vg-surface)'}}>
+          <span style={sp.resumoL}> Apurado na Meta</span>
+          <span style={{...sp.resumoV,color:totalMetaApurado>0?'var(--vg-success-fg)':'var(--vg-neutral-bg)'}}>
             {totalMetaApurado>0?fmt(totalMetaApurado):'—'}
           </span>
-          <span style={{color:totalMetaApurado>0?'#6b7280':'#b0b7cc',fontSize:'0.68rem'}}>
+          <span style={{color:totalMetaApurado>0?'var(--vg-ink-secondary)':'var(--vg-muted)',fontSize:'0.68rem'}}>
             {valorMetas.length>0?`${valorMetas.length} entrada${valorMetas.length>1?'s':''}`:elegivel?'clique Movimentação':'não elegível'}
           </span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Consultor</span>
           <span style={{...sp.resumoV,fontSize:'0.9rem'}}>{empresa.consultor_principal?.nome||'—'}</span>
-          {empresa.consultor_principal?.gestor&&<span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.consultor_principal.gestor}</span>}
+          {empresa.consultor_principal?.gestor&&<span style={{color:'var(--vg-muted)',fontSize:'0.68rem'}}>{empresa.consultor_principal.gestor}</span>}
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Ocorrências CRM</span>
-          <span style={{...sp.resumoV,color:historico.length>0?'#2563eb':'#d1d5e8'}}>{historico.length}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{historico.length===0?'sem registros':'registradas'}</span>
+          <span style={{...sp.resumoV,color:historico.length>0?'var(--vg-info-fg)':'var(--vg-neutral-bg)'}}>{historico.length}</span>
+          <span style={{color:'var(--vg-muted)',fontSize:'0.68rem'}}>{historico.length===0?'sem registros':'registradas'}</span>
         </div>
         <div style={sp.resumoCard}>
           <span style={sp.resumoL}>Cidade / UF</span>
           <span style={{...sp.resumoV,fontSize:'0.9rem'}}>{empresa.cidade||'—'}</span>
-          <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{empresa.estado||''}</span>
+          <span style={{color:'var(--vg-muted)',fontSize:'0.68rem'}}>{empresa.estado||''}</span>
         </div>
       </div>
 
       {/* Abas */}
-      <div style={{display:'flex',gap:6,marginBottom:20,borderBottom:'2px solid #e4e7ef'}}>
+      <div style={{display:'flex',gap:6,marginBottom:20,borderBottom:'2px solid var(--vg-border)'}}>
         {abas.map(a=>(
           <button key={a.key}
-            style={{background:'none',border:'none',borderBottom:`3px solid ${abaAtiva===a.key?'#f0b429':'transparent'}`,padding:'10px 18px',color:abaAtiva===a.key?'#b45309':'#8b92b0',fontWeight:abaAtiva===a.key?700:500,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,marginBottom:'-2px'}}
+            style={{background:'none',border:'none',borderBottom:`3px solid ${abaAtiva===a.key?'var(--vg-brand-500)':'transparent'}`,padding:'10px 18px',color:abaAtiva===a.key?'var(--vg-brand-700)':'var(--vg-muted)',fontWeight:abaAtiva===a.key?700:500,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,marginBottom:'-2px'}}
             onClick={()=>setAbaAtiva(a.key)}>
             {a.label}
-            {a.badge>0&&<span style={{background:'#eff6ff',color:'#2563eb',borderRadius:10,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>{a.badge}</span>}
+            {a.badge>0&&<span style={{background:'var(--vg-info-bg)',color:'var(--vg-info-fg)',borderRadius:10,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>{a.badge}</span>}
           </button>
         ))}
       </div>
 
-      {/* ── ABA: CRM ── */}
+      {/*  ABA: CRM  */}
       {abaAtiva==='crm'&&(
         <div style={sp.card}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-            <div><div style={sp.cardTitle}>📝 Histórico CRM</div><div style={{color:'#8b92b0',fontSize:'0.78rem',marginTop:2}}>{historico.length} ocorrência{historico.length!==1?'s':''}</div></div>
-            <button style={sp.btnPri} onClick={()=>setAddCRM(a=>!a)}>{addCRM?'✕ Cancelar':'+ Nova Ocorrência'}</button>
+            <div><div style={sp.cardTitle}> Histórico CRM</div><div style={{color:'var(--vg-muted)',fontSize:'0.78rem',marginTop:2}}>{historico.length} ocorrência{historico.length!==1?'s':''}</div></div>
+            <button style={sp.btnPri} onClick={()=>setAddCRM(a=>!a)}>{addCRM?' Cancelar':'+ Nova Ocorrência'}</button>
           </div>
           {addCRM&&(
-            <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:12,padding:20,marginBottom:24}}>
+            <div style={{background:'var(--vg-warning-bg)',border:'1px solid var(--vg-warning-fg)',borderRadius:12,padding:20,marginBottom:24}}>
               <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:12,marginBottom:12}}>
                 <div><label style={sp.label}>Tipo</label>
                   <select style={sp.select} value={novaOco.tipo} onChange={e=>setNovaOco(n=>({...n,tipo:e.target.value}))}>
-                    <option value="contato">📞 Contato</option><option value="upsell">📈 Up-sell</option>
-                    <option value="negociacao">🤝 Negociação</option><option value="prazo">⏳ Prazo Extra</option>
-                    <option value="juros">💸 Juros / Boleto</option><option value="reclamacao">⚠️ Reclamação</option>
-                    <option value="outro">📌 Outro</option>
+                    <option value="contato"> Contato</option><option value="upsell"> Up-sell</option>
+                    <option value="negociacao"> Negociação</option><option value="prazo"> Prazo Extra</option>
+                    <option value="juros"> Juros / Boleto</option><option value="reclamacao"> Reclamação</option>
+                    <option value="outro"> Outro</option>
                   </select>
                 </div>
                 <div><label style={sp.label}>Título *</label>
@@ -557,40 +558,40 @@ export default function GestaoEmpresaDetalhe({ params }) {
               </div>
               <button style={{...sp.btnPri,opacity:!novaOco.titulo.trim()?0.5:1}}
                 onClick={salvarCRM} disabled={salvandoCRM||!novaOco.titulo.trim()}>
-                {salvandoCRM?'Salvando...':'💾 Salvar Ocorrência'}
+                {salvandoCRM?'Salvando...':' Salvar Ocorrência'}
               </button>
             </div>
           )}
           {historico.length===0?(
-            <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
+            <div style={{textAlign:'center',padding:'48px 0',color:'var(--vg-muted)'}}>
+              <div style={{fontSize:'2.5rem',marginBottom:12}}></div>
               <div style={{fontWeight:600,marginBottom:4}}>Nenhuma ocorrência ainda</div>
               <div style={{fontSize:'0.82rem'}}>Clique em "+ Nova Ocorrência" para começar</div>
             </div>
           ):(
             <div style={{position:'relative',paddingLeft:32}}>
-              <div style={{position:'absolute',left:11,top:0,bottom:0,width:2,background:'#e4e7ef',borderRadius:2}}></div>
+              <div style={{position:'absolute',left:11,top:0,bottom:0,width:2,background:'var(--vg-border)',borderRadius:2}}></div>
               <div style={{display:'flex',flexDirection:'column',gap:16}}>
                 {historico.map((h)=>{
                   const cfg=TIPO_CRM[h.tipo]||TIPO_CRM.outro;
                   return(
-                    <div key={h.id} className="crm-item" style={{position:'relative',background:'#ffffff',border:'1px solid #e4e7ef',borderLeft:`3px solid ${cfg.cor}`,borderRadius:10,padding:'14px 18px',transition:'background 0.15s'}}>
-                      <div style={{position:'absolute',left:-27,top:16,width:12,height:12,borderRadius:'50%',background:cfg.cor,border:'2px solid #ffffff',boxShadow:`0 0 0 2px ${cfg.cor}40`}}></div>
+                    <div key={h.id} className="crm-item" style={{position:'relative',background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderLeft:`3px solid ${cfg.cor}`,borderRadius:10,padding:'14px 18px',transition:'background 0.15s'}}>
+                      <div style={{position:'absolute',left:-27,top:16,width:12,height:12,borderRadius:'50%',background:cfg.cor,border:'2px solid var(--vg-surface)',boxShadow:`0 0 0 2px ${cfg.cor}40`}}></div>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8}}>
                         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                           <span style={{fontSize:'1.1rem'}}>{cfg.icon}</span>
-                          <span style={{fontWeight:700,fontSize:'0.9rem',color:'#1a1d2e'}}>{h.titulo}</span>
+                          <span style={{fontWeight:700,fontSize:'0.9rem',color:'var(--vg-ink)'}}>{h.titulo}</span>
                           <span style={{background:`${cfg.cor}15`,color:cfg.cor,border:`1px solid ${cfg.cor}30`,borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,textTransform:'uppercase'}}>{cfg.label}</span>
                         </div>
                         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                          <span style={{color:'#8b92b0',fontSize:'0.72rem',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:6}}>
-                            {h.criado_por && <span style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe',borderRadius:5,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}>👤 {h.criado_por}</span>}
+                          <span style={{color:'var(--vg-muted)',fontSize:'0.72rem',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:6}}>
+                            {h.criado_por && <span style={{background:'var(--vg-info-bg)',color:'var(--vg-info-fg)',border:'1px solid var(--vg-info-fg)',borderRadius:5,padding:'1px 7px',fontSize:'0.65rem',fontWeight:700}}> {h.criado_por}</span>}
                             {fmtDT(h.criado_em)}
                           </span>
-                          <button onClick={()=>deletarCRM(h.id)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}>✕</button>
+                          <button onClick={()=>deletarCRM(h.id)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:6,padding:'3px 8px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.7rem',fontFamily:'inherit'}}></button>
                         </div>
                       </div>
-                      {h.descricao&&<p style={{color:'#4a5068',fontSize:'0.83rem',margin:0,lineHeight:1.6,paddingLeft:4}}>{h.descricao}</p>}
+                      {h.descricao&&<p style={{color:'var(--vg-ink-secondary)',fontSize:'0.83rem',margin:0,lineHeight:1.6,paddingLeft:4}}>{h.descricao}</p>}
                     </div>
                   );
                 })}
@@ -600,61 +601,61 @@ export default function GestaoEmpresaDetalhe({ params }) {
         </div>
       )}
 
-      {/* ── ABA: DADOS ── */}
+      {/*  ABA: DADOS  */}
       {abaAtiva==='dados'&&(
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
           <div style={sp.card}>
-            <div style={sp.cardTitle}>📋 Informações Cadastrais</div>
+            <div style={sp.cardTitle}> Informações Cadastrais</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginTop:16}}>
               {[['CNPJ',empresa.cnpj||'—'],['Data Cadastro',fmtDate(empresa.data_cadastro)],['Cidade',empresa.cidade||'—'],['Estado',empresa.estado||'—'],['Cartões Emitidos',empresa.cartoes_emitidos||0],['Dias de Prazo',empresa.dias_prazo||'—'],['Tipo Boleto',empresa.tipo_boleto||'—']].map(([l,v])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{l}</div><div style={{fontWeight:500,fontSize:'0.88rem'}}>{v}</div></div>
+                <div key={l}><div style={{color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{l}</div><div style={{fontWeight:500,fontSize:'0.88rem'}}>{v}</div></div>
               ))}
             </div>
           </div>
           <div style={sp.card}>
-            <div style={sp.cardTitle}>💰 Produto & Financeiro</div>
+            <div style={sp.cardTitle}> Produto & Financeiro</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginTop:16}}>
               {[
                 ['Categoria',    editando?<select style={sp.select} value={form.categoria} onChange={e=>set('categoria',e.target.value)}>{produtos_list.map(c=><option key={c} value={c}>{c}</option>)}</select>:<span style={{color:cor.text,fontWeight:600}}>{empresa.categoria}</span>],
                 ['Produto',      editando?<select style={sp.select} value={form.produto_contratado} onChange={e=>set('produto_contratado',e.target.value)}><option value="">— Selecione —</option>{produtos.map(p=><option key={p.id} value={p.nome}>{p.nome}</option>)}</select>:empresa.produto_contratado||'—'],
-                ['Peso meta (%)', editando?<input style={sp.input} type="number" step="0.01" min="0" max="1" value={form.peso_categoria} onChange={e=>set('peso_categoria',e.target.value)}/>:<span style={{color:'#f0b429',fontWeight:700}}>{fmtPct((empresa.peso_categoria||1)*100)} <span style={{color:'#8b92b0',fontWeight:400,fontSize:'0.78rem'}}>(da mov. vai para meta)</span></span>],
-                ['Potencial',   editando?<input style={sp.input} type="number" value={form.potencial_movimentacao} onChange={e=>set('potencial_movimentacao',e.target.value)}/>:<span style={{color:'#16a34a',fontWeight:700}}>{fmt(empresa.potencial_movimentacao)}</span>],
-                ['Taxa Positiva',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_positiva} onChange={e=>set('taxa_positiva',e.target.value)}/>:<span style={{color:'#16a34a'}}>{empresa.taxa_positiva>0?`${(empresa.taxa_positiva*100).toFixed(2)}%`:'—'}</span>],
-                ['Taxa Negativa',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_negativa} onChange={e=>set('taxa_negativa',e.target.value)}/>:<span style={{color:empresa.taxa_negativa>0?'#dc2626':'#b0b7cc'}}>{empresa.taxa_negativa>0?`${(empresa.taxa_negativa*100).toFixed(2)}%`:'—'}</span>],
+                ['Peso meta (%)', editando?<input style={sp.input} type="number" step="0.01" min="0" max="1" value={form.peso_categoria} onChange={e=>set('peso_categoria',e.target.value)}/>:<span style={{color:'var(--vg-brand-500)',fontWeight:700}}>{fmtPct((empresa.peso_categoria||1)*100)} <span style={{color:'var(--vg-muted)',fontWeight:400,fontSize:'0.78rem'}}>(da mov. vai para meta)</span></span>],
+                ['Potencial',   editando?<input style={sp.input} type="number" value={form.potencial_movimentacao} onChange={e=>set('potencial_movimentacao',e.target.value)}/>:<span style={{color:'var(--vg-success-fg)',fontWeight:700}}>{fmt(empresa.potencial_movimentacao)}</span>],
+                ['Taxa Positiva',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_positiva} onChange={e=>set('taxa_positiva',e.target.value)}/>:<span style={{color:'var(--vg-success-fg)'}}>{empresa.taxa_positiva>0?`${(empresa.taxa_positiva*100).toFixed(2)}%`:'—'}</span>],
+                ['Taxa Negativa',editando?<input style={sp.input} type="number" step="0.001" value={form.taxa_negativa} onChange={e=>set('taxa_negativa',e.target.value)}/>:<span style={{color:empresa.taxa_negativa>0?'var(--vg-danger-fg)':'var(--vg-muted)'}}>{empresa.taxa_negativa>0?`${(empresa.taxa_negativa*100).toFixed(2)}%`:'—'}</span>],
               ].map(([l,v])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div><div style={{fontSize:'0.9rem'}}>{v}</div></div>
+                <div key={l}><div style={{color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div><div style={{fontSize:'0.9rem'}}>{v}</div></div>
               ))}
             </div>
           </div>
           <div style={sp.card}>
-            <div style={sp.cardTitle}>👥 Equipe Comercial</div>
+            <div style={sp.cardTitle}> Equipe Comercial</div>
             <div style={{display:'flex',flexDirection:'column',gap:16,marginTop:16}}>
               {[['Consultor Principal','consultor_principal_id',empresa.consultor_principal?.nome],['Consultor Agregado 1','consultor_agregado_id',empresa.consultor_agregado?.nome],['Consultor Agregado 2','consultor_agregado_2_id',empresa.consultor_agregado_2?.nome]].map(([l,k,nome])=>(
-                <div key={l}><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div>
+                <div key={l}><div style={{color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>{l}</div>
                   {editando?<select style={sp.select} value={form[k]} onChange={e=>set(k,e.target.value)}><option value="">— Nenhum —</option>{consultores.map(c=><option key={c.id} value={c.id}>{c.nome}{c.gestor?` (${c.gestor})`:''}</option>)}</select>:<span style={{fontWeight:k==='consultor_principal_id'?600:400}}>{nome||'—'}</span>}
                 </div>
               ))}
-              <div><div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Parceiro Comercial</div>
+              <div><div style={{color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>Parceiro Comercial</div>
                 {editando?<select style={sp.select} value={form.parceiro_id} onChange={e=>set('parceiro_id',e.target.value)}><option value="">— Nenhum —</option>{parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select>:<span>{empresa.parceiro?.nome||'—'}</span>}
               </div>
-              <div style={{borderTop:'1px solid #e4e7ef',paddingTop:16,marginTop:4}}>
-                <div style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Divisão de Resultado</div>
+              <div style={{borderTop:'1px solid var(--vg-border)',paddingTop:16,marginTop:4}}>
+                <div style={{color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Divisão de Resultado</div>
                 {editando?(
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {[{label:'100% Principal',p:100,a1:0,a2:0},{label:'50% / 50%',p:50,a1:50,a2:0},{label:'34% / 33% / 33%',p:34,a1:33,a2:33}].map(opt=>{
                       const ativo=form.pct_principal===opt.p&&form.pct_agregado_1===opt.a1&&form.pct_agregado_2===opt.a2;
                       if(opt.a2>0&&!form.consultor_agregado_2_id)return null;
                       if(opt.a1>0&&!form.consultor_agregado_id)return null;
-                      return(<button key={opt.label} onClick={()=>{set('pct_principal',opt.p);set('pct_agregado_1',opt.a1);set('pct_agregado_2',opt.a2);set('divisao_manual',true);}} style={{background:ativo?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${ativo?'rgba(240,180,41,0.4)':'#e4e7ef'}`,borderRadius:8,padding:'8px 16px',color:ativo?'#f0b429':'#4a5068',cursor:'pointer',fontWeight:ativo?700:500,fontSize:'0.82rem',fontFamily:'inherit'}}>{opt.label}</button>);
+                      return(<button key={opt.label} onClick={()=>{set('pct_principal',opt.p);set('pct_agregado_1',opt.a1);set('pct_agregado_2',opt.a2);set('divisao_manual',true);}} style={{background:ativo?'rgba(77,86,161,0.15)':'var(--vg-bg)',border:`1px solid ${ativo?'rgba(77,86,161,0.4)':'var(--vg-border)'}`,borderRadius:8,padding:'8px 16px',color:ativo?'var(--vg-brand-500)':'var(--vg-ink-secondary)',cursor:'pointer',fontWeight:ativo?700:500,fontSize:'0.82rem',fontFamily:'inherit'}}>{opt.label}</button>);
                     })}
                   </div>
                 ):(
                   <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
                     {[{nome:empresa.consultor_principal?.nome,pct:empresa.pct_principal??100,label:'Principal'},empresa.consultor_agregado?.nome&&{nome:empresa.consultor_agregado.nome,pct:empresa.pct_agregado_1??0,label:'Agr. 1'},empresa.consultor_agregado_2?.nome&&{nome:empresa.consultor_agregado_2.nome,pct:empresa.pct_agregado_2??0,label:'Agr. 2'}].filter(Boolean).map((item,i)=>(
-                      <div key={i} style={{background:'#f9fafb',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',display:'flex',alignItems:'center',gap:8}}>
-                        <span style={{background:'rgba(240,180,41,0.1)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
+                      <div key={i} style={{background:'var(--vg-surface-muted)',border:'1px solid var(--vg-border)',borderRadius:8,padding:'8px 14px',display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{background:'rgba(77,86,161,0.1)',color:'var(--vg-brand-500)',borderRadius:5,padding:'2px 8px',fontSize:'0.72rem',fontWeight:700}}>{item.pct}%</span>
                         <span style={{fontSize:'0.82rem',fontWeight:500}}>{item.nome}</span>
-                        <span style={{fontSize:'0.68rem',color:'#8b92b0'}}>{item.label}</span>
+                        <span style={{fontSize:'0.68rem',color:'var(--vg-muted)'}}>{item.label}</span>
                       </div>
                     ))}
                   </div>
@@ -663,17 +664,17 @@ export default function GestaoEmpresaDetalhe({ params }) {
             </div>
           </div>
           <div style={sp.card}>
-            <div style={sp.cardTitle}>⚙️ Status da Empresa</div>
+            <div style={sp.cardTitle}> Status da Empresa</div>
             <div style={{marginTop:16}}>
               {editando?(
                 <div style={{display:'flex',gap:12}}>
-                  <button onClick={()=>set('ativo',true)} style={{...sp.statusBtn,...(form.ativo?{background:'rgba(22,163,74,0.1)',border:'1px solid rgba(22,163,74,0.3)',color:'#16a34a'}:{})}}>✅ Ativa</button>
-                  <button onClick={()=>set('ativo',false)} style={{...sp.statusBtn,...(!form.ativo?{background:'rgba(220,38,38,0.1)',border:'1px solid rgba(220,38,38,0.3)',color:'#dc2626'}:{})}}>❌ Inativa</button>
+                  <button onClick={()=>set('ativo',true)} style={{...sp.statusBtn,...(form.ativo?{background:'rgba(22,163,74,0.1)',border:'1px solid rgba(22,163,74,0.3)',color:'var(--vg-success-fg)'}:{})}}> Ativa</button>
+                  <button onClick={()=>set('ativo',false)} style={{...sp.statusBtn,...(!form.ativo?{background:'rgba(220,38,38,0.1)',border:'1px solid rgba(220,38,38,0.3)',color:'var(--vg-danger-fg)'}:{})}}> Inativa</button>
                 </div>
               ):(
                 <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0'}}>
-                  <div style={{width:14,height:14,borderRadius:'50%',background:empresa.ativo?'#16a34a':'#dc2626',boxShadow:`0 0 0 3px ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`}}></div>
-                  <span style={{fontWeight:700,fontSize:'1rem',color:empresa.ativo?'#16a34a':'#dc2626'}}>{empresa.ativo?'Empresa Ativa':'Empresa Inativa'}</span>
+                  <div style={{width:14,height:14,borderRadius:'50%',background:empresa.ativo?'var(--vg-success-fg)':'var(--vg-danger-fg)',boxShadow:`0 0 0 3px ${empresa.ativo?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`}}></div>
+                  <span style={{fontWeight:700,fontSize:'1rem',color:empresa.ativo?'var(--vg-success-fg)':'var(--vg-danger-fg)'}}>{empresa.ativo?'Empresa Ativa':'Empresa Inativa'}</span>
                 </div>
               )}
             </div>
@@ -681,7 +682,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
         </div>
       )}
 
-      {/* ── ABA: MOVIMENTAÇÃO ── */}
+      {/*  ABA: MOVIMENTAÇÃO  */}
       {abaAtiva==='movimentos'&&(
         <div style={sp.card}>
 
@@ -691,19 +692,19 @@ export default function GestaoEmpresaDetalhe({ params }) {
               {metaAutoGravada&&metaAuto&&!metaAuto.pendente&&(
                 <div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:12,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
                   <div style={{display:'flex',alignItems:'flex-start',gap:12,flex:1}}>
-                    <span style={{fontSize:'1.4rem'}}>✅</span>
+                    <span style={{fontSize:'1.4rem'}}></span>
                     <div style={{flex:1}}>
-                      <div style={{fontWeight:700,color:'#16a34a',fontSize:'0.88rem',marginBottom:6}}>
+                      <div style={{fontWeight:700,color:'var(--vg-success-fg)',fontSize:'0.88rem',marginBottom:6}}>
                         Meta aplicada — {valorMetas.length} entrada{valorMetas.length!==1?'s':''} · Total: {fmt(totalMetaApurado)}
                       </div>
                       {/* Lista todas as entradas: meta principal + upsells */}
                       <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
                         {valorMetas.sort((a,b)=>(a.competencia_meta||'').localeCompare(b.competencia_meta||'')).map((v,i) => (
                           <div key={i} style={{background:v.regra==='upsell'?'rgba(251,191,36,0.1)':'rgba(52,211,153,0.1)',border:`1px solid ${v.regra==='upsell'?'rgba(251,191,36,0.3)':'rgba(52,211,153,0.3)'}`,borderRadius:8,padding:'6px 12px'}}>
-                            <div style={{fontWeight:700,color:v.regra==='upsell'?'#f0b429':'#16a34a',fontSize:'0.78rem'}}>
-                              {v.regra==='upsell'?'📈 Upsell':v.regra==='beneficio'?'✅ 1ª recarga':v.regra==='convenio'?'✅ 3º mês':'✅ Manual'} · {fmtMes(v.competencia_meta)}
+                            <div style={{fontWeight:700,color:v.regra==='upsell'?'var(--vg-brand-500)':'var(--vg-success-fg)',fontSize:'0.78rem'}}>
+                              {v.regra==='upsell'?' Upsell':v.regra==='beneficio'?' 1ª recarga':v.regra==='convenio'?' 3º mês':' Manual'} · {fmtMes(v.competencia_meta)}
                             </div>
-                            <div style={{color:v.regra==='upsell'?'#f0b429':'#16a34a',fontSize:'0.85rem',fontWeight:700}}>{fmt(v.valor_meta)}</div>
+                            <div style={{color:v.regra==='upsell'?'var(--vg-brand-500)':'var(--vg-success-fg)',fontSize:'0.85rem',fontWeight:700}}>{fmt(v.valor_meta)}</div>
                           </div>
                         ))}
                       </div>
@@ -711,8 +712,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                   </div>
                   {podeEditar && (
                   <button onClick={()=>removerMeta(metaAuto.comp)} disabled={removendoMeta}
-                    style={{background:'rgba(220,38,38,0.07)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:8,padding:'7px 16px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',fontWeight:600}}>
-                    {removendoMeta?'Removendo...':'🗑 Desmarcar meta principal'}
+                    style={{background:'rgba(220,38,38,0.07)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:8,padding:'7px 16px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',fontWeight:600}}>
+                    {removendoMeta?'Removendo...':' Desmarcar meta principal'}
                   </button>
                   )}
                 </div>
@@ -731,40 +732,40 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 const isManual      = !!mesSelecionado;
 
                 return (
-                  <div style={{background:'rgba(240,180,41,0.05)',border:'1px solid rgba(240,180,41,0.25)',borderRadius:12,padding:'14px 18px',animation:'fadeIn 0.3s ease'}}>
+                  <div style={{background:'rgba(77,86,161,0.05)',border:'1px solid rgba(77,86,161,0.25)',borderRadius:12,padding:'14px 18px',animation:'fadeIn 0.3s ease'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
                       <div style={{display:'flex',alignItems:'center',gap:12}}>
-                        <span style={{fontSize:'1.4rem'}}>🎯</span>
+                        <span style={{fontSize:'1.4rem'}}></span>
                         <div>
-                          <div style={{fontWeight:700,color:'#b45309',fontSize:'0.88rem',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                          <div style={{fontWeight:700,color:'var(--vg-brand-700)',fontSize:'0.88rem',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                             {isManual
-                              ? <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontSize:'0.72rem',fontWeight:700}}>✏️ Mês alterado manualmente</span>
+                              ? <span style={{background:'rgba(96,165,250,0.12)',color:'var(--vg-info-fg)',borderRadius:4,padding:'1px 7px',fontSize:'0.72rem',fontWeight:700}}> Mês alterado manualmente</span>
                               : <span>Meta calculada — {metaAuto.regra==='beneficio'?'1ª recarga':'3º mês'}</span>
                             }
-                            <span style={{color:'#b45309'}}>· {fmtMes(compEfetivo)}</span>
+                            <span style={{color:'var(--vg-brand-700)'}}>· {fmtMes(compEfetivo)}</span>
                           </div>
-                          <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                          <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.75rem',marginTop:4,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                             <span>{fmt(valorConsidEf)}</span>
                             {metaAuto.peso < 1 && <>
-                              <span style={{color:'#d1d5db'}}>×</span>
-                              <span style={{background:'rgba(240,180,41,0.12)',color:'#b45309',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
+                              <span style={{color:'var(--vg-muted)'}}>×</span>
+                              <span style={{background:'rgba(77,86,161,0.12)',color:'var(--vg-brand-700)',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(metaAuto.peso*100)} peso VB</span>
                             </>}
-                            <span style={{color:'#d1d5db'}}>×</span>
-                            <span style={{background:'rgba(96,165,250,0.12)',color:'#2563eb',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
-                            <span style={{color:'#d1d5db'}}>=</span>
-                            <strong style={{color:'#f0b429',fontSize:'0.85rem'}}>{fmt(valorMetaEf)}</strong>
+                            <span style={{color:'var(--vg-muted)'}}>×</span>
+                            <span style={{background:'rgba(96,165,250,0.12)',color:'var(--vg-info-fg)',borderRadius:4,padding:'1px 7px',fontWeight:700}}>{fmtPct(pctCons)} consultor</span>
+                            <span style={{color:'var(--vg-muted)'}}>=</span>
+                            <strong style={{color:'var(--vg-brand-500)',fontSize:'0.85rem'}}>{fmt(valorMetaEf)}</strong>
                           </div>
                         </div>
                       </div>
                       <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
                         <button onClick={()=>setTrocandoMes(t=>!t)}
-                          style={{background:trocandoMes?'rgba(96,165,250,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${trocandoMes?'rgba(96,165,250,0.4)':'rgba(107,114,128,0.2)'}`,borderRadius:7,padding:'6px 14px',color:trocandoMes?'#2563eb':'#6b7280',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                          📅 {trocandoMes ? 'Fechar' : 'Trocar mês'}
+                          style={{background:trocandoMes?'rgba(96,165,250,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${trocandoMes?'rgba(96,165,250,0.4)':'rgba(107,114,128,0.2)'}`,borderRadius:7,padding:'6px 14px',color:trocandoMes?'var(--vg-info-fg)':'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                           {trocandoMes ? 'Fechar' : 'Trocar mês'}
                         </button>
                         {isManual && (
                           <button onClick={()=>{setMesSelecionado(null);setTrocandoMes(false);}}
-                            style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'6px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>
-                            ✕ Desfazer
+                            style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'6px 12px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>
+                             Desfazer
                           </button>
                         )}
                         {podeEditar && (
@@ -791,15 +792,15 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             setAplicandoAuto(false);
                           }}
                           disabled={aplicandoAuto}
-                          style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                          {aplicandoAuto?'Aplicando...':'✅ Aplicar na meta'}
+                          style={{background:'var(--vg-success-fg)',color:'var(--vg-surface)',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                          {aplicandoAuto?'Aplicando...':' Aplicar na meta'}
                         </button>
                         )}
                       </div>
                     </div>
                     {trocandoMes && (
-                      <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(240,180,41,0.15)'}}>
-                        <div style={{color:'#6b7280',fontSize:'0.72rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
+                      <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(77,86,161,0.15)'}}>
+                        <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.72rem',fontWeight:600,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
                           Escolha o mês para considerar na meta:
                         </div>
                         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -812,12 +813,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                             const isSelected = mesSelecionado === comp || isAuto;
                             return (
                               <button key={comp} onClick={()=>{setMesSelecionado(comp);setTrocandoMes(false);}}
-                                style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,background:isSelected?'rgba(16,163,74,0.12)':'#f9fafb',border:`2px solid ${isSelected?'#16a34a':'#e4e7ef'}`,borderRadius:10,padding:'8px 14px',cursor:'pointer',fontFamily:'inherit',minWidth:110,transition:'all 0.15s'}}>
-                                <span style={{fontWeight:700,fontSize:'0.82rem',color:isSelected?'#16a34a':'#1a1d2e'}}>{fmtMes(comp)}</span>
-                                <span style={{fontSize:'0.72rem',color:'#4b5563'}}>{fmt(val)}</span>
-                                <span style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:700}}>meta: {fmt(metaVal)}</span>
+                                style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,background:isSelected?'rgba(16,163,74,0.12)':'var(--vg-surface-muted)',border:`2px solid ${isSelected?'var(--vg-success-fg)':'var(--vg-border)'}`,borderRadius:10,padding:'8px 14px',cursor:'pointer',fontFamily:'inherit',minWidth:110,transition:'all 0.15s'}}>
+                                <span style={{fontWeight:700,fontSize:'0.82rem',color:isSelected?'var(--vg-success-fg)':'var(--vg-ink)'}}>{fmtMes(comp)}</span>
+                                <span style={{fontSize:'0.72rem',color:'var(--vg-muted)'}}>{fmt(val)}</span>
+                                <span style={{fontSize:'0.68rem',color:'var(--vg-brand-500)',fontWeight:700}}>meta: {fmt(metaVal)}</span>
                                 {!mesSelecionado && idx === (metaAuto.regra === 'beneficio' ? 0 : 2) && (
-                                  <span style={{fontSize:'0.6rem',color:'#16a34a',fontWeight:700,background:'rgba(16,163,74,0.1)',borderRadius:3,padding:'1px 5px'}}>automático</span>
+                                  <span style={{fontSize:'0.6rem',color:'var(--vg-success-fg)',fontWeight:700,background:'rgba(16,163,74,0.1)',borderRadius:3,padding:'1px 5px'}}>automático</span>
                                 )}
                               </button>
                             );
@@ -830,14 +831,14 @@ export default function GestaoEmpresaDetalhe({ params }) {
               })()}
               {metaAuto?.pendente&&(
                 <div style={{background:'rgba(107,114,128,0.06)',border:'1px solid rgba(107,114,128,0.15)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:12}}>
-                  <span style={{fontSize:'1.2rem'}}>⏳</span>
+                  <span style={{fontSize:'1.2rem'}}></span>
                   <div>
-                    <div style={{fontWeight:600,color:'#4b5563',fontSize:'0.85rem'}}>Aguardando {metaAuto.precisam}º mês com movimentação</div>
-                    <div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:3,display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{fontWeight:600,color:'var(--vg-muted)',fontSize:'0.85rem'}}>Aguardando {metaAuto.precisam}º mês com movimentação</div>
+                    <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.75rem',marginTop:3,display:'flex',alignItems:'center',gap:6}}>
                       {metaAuto.progresso} de {metaAuto.precisam} meses
                       <span style={{display:'inline-flex',gap:3,marginLeft:4}}>
                         {Array.from({length:metaAuto.precisam}).map((_,i)=>(
-                          <span key={i} style={{width:10,height:10,borderRadius:'50%',background:i<metaAuto.progresso?'#16a34a':'#e4e7ef',display:'inline-block'}}></span>
+                          <span key={i} style={{width:10,height:10,borderRadius:'50%',background:i<metaAuto.progresso?'var(--vg-success-fg)':'var(--vg-border)',display:'inline-block'}}></span>
                         ))}
                       </span>
                     </div>
@@ -846,8 +847,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
               )}
               {!metaAuto&&(
                 <div style={{background:'rgba(107,114,128,0.04)',border:'1px solid rgba(107,114,128,0.12)',borderRadius:12,padding:'12px 18px',display:'flex',alignItems:'center',gap:10}}>
-                  <span>📭</span>
-                  <div style={{color:'#6b7280',fontSize:'0.82rem'}}>
+                  <span></span>
+                  <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.82rem'}}>
                     Nenhuma movimentação ainda — meta calculada automaticamente após a {detectarRegra()==='beneficio'?'1ª recarga':'3ª liberação'}.
                   </div>
                 </div>
@@ -855,16 +856,16 @@ export default function GestaoEmpresaDetalhe({ params }) {
             </div>
           )}
 
-          {erroMeta&&<div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'#dc2626',fontSize:'0.82rem'}}>❌ {erroMeta}</div>}
+          {erroMeta&&<div style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'10px 14px',marginBottom:16,color:'var(--vg-danger-fg)',fontSize:'0.82rem'}}> {erroMeta}</div>}
 
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
-            <div style={sp.cardTitle}>📊 HISTÓRICO DE MOVIMENTAÇÃO</div>
-            <div style={{color:'#8b92b0',fontSize:'0.72rem'}}>✏️ ajustar valor · 🎯 entrada manual na meta</div>
+            <div style={sp.cardTitle}> HISTÓRICO DE MOVIMENTAÇÃO</div>
+            <div style={{color:'var(--vg-muted)',fontSize:'0.72rem'}}> ajustar valor ·  entrada manual na meta</div>
           </div>
 
           {mesesParaExibir.length===0?(
-            <div style={{textAlign:'center',padding:'48px 0',color:'#b0b7cc'}}>
-              <div style={{fontSize:'2.5rem',marginBottom:12}}>📭</div>
+            <div style={{textAlign:'center',padding:'48px 0',color:'var(--vg-muted)'}}>
+              <div style={{fontSize:'2.5rem',marginBottom:12}}></div>
               <div style={{fontWeight:600}}>Nenhuma movimentação registrada</div>
             </div>
           ):(
@@ -875,11 +876,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 return (
                   <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
                     {[
-                      {label:'Total Bruto',       val:fmt(totalMovimentado),             bg:'#eff6ff',border:'#bfdbfe',cor:'#2563eb'},
-                      {label:'Total Considerado',  val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'#f0fdf4',border:'#86efac',cor:'#16a34a'},
-                      {label:'Ajustes Ativos',     val:ajustes.length,                    bg:'#fff7ed',border:'#fed7aa',cor:'#ea580c'},
-                      {label:'Meses Ativos',       val:`${mesesAtivos} de ${mesesParaExibir.length}`, bg:'#f5f3ff',border:'#ddd6fe',cor:'#7c3aed'},
-                      {label:isVegasBeneficios?`🎯 Meta (${fmtPct(peso*100)}% peso)`:'🎯 Apurado Meta', val:totalMetaApurado>0?fmt(totalMetaApurado):'—', bg:totalMetaApurado>0?'#f0fdf4':'#f9fafb',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'#e4e7ef',cor:totalMetaApurado>0?'#16a34a':'#b0b7cc'},
+                      {label:'Total Bruto',       val:fmt(totalMovimentado),             bg:'var(--vg-info-bg)',border:'var(--vg-info-fg)',cor:'var(--vg-info-fg)'},
+                      {label:'Total Considerado',  val:fmt(movimentos.reduce((s,m)=>{const c=m.competencia?.substring(0,10);const aj=ajusteMap[c];return s+(aj?aj.valor_considerado:m.total_liberado);},0)),bg:'var(--vg-success-bg)',border:'var(--vg-success-fg)',cor:'var(--vg-success-fg)'},
+                      {label:'Ajustes Ativos',     val:ajustes.length,                    bg:'var(--vg-warning-bg)',border:'var(--vg-warning-fg)',cor:'var(--vg-warning-fg)'},
+                      {label:'Meses Ativos',       val:`${mesesAtivos} de ${mesesParaExibir.length}`, bg:'var(--vg-brand-50)',border:'var(--vg-brand-400)',cor:'var(--vg-brand-400)'},
+                      {label:isVegasBeneficios?` Meta (${fmtPct(peso*100)}% peso)`:' Apurado Meta', val:totalMetaApurado>0?fmt(totalMetaApurado):'—', bg:totalMetaApurado>0?'var(--vg-success-bg)':'var(--vg-surface-muted)',border:totalMetaApurado>0?'rgba(52,211,153,0.4)':'var(--vg-border)',cor:totalMetaApurado>0?'var(--vg-success-fg)':'var(--vg-muted)'},
                     ].map(({label,val,bg,border,cor})=>(
                       <div key={label} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:'12px 18px',flex:1,minWidth:130}}>
                         <div style={{color:cor,fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>{label}</div>
@@ -890,12 +891,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                 );
               })()}
 
-              <div style={{border:'1px solid #e4e7ef',borderRadius:10,overflow:'hidden'}}>
+              <div style={{border:'1px solid var(--vg-border)',borderRadius:10,overflow:'hidden'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
                   <thead>
-                    <tr style={{background:'#f9fafb'}}>
+                    <tr style={{background:'var(--vg-surface-muted)'}}>
                       {['Mês','Valor Bruto','Valor Considerado','Motivo / Obs.','Ação'].map(h=>(
-                        <th key={h} style={{padding:'10px 16px',textAlign:h==='Valor Bruto'||h==='Valor Considerado'?'right':'left',color:'#8b92b0',fontWeight:600,fontSize:'0.7rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
+                        <th key={h} style={{padding:'10px 16px',textAlign:h==='Valor Bruto'||h==='Valor Considerado'?'right':'left',color:'var(--vg-muted)',fontWeight:600,fontSize:'0.7rem',textTransform:'uppercase',letterSpacing:0.5,whiteSpace:'nowrap'}}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -906,27 +907,27 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       const metaGravada = metaMap[comp];
                       return (
                         <React.Fragment key={'zero-'+comp}>
-                          <tr style={{borderTop:'1px solid #f0f2f8',background:'rgba(248,113,113,0.03)'}}>
+                          <tr style={{borderTop:'1px solid var(--vg-surface-muted)',background:'rgba(248,113,113,0.03)'}}>
                             <td style={{padding:'12px 16px',fontWeight:600}}>
                               <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                                <span style={{color:'#9ca3af'}}>{fmtMes(comp+'-01')}</span>
-                                <span style={{background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',color:'#f87171',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:700}}>sem registro</span>
+                                <span style={{color:'var(--vg-muted)'}}>{fmtMes(comp+'-01')}</span>
+                                <span style={{background:'rgba(248,113,113,0.1)',border:'1px solid rgba(248,113,113,0.2)',color:'var(--vg-danger-fg)',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:700}}>sem registro</span>
                                 {metaGravada && (
-                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>
-                                    ✅ {fmt(metaGravada.valor_meta)}
+                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'var(--vg-success-fg)',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700}}>
+                                     {fmt(metaGravada.valor_meta)}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
-                            <td style={{padding:'12px 16px',textAlign:'right',color:'#d1d5db'}}>—</td>
-                            <td style={{padding:'12px 16px',color:'#9ca3af',fontSize:'0.75rem',fontStyle:'italic'}}>mês sem movimentação</td>
+                            <td style={{padding:'12px 16px',textAlign:'right',color:'var(--vg-muted)'}}>—</td>
+                            <td style={{padding:'12px 16px',textAlign:'right',color:'var(--vg-muted)'}}>—</td>
+                            <td style={{padding:'12px 16px',color:'var(--vg-muted)',fontSize:'0.75rem',fontStyle:'italic'}}>mês sem movimentação</td>
                             <td style={{padding:'12px 16px'}}>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                                 {!metaGravada ? (
                                   <button onClick={()=>{setInserindoValor(eInserindo?null:comp);setValorInserir('');}}
-                                    style={{background:eInserindo?'rgba(52,211,153,0.12)':'#f5f6fa',border:`1px solid ${eInserindo?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eInserindo?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                    {eInserindo?'✕':'🎯 Aplicar meta'}
+                                    style={{background:eInserindo?'rgba(52,211,153,0.12)':'var(--vg-bg)',border:`1px solid ${eInserindo?'rgba(52,211,153,0.3)':'var(--vg-border)'}`,borderRadius:7,padding:'5px 12px',color:eInserindo?'var(--vg-success-fg)':'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                    {eInserindo?'':' Aplicar meta'}
                                   </button>
                                 ) : (
                                   <button onClick={async ()=>{
@@ -934,8 +935,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('competencia_meta',comp+'-01');
                                     await carregar();
                                   }}
-                                    style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 12px',color:'#dc2626',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                    ✕ Remover meta
+                                    style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 12px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                     Remover meta
                                   </button>
                                 )}
                               </div>
@@ -962,20 +963,20 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               <tr style={{background:'rgba(96,165,250,0.04)',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
                                 <td colSpan={5} style={{padding:'16px 20px'}}>
                                   <div style={{marginBottom:10}}>
-                                    <div style={{color:'#2563eb',fontWeight:700,fontSize:'0.85rem',marginBottom:4}}>
-                                      🎯 Aplicar meta para {fmtMes(comp+'-01')} (3º mês corrido zerado)
+                                    <div style={{color:'var(--vg-info-fg)',fontWeight:700,fontSize:'0.85rem',marginBottom:4}}>
+                                       Aplicar meta para {fmtMes(comp+'-01')} (3º mês corrido zerado)
                                     </div>
-                                    <div style={{color:'#6b7280',fontSize:'0.75rem'}}>
-                                      {fmtMes(comp+'-01')} não teve movimentação. O sistema usará o valor de <strong style={{color:'#1a1d2e'}}>{mesParaMeta?.label||'—'}</strong> como base da meta.
+                                    <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.75rem'}}>
+                                      {fmtMes(comp+'-01')} não teve movimentação. O sistema usará o valor de <strong style={{color:'var(--vg-ink)'}}>{mesParaMeta?.label||'—'}</strong> como base da meta.
                                     </div>
                                   </div>
                                   {mesParaMeta ? (
-                                    <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px'}}>
-                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Mês de referência</div><div style={{fontWeight:700,color:'#2563eb'}}>{mesParaMeta.label}</div></div>
-                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor movimentado</div><div style={{fontWeight:700,color:'#1a1d2e'}}>{fmt(mesParaMeta.val)}</div></div>
-                                      {_pesoMeta < 1 && <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoMeta*100)}</div></div>}
-                                      <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
-                                      <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta</div><div style={{fontWeight:800,color:'#16a34a',fontSize:'1.1rem'}}>{fmt(valorMetaCalc)}</div></div>
+                                    <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',background:'white',border:'1px solid var(--vg-border)',borderRadius:10,padding:'12px 16px'}}>
+                                      <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Mês de referência</div><div style={{fontWeight:700,color:'var(--vg-info-fg)'}}>{mesParaMeta.label}</div></div>
+                                      <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor movimentado</div><div style={{fontWeight:700,color:'var(--vg-ink)'}}>{fmt(mesParaMeta.val)}</div></div>
+                                      {_pesoMeta < 1 && <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Peso</div><div style={{fontWeight:700,color:'var(--vg-brand-500)'}}>{fmtPct(_pesoMeta*100)}</div></div>}
+                                      <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'var(--vg-info-fg)'}}>{fmtPct(pctCons)}</div></div>
+                                      <div style={{borderLeft:'2px solid var(--vg-border)',paddingLeft:16}}><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Valor da meta</div><div style={{fontWeight:800,color:'var(--vg-success-fg)',fontSize:'1.1rem'}}>{fmt(valorMetaCalc)}</div></div>
                                       <button disabled={salvandoInserir}
                                         onClick={async () => {
                                           setSalvandoInserir(true);
@@ -991,12 +992,12 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                           else { alert('Erro: ' + error.message); }
                                           setSalvandoInserir(false);
                                         }}
-                                        style={{background:'#16a34a',color:'white',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',marginLeft:'auto'}}>
-                                        {salvandoInserir?'Aplicando...':'✅ Aplicar meta'}
+                                        style={{background:'var(--vg-success-fg)',color:'white',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit',marginLeft:'auto'}}>
+                                        {salvandoInserir?'Aplicando...':' Aplicar meta'}
                                       </button>
                                     </div>
                                   ) : (
-                                    <div style={{color:'#f87171',fontSize:'0.82rem'}}>Nenhum mês com valor encontrado dentro dos 3 corridos.</div>
+                                    <div style={{color:'var(--vg-danger-fg)',fontSize:'0.82rem'}}>Nenhum mês com valor encontrado dentro dos 3 corridos.</div>
                                   )}
                                 </td>
                               </tr>
@@ -1006,7 +1007,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                       );
                     })}
 
-                    {/* ── PATCH: Exibe TODOS os meses desde o cadastro ── */}
+                    {/*  PATCH: Exibe TODOS os meses desde o cadastro  */}
                     {mesesParaExibir.map((m,i)=>{
                       const comp           = m.competencia?.substring(0,10);
                       const ajuste         = ajusteMap[comp];
@@ -1024,44 +1025,44 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
                       return(
                         <React.Fragment key={comp}>
-                          <tr style={{borderTop:'1px solid #f0f2f8',
-                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(240,180,41,0.04)':temAjuste?'#fffbeb':!m.temRegistro?'rgba(248,113,113,0.03)':i%2===0?'#ffffff':'#fafafa',
+                          <tr style={{borderTop:'1px solid var(--vg-surface-muted)',
+                            background:temMeta?'rgba(52,211,153,0.05)':ehMesMetaAuto?'rgba(77,86,161,0.04)':temAjuste?'var(--vg-warning-bg)':!m.temRegistro?'rgba(248,113,113,0.03)':i%2===0?'var(--vg-surface)':'var(--vg-surface-muted)',
                             opacity:!m.temRegistro&&!temAjuste&&!temMeta?0.85:1}}>
                             <td style={{padding:'12px 16px',fontWeight:600}}>
                               <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                                 {fmtMes(m.competencia)}
                                 {/* PATCH: badge "sem mov." em meses sem registro */}
                                 {!m.temRegistro && !temAjuste && (
-                                  <span style={{background:'rgba(156,163,175,0.12)',color:'#9ca3af',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:600}}>
+                                  <span style={{background:'rgba(156,163,175,0.12)',color:'var(--vg-muted)',borderRadius:5,padding:'2px 7px',fontSize:'0.62rem',fontWeight:600}}>
                                     sem mov.
                                   </span>
                                 )}
                                 {temMeta&&(
-                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'#16a34a',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,whiteSpace:'nowrap'}}>
-                                    ✅ {fmt(metaGravada.valor_meta)}
+                                  <span style={{background:'rgba(52,211,153,0.12)',border:'1px solid rgba(52,211,153,0.3)',color:'var(--vg-success-fg)',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:700,whiteSpace:'nowrap'}}>
+                                     {fmt(metaGravada.valor_meta)}
                                   </span>
                                 )}
                                 {ehMesMetaAuto && !temMeta && valorMetas.length === 0 && (
-                                  <span style={{background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.25)',color:'#b45309',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
-                                    🎯 elegível
+                                  <span style={{background:'rgba(77,86,161,0.1)',border:'1px solid rgba(77,86,161,0.25)',color:'var(--vg-brand-700)',borderRadius:5,padding:'2px 8px',fontSize:'0.65rem',fontWeight:600,whiteSpace:'nowrap'}}>
+                                     elegível
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',color:'#6b7280',fontWeight:temAjuste?400:700}}>
+                            <td style={{padding:'12px 16px',textAlign:'right',color:'var(--vg-ink-secondary)',fontWeight:temAjuste?400:700}}>
                               {m.total_liberado>0
                                 ? <span style={{textDecoration:temAjuste?'line-through':''}}>{fmt(m.total_liberado)}</span>
-                                : <span style={{color:'#d1d5db',fontSize:'0.78rem'}}>—</span>}
+                                : <span style={{color:'var(--vg-muted)',fontSize:'0.78rem'}}>—</span>}
                             </td>
-                            <td style={{padding:'12px 16px',textAlign:'right',fontWeight:700,color:temAjuste?'#f0b429':m.temRegistro?'#16a34a':'#9ca3af',fontSize:'1rem'}}>
-                              {valConsiderado>0?fmt(valConsiderado):<span style={{color:'#d1d5db'}}>—</span>}
-                              {temAjuste&&<div style={{fontSize:'0.68rem',color:'#f0b429',fontWeight:400}}>ajustado</div>}
+                            <td style={{padding:'12px 16px',textAlign:'right',fontWeight:700,color:temAjuste?'var(--vg-brand-500)':m.temRegistro?'var(--vg-success-fg)':'var(--vg-muted)',fontSize:'1rem'}}>
+                              {valConsiderado>0?fmt(valConsiderado):<span style={{color:'var(--vg-muted)'}}>—</span>}
+                              {temAjuste&&<div style={{fontSize:'0.68rem',color:'var(--vg-brand-500)',fontWeight:400}}>ajustado</div>}
                             </td>
                             <td style={{padding:'12px 16px',maxWidth:220}}>
                               {temAjuste&&(
                                 <div>
-                                  <span style={{background:'rgba(240,180,41,0.12)',color:'#f0b429',borderRadius:5,padding:'2px 8px',fontSize:'0.7rem',fontWeight:600}}>{MOTIVOS_LABEL[ajuste.motivo]||ajuste.motivo}</span>
-                                  {ajuste.observacao&&<div style={{color:'#6b7280',fontSize:'0.75rem',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:180}}>{ajuste.observacao}</div>}
+                                  <span style={{background:'rgba(77,86,161,0.12)',color:'var(--vg-brand-500)',borderRadius:5,padding:'2px 8px',fontSize:'0.7rem',fontWeight:600}}>{MOTIVOS_LABEL[ajuste.motivo]||ajuste.motivo}</span>
+                                  {ajuste.observacao&&<div style={{color:'var(--vg-ink-secondary)',fontSize:'0.75rem',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:180}}>{ajuste.observacao}</div>}
                                 </div>
                               )}
                             </td>
@@ -1070,21 +1071,21 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                 {podeEditar && (<>
                                 {/* Botão Ajustar — disponível em TODOS os meses */}
                                 <button onClick={()=>{setEditandoMes(eEditando?null:comp);setAjusteForm({valor:temAjuste?ajuste.valor_considerado:(m.total_liberado||''),motivo:ajuste?.motivo||'correcao',observacao:ajuste?.observacao||''});setMetaMes(null);}}
-                                  style={{background:eEditando?'rgba(240,180,41,0.15)':'#f5f6fa',border:`1px solid ${eEditando?'rgba(240,180,41,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'#f0b429':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                  {eEditando?'✕':'✏️ Ajustar'}
+                                  style={{background:eEditando?'rgba(77,86,161,0.15)':'var(--vg-bg)',border:`1px solid ${eEditando?'rgba(77,86,161,0.3)':'var(--vg-border)'}`,borderRadius:7,padding:'5px 12px',color:eEditando?'var(--vg-brand-500)':'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                  {eEditando?'':' Ajustar'}
                                 </button>
                                 {/* Botão Meta — disponível com movimentação bruta OU com ajuste manual */}
                                 {(m.total_liberado>0 || temAjuste)&&(
                                   <button onClick={()=>abrirMetaManual(comp,valConsiderado)}
-                                    style={{background:eMetaAberta?'rgba(52,211,153,0.15)':temMeta?'rgba(52,211,153,0.08)':'#f5f6fa',border:`1px solid ${eMetaAberta?'rgba(52,211,153,0.4)':temMeta?'rgba(52,211,153,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eMetaAberta?'#16a34a':temMeta?'#16a34a':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                    {eMetaAberta?'✕':temMeta?'✅ Meta':'🎯 Meta'}
+                                    style={{background:eMetaAberta?'rgba(52,211,153,0.15)':temMeta?'rgba(52,211,153,0.08)':'var(--vg-bg)',border:`1px solid ${eMetaAberta?'rgba(52,211,153,0.4)':temMeta?'rgba(52,211,153,0.3)':'var(--vg-border)'}`,borderRadius:7,padding:'5px 12px',color:eMetaAberta?'var(--vg-success-fg)':temMeta?'var(--vg-success-fg)':'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                    {eMetaAberta?'':temMeta?' Meta':' Meta'}
                                   </button>
                                 )}
                                 {temAjuste&&!eEditando&&(
-                                  <button onClick={()=>removerAjuste(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Aj.</button>
+                                  <button onClick={()=>removerAjuste(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}> Aj.</button>
                                 )}
                                 {temMeta&&!eMetaAberta&&(
-                                  <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'#dc2626',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}>✕ Meta</button>
+                                  <button onClick={()=>removerMeta(comp)} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:7,padding:'5px 10px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.75rem',fontFamily:'inherit'}}> Meta</button>
                                 )}
                                 {/* Upsell */}
                                 {m.total_liberado > 0 && valorMetas.length > 0 && (() => {
@@ -1098,8 +1099,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                   // Sempre mostra o botão Upsell em meses posteriores à meta
                                   return (
                                     <button onClick={()=>setUpsellMes(eUpsellAberto?null:comp)}
-                                      style={{background:eUpsellAberto?'rgba(8,145,178,0.15)':jaTemUpsell?'rgba(8,145,178,0.08)':'#f5f6fa',border:`1px solid ${eUpsellAberto?'rgba(8,145,178,0.4)':jaTemUpsell?'rgba(8,145,178,0.3)':'#e4e7ef'}`,borderRadius:7,padding:'5px 12px',color:eUpsellAberto?'#0891b2':jaTemUpsell?'#0891b2':'#4a5068',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
-                                      {eUpsellAberto?'✕':'📈 Upsell'}
+                                      style={{background:eUpsellAberto?'rgba(8,145,178,0.15)':jaTemUpsell?'rgba(8,145,178,0.08)':'var(--vg-bg)',border:`1px solid ${eUpsellAberto?'rgba(8,145,178,0.4)':jaTemUpsell?'rgba(8,145,178,0.3)':'var(--vg-border)'}`,borderRadius:7,padding:'5px 12px',color:eUpsellAberto?'var(--vg-info-fg)':jaTemUpsell?'var(--vg-info-fg)':'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',fontWeight:600}}>
+                                      {eUpsellAberto?'':' Upsell'}
                                     </button>
                                   );
                                 })()}
@@ -1112,8 +1113,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       await carregar();
                                     }}
                                     title="Remover este registro de movimentação"
-                                    style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.1)',borderRadius:7,padding:'5px 8px',color:'#dc2626',cursor:'pointer',fontSize:'0.72rem',fontFamily:'inherit',opacity:0.7}}>
-                                    🗑️
+                                    style={{background:'rgba(220,38,38,0.04)',border:'1px solid rgba(220,38,38,0.1)',borderRadius:7,padding:'5px 8px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.72rem',fontFamily:'inherit',opacity:0.7}}>
+                                    
                                   </button>
                                 )}
                                 </>)}
@@ -1123,18 +1124,18 @@ export default function GestaoEmpresaDetalhe({ params }) {
 
                           {/* Painel: Ajuste — funciona em meses com e sem movimentação */}
                           {eEditando&&(
-                            <tr key={comp+'-adj'} style={{background:'#fffbeb'}}>
+                            <tr key={comp+'-adj'} style={{background:'var(--vg-warning-bg)'}}>
                               <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{background:'#ffffff',border:'1px solid #fde68a',borderRadius:10,padding:16}}>
-                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'#b45309',marginBottom:12}}>
+                                <div style={{background:'var(--vg-surface)',border:'1px solid var(--vg-warning-fg)',borderRadius:10,padding:16}}>
+                                  <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--vg-brand-700)',marginBottom:12}}>
                                     {m.temRegistro
-                                      ? <>✏️ Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</>
-                                      : <>➕ Inserir valor manual — {fmtMes(m.competencia)} <span style={{color:'#9ca3af',fontWeight:400}}>(sem movimentação registrada)</span></>
+                                      ? <> Ajustando {fmtMes(m.competencia)} — Valor bruto: {fmt(m.total_liberado)}</>
+                                      : <> Inserir valor manual — {fmtMes(m.competencia)} <span style={{color:'var(--vg-muted)',fontWeight:400}}>(sem movimentação registrada)</span></>
                                     }
                                   </div>
                                   {!m.temRegistro && (
-                                    <div style={{background:'rgba(96,165,250,0.06)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:'0.78rem',color:'#4b5563'}}>
-                                      💡 Insira o valor real da movimentação para este mês. Ele ficará registrado como "ajuste manual" e poderá ser marcado na meta.
+                                    <div style={{background:'rgba(96,165,250,0.06)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:'0.78rem',color:'var(--vg-muted)'}}>
+                                       Insira o valor real da movimentação para este mês. Ele ficará registrado como "ajuste manual" e poderá ser marcado na meta.
                                     </div>
                                   )}
                                   <div style={{display:'grid',gridTemplateColumns:'180px 200px 1fr',gap:12,alignItems:'end'}}>
@@ -1143,11 +1144,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                     </div>
                                     <div><label style={sp.labelSm}>Motivo *</label>
                                       <select value={ajusteForm.motivo} onChange={e=>setAjusteForm(f=>({...f,motivo:e.target.value}))} style={sp.selectInline}>
-                                        <option value="correcao">🔧 Correção</option>
-                                        <option value="upsell">📈 Up-sell</option>
-                                        <option value="ajuste">✏️ Ajuste de valor</option>
-                                        <option value="negociacao">🤝 Negociação</option>
-                                        <option value="outro">📌 Outro</option>
+                                        <option value="correcao"> Correção</option>
+                                        <option value="upsell"> Up-sell</option>
+                                        <option value="ajuste"> Ajuste de valor</option>
+                                        <option value="negociacao"> Negociação</option>
+                                        <option value="outro"> Outro</option>
                                       </select>
                                     </div>
                                     <div><label style={sp.labelSm}>Observação</label>
@@ -1156,11 +1157,11 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                   </div>
                                   <div style={{display:'flex',gap:10,marginTop:14,alignItems:'center'}}>
                                     <button onClick={()=>salvarAjuste(m.competencia,m.total_liberado)} disabled={salvandoAjuste||!ajusteForm.valor}
-                                      style={{background:'#f0b429',color:'#000',border:'none',borderRadius:8,padding:'9px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!ajusteForm.valor?0.5:1}}>
-                                      {salvandoAjuste?'Salvando...':'💾 Salvar'}
+                                      style={{background:'var(--vg-brand-500)',color:'var(--vg-ink)',border:'none',borderRadius:8,padding:'9px 20px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!ajusteForm.valor?0.5:1}}>
+                                      {salvandoAjuste?'Salvando...':' Salvar'}
                                     </button>
-                                    <button onClick={()=>setEditandoMes(null)} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'9px 16px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
-                                    {m.temRegistro && <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>O valor bruto será mantido no histórico</span>}
+                                    <button onClick={()=>setEditandoMes(null)} style={{background:'var(--vg-bg)',border:'1px solid var(--vg-border)',borderRadius:8,padding:'9px 16px',color:'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
+                                    {m.temRegistro && <span style={{color:'var(--vg-muted)',fontSize:'0.75rem'}}>O valor bruto será mantido no histórico</span>}
                                   </div>
                                 </div>
                               </td>
@@ -1171,23 +1172,23 @@ export default function GestaoEmpresaDetalhe({ params }) {
                           {eMetaAberta&&(
                             <tr key={comp+'-meta'} style={{background:'rgba(52,211,153,0.02)'}}>
                               <td colSpan={5} style={{padding:'16px 20px'}}>
-                                <div style={{background:'#ffffff',border:'1px solid rgba(52,211,153,0.3)',borderRadius:10,padding:20,animation:'fadeIn 0.2s ease'}}>
+                                <div style={{background:'var(--vg-surface)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:10,padding:20,animation:'fadeIn 0.2s ease'}}>
                                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                                     <div>
-                                      <div style={{fontSize:'0.82rem',fontWeight:700,color:'#16a34a',marginBottom:3}}>
-                                        🎯 {temMeta?'Editar entrada na meta':'Marcar na meta'} — {fmtMes(m.competencia)}
+                                      <div style={{fontSize:'0.82rem',fontWeight:700,color:'var(--vg-success-fg)',marginBottom:3}}>
+                                         {temMeta?'Editar entrada na meta':'Marcar na meta'} — {fmtMes(m.competencia)}
                                       </div>
-                                      <div style={{fontSize:'0.72rem',color:'#6b7280'}}>
+                                      <div style={{fontSize:'0.72rem',color:'var(--vg-ink-secondary)'}}>
                                         Mov.: <strong>{fmt(valConsiderado)}</strong>
-                                        {temAjuste&&<span style={{color:'#f0b429'}}> (ajustado)</span>}
-                                        {_isVB && <>{' · '}Peso VB: <strong style={{color:'#f0b429'}}>{fmtPct(peso*100)}</strong></>}
+                                        {temAjuste&&<span style={{color:'var(--vg-brand-500)'}}> (ajustado)</span>}
+                                        {_isVB && <>{' · '}Peso VB: <strong style={{color:'var(--vg-brand-500)'}}>{fmtPct(peso*100)}</strong></>}
                                         {' · '}Consultor: <strong>{empresa.consultor_principal?.nome||'—'}</strong> ({fmtPct(pctCons)})
-                                        {' · '}Sugerido: <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
+                                        {' · '}Sugerido: <strong style={{color:'var(--vg-success-fg)'}}>{fmt(valorMetaCalc)}</strong>
                                       </div>
                                     </div>
                                     {temMeta&&<div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'6px 14px',textAlign:'right'}}>
-                                      <div style={{fontSize:'0.6rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Meta atual</div>
-                                      <div style={{fontWeight:700,color:'#16a34a'}}>{fmt(metaGravada.valor_meta)}</div>
+                                      <div style={{fontSize:'0.6rem',color:'var(--vg-ink-secondary)',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Meta atual</div>
+                                      <div style={{fontWeight:700,color:'var(--vg-success-fg)'}}>{fmt(metaGravada.valor_meta)}</div>
                                     </div>}
                                   </div>
                                   <div style={{display:'grid',gridTemplateColumns:'220px 220px 1fr',gap:12,alignItems:'end',marginBottom:14}}>
@@ -1202,7 +1203,7 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                           {label:'Bruto',        val: m.total_liberado},
                                         ].filter((v,i,a)=>v.val>0&&a.findIndex(x=>x.val===v.val)===i).map(opt=>(
                                           <button key={opt.label} onClick={()=>setMetaForm(f=>({...f,valor:opt.val}))}
-                                            style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'#16a34a',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
+                                            style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:5,padding:'3px 8px',color:'var(--vg-success-fg)',cursor:'pointer',fontSize:'0.65rem',fontFamily:'inherit',fontWeight:600}}>
                                             {opt.label}: {fmt(opt.val)}
                                           </button>
                                         ))}
@@ -1212,29 +1213,29 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                       <label style={sp.labelSm}>Regra aplicada</label>
                                       <select value={metaForm.regra} onChange={e=>setMetaForm(f=>({...f,regra:e.target.value}))}
                                         style={{...sp.selectInline,border:'1px solid rgba(52,211,153,0.3)'}}>
-                                        <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
-                                        <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
-                                        <option value="manual">✏️ Inclusão Manual</option>
+                                        <option value="beneficio"> 1ª Recarga (Benefícios/Bônus)</option>
+                                        <option value="convenio"> 3º Mês (Convênio/Mobilidade)</option>
+                                        <option value="manual"> Inclusão Manual</option>
                                       </select>
                                     </div>
                                     <div style={{display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
                                       <div style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.15)',borderRadius:8,padding:'10px 14px'}}>
-                                        <div style={{fontSize:'0.65rem',color:'#6b7280',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Fórmula aplicada</div>
-                                        <div style={{fontSize:'0.78rem',color:'#4b5563'}}>
+                                        <div style={{fontSize:'0.65rem',color:'var(--vg-ink-secondary)',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Fórmula aplicada</div>
+                                        <div style={{fontSize:'0.78rem',color:'var(--vg-muted)'}}>
                                           {fmt(valConsiderado)}
-                                          {_isVB && <> × <span style={{color:'#f0b429',fontWeight:700}}>{fmtPct(peso*100)} peso</span></>}
-                                          {' '}× <span style={{color:'#2563eb',fontWeight:700}}>{fmtPct(pctCons)} cons.</span> = <strong style={{color:'#16a34a'}}>{fmt(valorMetaCalc)}</strong>
+                                          {_isVB && <> × <span style={{color:'var(--vg-brand-500)',fontWeight:700}}>{fmtPct(peso*100)} peso</span></>}
+                                          {' '}× <span style={{color:'var(--vg-info-fg)',fontWeight:700}}>{fmtPct(pctCons)} cons.</span> = <strong style={{color:'var(--vg-success-fg)'}}>{fmt(valorMetaCalc)}</strong>
                                         </div>
                                       </div>
                                     </div>
                                   </div>
                                   <div style={{display:'flex',gap:10,alignItems:'center'}}>
                                     <button onClick={()=>salvarMetaManual(comp,valConsiderado)} disabled={salvandoMeta||!metaForm.valor}
-                                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!metaForm.valor?0.5:1}}>
-                                      {salvandoMeta?'Salvando...':temMeta?'💾 Atualizar':'🎯 Confirmar na Meta'}
+                                      style={{background:'var(--vg-success-fg)',color:'var(--vg-surface)',border:'none',borderRadius:8,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit',opacity:!metaForm.valor?0.5:1}}>
+                                      {salvandoMeta?'Salvando...':temMeta?' Atualizar':' Confirmar na Meta'}
                                     </button>
-                                    <button onClick={()=>setMetaMes(null)} style={{background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'10px 18px',color:'#4a5068',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
-                                    <span style={{color:'#8b92b0',fontSize:'0.72rem'}}>Aparecerá no dashboard como "Apurado na Meta"</span>
+                                    <button onClick={()=>setMetaMes(null)} style={{background:'var(--vg-bg)',border:'1px solid var(--vg-border)',borderRadius:8,padding:'10px 18px',color:'var(--vg-ink-secondary)',cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'}}>Cancelar</button>
+                                    <span style={{color:'var(--vg-muted)',fontSize:'0.72rem'}}>Aparecerá no dashboard como "Apurado na Meta"</span>
                                   </div>
                                 </div>
                               </td>
@@ -1255,35 +1256,35 @@ export default function GestaoEmpresaDetalhe({ params }) {
                               <tr key={comp+'-up'} style={{background:'rgba(8,145,178,0.04)',borderTop:'1px solid rgba(8,145,178,0.12)'}}>
                                 <td colSpan={5} style={{padding:'16px 20px'}}>
                                   <div style={{marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
-                                    <span style={{color:'#0891b2',fontWeight:700,fontSize:'0.88rem'}}>📈 Upsell — {fmtMes(comp+'-01')}</span>
-                                    {jaTemUpsell&&<span style={{background:'rgba(8,145,178,0.1)',color:'#0891b2',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
+                                    <span style={{color:'var(--vg-info-fg)',fontWeight:700,fontSize:'0.88rem'}}> Upsell — {fmtMes(comp+'-01')}</span>
+                                    {jaTemUpsell&&<span style={{background:'rgba(8,145,178,0.1)',color:'var(--vg-info-fg)',borderRadius:4,padding:'1px 8px',fontSize:'0.72rem',fontWeight:700}}>já registrado</span>}
                                   </div>
-                                  <div style={{display:'flex',gap:16,flexWrap:'wrap',background:'white',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
-                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Movimentação</div><div style={{fontWeight:700}}>{fmt(m.total_liberado)}</div></div>
-                                    <span style={{color:'#9ca3af'}}>−</span>
-                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Base (meta {fmtMes(mesMetaComp+'-01')})</div><div style={{fontWeight:700,color:'#16a34a'}}>{fmt(valorBase)}</div></div>
-                                    <span style={{color:'#9ca3af'}}>=</span>
-                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Excedente</div><div style={{fontWeight:700,color:'#0891b2'}}>{fmt(excedente)}</div></div>
-                                    {_pesoUp<1&&<><span style={{color:'#9ca3af'}}>×</span><div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Peso VB</div><div style={{fontWeight:700,color:'#f0b429'}}>{fmtPct(_pesoUp*100)}</div></div></>}
-                                    <span style={{color:'#9ca3af'}}>×</span>
-                                    <div><div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'#2563eb'}}>{fmtPct(pctCons)}</div></div>
-                                    <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
-                                      <div style={{fontWeight:800,color:'#0891b2',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
+                                  <div style={{display:'flex',gap:16,flexWrap:'wrap',background:'white',border:'1px solid var(--vg-border)',borderRadius:10,padding:'12px 16px',alignItems:'center'}}>
+                                    <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Movimentação</div><div style={{fontWeight:700}}>{fmt(m.total_liberado)}</div></div>
+                                    <span style={{color:'var(--vg-muted)'}}>−</span>
+                                    <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Base (meta {fmtMes(mesMetaComp+'-01')})</div><div style={{fontWeight:700,color:'var(--vg-success-fg)'}}>{fmt(valorBase)}</div></div>
+                                    <span style={{color:'var(--vg-muted)'}}>=</span>
+                                    <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Excedente</div><div style={{fontWeight:700,color:'var(--vg-info-fg)'}}>{fmt(excedente)}</div></div>
+                                    {_pesoUp<1&&<><span style={{color:'var(--vg-muted)'}}>×</span><div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Peso VB</div><div style={{fontWeight:700,color:'var(--vg-brand-500)'}}>{fmtPct(_pesoUp*100)}</div></div></>}
+                                    <span style={{color:'var(--vg-muted)'}}>×</span>
+                                    <div><div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>% Consultor</div><div style={{fontWeight:700,color:'var(--vg-info-fg)'}}>{fmtPct(pctCons)}</div></div>
+                                    <div style={{borderLeft:'2px solid var(--vg-border)',paddingLeft:16}}>
+                                      <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:2}}>Comissão upsell</div>
+                                      <div style={{fontWeight:800,color:'var(--vg-info-fg)',fontSize:'1.1rem'}}>{fmt(valorUpsell)}</div>
                                     </div>
                                     {/* Campo valor manual — quando não há excedente ou quer sobrescrever */}
-                                    <div style={{borderLeft:'2px solid #e4e7ef',paddingLeft:16,minWidth:180}}>
-                                      <div style={{color:'#6b7280',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:4}}>Valor manual (opcional)</div>
+                                    <div style={{borderLeft:'2px solid var(--vg-border)',paddingLeft:16,minWidth:180}}>
+                                      <div style={{color:'var(--vg-ink-secondary)',fontSize:'0.68rem',textTransform:'uppercase',marginBottom:4}}>Valor manual (opcional)</div>
                                       <input
                                         type="number" step="0.01" placeholder={excedente>0?`Calc: ${fmt(valorUpsell)}`:"Digite o valor"}
                                         value={valorUpsellManual}
                                         onChange={e=>setValorUpsellManual(e.target.value)}
-                                        style={{width:'100%',border:'1px solid rgba(8,145,178,0.3)',borderRadius:7,padding:'6px 10px',fontSize:'0.88rem',fontFamily:'inherit',color:'#0891b2',fontWeight:700,boxSizing:'border-box'}}
+                                        style={{width:'100%',border:'1px solid rgba(8,145,178,0.3)',borderRadius:7,padding:'6px 10px',fontSize:'0.88rem',fontFamily:'inherit',color:'var(--vg-info-fg)',fontWeight:700,boxSizing:'border-box'}}
                                       />
-                                      {excedente<=0&&<div style={{color:'#f87171',fontSize:'0.65rem',marginTop:3}}>Sem excedente automático — insira o valor</div>}
+                                      {excedente<=0&&<div style={{color:'var(--vg-danger-fg)',fontSize:'0.65rem',marginTop:3}}>Sem excedente automático — insira o valor</div>}
                                     </div>
                                     <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
-                                      {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell').eq('competencia_meta',comp);await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'#dc2626',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}>✕ Remover</button>}
+                                      {jaTemUpsell&&<button onClick={async()=>{if(!confirm('Remover upsell?'))return;await supabase.from('valor_meta_empresa').delete().eq('empresa_id',empresa.id).eq('regra','upsell').eq('competencia_meta',comp);await carregar();setUpsellMes(null);}} style={{background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.15)',borderRadius:8,padding:'8px 14px',color:'var(--vg-danger-fg)',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit'}}> Remover</button>}
                                       <button disabled={salvandoUpsell} onClick={async()=>{
                                         // Usa valor manual se preenchido, senão usa excedente calculado
                                         const valorFinal = valorUpsellManual ? parseFloat(valorUpsellManual) : valorUpsell;
@@ -1304,8 +1305,8 @@ export default function GestaoEmpresaDetalhe({ params }) {
                                         if(!error){await carregar();setUpsellMes(null);setValorUpsellManual('');}
                                         else alert('Erro: '+error.message);
                                         setSalvandoUpsell(false);
-                                      }} style={{background:'#0891b2',color:'white',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
-                                        {salvandoUpsell?'Salvando...':'📈 Aplicar Upsell'}
+                                      }} style={{background:'var(--vg-info-fg)',color:'white',border:'none',borderRadius:8,padding:'8px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                                        {salvandoUpsell?'Salvando...':' Aplicar Upsell'}
                                       </button>
                                     </div>
                                   </div>
@@ -1328,25 +1329,25 @@ export default function GestaoEmpresaDetalhe({ params }) {
 }
 
 const sp = {
-  page:        {maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'DM Sans',sans-serif",color:'#1a1d2e',background:'#f5f6fa',minHeight:'100vh'},
+  page:        {maxWidth:1200,margin:'0 auto',padding:'32px 24px',fontFamily:"'Inter', sans-serif",color:'var(--vg-ink)',background:'var(--vg-bg)',minHeight:'100vh'},
   header:      {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24,flexWrap:'wrap',gap:16},
-  tag:         {color:'#b45309',fontWeight:800,fontSize:'0.8rem',letterSpacing:2,marginBottom:6,textTransform:'uppercase'},
-  title:       {fontSize:'1.6rem',fontWeight:700,margin:0},
-  btnBack:     {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:8,padding:'8px 14px',color:'#4a5068',cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',whiteSpace:'nowrap'},
-  btnPri:      {background:'#f0b429',color:'#000',border:'none',borderRadius:10,padding:'10px 22px',fontWeight:700,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'},
-  btnSec:      {background:'#eaecf2',color:'#1a1d2e',border:'1px solid #e4e7ef',borderRadius:10,padding:'10px 18px',fontWeight:600,cursor:'pointer',fontSize:'0.88rem',fontFamily:'inherit'},
-  erroBox:     {background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'12px 16px',marginBottom:20,color:'#dc2626',fontSize:'0.85rem'},
-  resumoCard:  {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:4},
-  resumoL:     {color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1},
-  resumoV:     {fontSize:'1.1rem',fontWeight:700,color:'#1a1d2e'},
-  card:        {background:'#ffffff',border:'1px solid #e4e7ef',borderRadius:16,padding:24},
-  cardTitle:   {fontSize:'0.72rem',fontWeight:700,color:'#8b92b0',textTransform:'uppercase',letterSpacing:1},
-  label:       {display:'block',color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontWeight:600},
-  labelSm:     {display:'block',color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
-  input:       {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',color:'#1a1d2e',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',boxSizing:'border-box'},
-  select:      {background:'#ffffff',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',color:'#1a1d2e',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',cursor:'pointer',boxSizing:'border-box'},
-  inputInline: {width:'100%',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',fontSize:'0.9rem',fontFamily:'inherit',boxSizing:'border-box',color:'#1a1d2e'},
-  selectInline:{width:'100%',border:'1px solid #d1d5e8',borderRadius:8,padding:'9px 12px',fontSize:'0.88rem',fontFamily:'inherit',boxSizing:'border-box',color:'#1a1d2e',cursor:'pointer'},
-  statusBtn:   {background:'#f5f6fa',border:'1px solid #e4e7ef',borderRadius:10,padding:'12px 24px',color:'#8b92b0',cursor:'pointer',fontWeight:600,fontSize:'0.88rem',fontFamily:'inherit',flex:1},
-  spin:        {width:36,height:36,border:'3px solid #e4e7ef',borderTop:'3px solid #f0b429',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
+  tag:         {color:'var(--vg-muted)',fontSize:12,lineHeight:'18px',marginBottom:6},
+  title:       {fontFamily:"'Outfit', sans-serif",fontSize:24,lineHeight:'32px',fontWeight:600,margin:0,color:'var(--vg-ink)'},
+  btnBack:     {background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderRadius:'var(--vg-radius)',padding:'8px 14px',color:'var(--vg-ink-secondary)',cursor:'pointer',fontSize:14,fontFamily:'inherit',fontWeight:600,whiteSpace:'nowrap'},
+  btnPri:      {background:'var(--vg-brand-500)',color:'#fff',border:'none',borderRadius:'var(--vg-radius)',padding:'10px 20px',fontWeight:600,cursor:'pointer',fontSize:14,fontFamily:'inherit'},
+  btnSec:      {background:'var(--vg-surface)',color:'var(--vg-ink-secondary)',border:'1px solid var(--vg-border-field)',borderRadius:'var(--vg-radius)',padding:'10px 18px',fontWeight:600,cursor:'pointer',fontSize:14,fontFamily:'inherit'},
+  erroBox:     {background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:10,padding:'12px 16px',marginBottom:20,color:'var(--vg-danger-fg)',fontSize:'0.85rem'},
+  resumoCard:  {background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderRadius:12,padding:'16px 18px',display:'flex',flexDirection:'column',gap:4},
+  resumoL:     {color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1},
+  resumoV:     {fontSize:'1.1rem',fontWeight:700,color:'var(--vg-ink)'},
+  card:        {background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderRadius:16,padding:24},
+  cardTitle:   {fontSize:'0.72rem',fontWeight:700,color:'var(--vg-muted)',textTransform:'uppercase',letterSpacing:1},
+  label:       {display:'block',color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6,fontWeight:600},
+  labelSm:     {display:'block',color:'var(--vg-muted)',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:1,marginBottom:6},
+  input:       {background:'var(--vg-surface)',border:'1px solid var(--vg-border-field)',borderRadius:'var(--vg-radius)',padding:'9px 12px',color:'var(--vg-ink)',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',boxSizing:'border-box'},
+  select:      {background:'var(--vg-surface)',border:'1px solid var(--vg-border-field)',borderRadius:'var(--vg-radius)',padding:'9px 12px',color:'var(--vg-ink)',fontSize:'0.88rem',fontFamily:'inherit',width:'100%',cursor:'pointer',boxSizing:'border-box'},
+  inputInline: {width:'100%',border:'1px solid var(--vg-border-field)',borderRadius:'var(--vg-radius)',padding:'9px 12px',fontSize:'0.9rem',fontFamily:'inherit',boxSizing:'border-box',color:'var(--vg-ink)'},
+  selectInline:{width:'100%',border:'1px solid var(--vg-border-field)',borderRadius:'var(--vg-radius)',padding:'9px 12px',fontSize:'0.88rem',fontFamily:'inherit',boxSizing:'border-box',color:'var(--vg-ink)',cursor:'pointer'},
+  statusBtn:   {background:'var(--vg-surface)',border:'1px solid var(--vg-border)',borderRadius:'var(--vg-radius)',padding:'12px 24px',color:'var(--vg-ink-secondary)',cursor:'pointer',fontWeight:600,fontSize:'0.88rem',fontFamily:'inherit',flex:1},
+  spin:        {width:36,height:36,border:'3px solid var(--vg-border)',borderTop:'3px solid var(--vg-brand-500)',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 0.8s linear infinite'},
 };
