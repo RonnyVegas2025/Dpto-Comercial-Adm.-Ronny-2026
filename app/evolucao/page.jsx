@@ -2,6 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import {
+  BarChart3, CreditCard, RefreshCw, TrendingUp, CheckCircle2, Clock,
+  Target, FileSpreadsheet, Search, Pencil, X, CalendarDays, ArrowUpRight, Copy,
+  Trash2, Settings, Hash,
+} from 'lucide-react';
+
+// Ícone Lucide inline padrão do passe 2 (size 16, strokeWidth 1.75).
+const LI = (Ico, extra) => <Ico size={16} strokeWidth={1.75} style={{ verticalAlign: 'text-bottom', ...extra }} />;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -47,10 +55,10 @@ function tendencia(vals) {
 }
 
 const TEND = {
-  up:   { color: 'var(--vg-success-fg)', label: '↑ Crescendo' },
-  down: { color: 'var(--vg-danger-fg)', label: '↓ Caindo' },
-  flat: { color: 'var(--vg-muted)', label: '→ Estável' },
-  new:  { color: 'var(--vg-info-fg)', label: '✦ Nova' },
+  up:   { color: 'var(--vg-success-fg)', label: 'Crescendo' },
+  down: { color: 'var(--vg-danger-fg)', label: 'Caindo' },
+  flat: { color: 'var(--vg-muted)', label: 'Estável' },
+  new:  { color: 'var(--vg-info-fg)', label: 'Nova' },
   none: { color: 'var(--vg-muted)', label: '— Sem movimentação' },
 };
 
@@ -170,7 +178,7 @@ function BadgeMeta({ meta, pct }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
         <span style={{ background: 'var(--vg-brand-50)', border: '1px solid var(--vg-brand-500)', color: 'var(--vg-brand-500)', borderRadius: 5, padding: '2px 7px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-          ⏳ Aguardando confirmação
+          {LI(Clock)} Aguardando confirmação
         </span>
         <span style={{ color: 'var(--vg-brand-500)', fontSize: '0.78rem', fontWeight: 700 }}>{fmt(meta.valorMeta)}</span>
         <span style={{ color: 'var(--vg-ink-secondary)', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
@@ -222,21 +230,21 @@ function BannerFiltros({ filtros, onLimpar }) {
   if (filtros.depto     !== 'todos') tags.push({ label: `Equipe: ${filtros.depto}`,           cor: 'var(--vg-brand-500)' });
   if (filtros.vendedor  !== 'todos') tags.push({ label: `Vendedor: ${filtros.vendedor}`,      cor: 'var(--vg-success-fg)' });
   if (filtros.categoria !== 'todos') tags.push({ label: `Cat.: ${filtros.categoria}`,         cor: 'var(--vg-brand-500)' });
-  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? '✅ Movimentaram' : '❌ Sem movimentação', cor: filtros.status === 'creditou' ? 'var(--vg-success-fg)' : 'var(--vg-danger-fg)' });
+  if (filtros.status    !== 'todos') tags.push({ label: filtros.status === 'creditou' ? 'Movimentaram' : 'Sem movimentação', cor: filtros.status === 'creditou' ? 'var(--vg-success-fg)' : 'var(--vg-danger-fg)' });
   if (filtros.tend      !== 'todos') tags.push({ label: `Tend.: ${TEND[filtros.tend]?.label}`, cor: TEND[filtros.tend]?.color });
   if (filtros.metaStatus !== 'todos') {
-    const metaLabels = { na_meta: '✅ Confirmadas na meta', aguardando: '⏳ Aguardando confirmação', pendente: '⏳ Pendente elegibilidade', fora: '— Fora da meta' };
+    const metaLabels = { na_meta: 'Confirmadas na meta', aguardando: 'Aguardando confirmação', pendente: 'Pendente elegibilidade', fora: '— Fora da meta' };
     const metaCores  = { na_meta: 'var(--vg-success-fg)', aguardando: 'var(--vg-brand-500)', pendente: 'var(--vg-brand-500)', fora: 'var(--vg-muted)' };
     tags.push({ label: metaLabels[filtros.metaStatus] || filtros.metaStatus, cor: metaCores[filtros.metaStatus] || 'var(--vg-muted)' });
   }
-  if (filtros.mesMeta !== 'todos') tags.push({ label: `🎯 Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: 'var(--vg-success-fg)' });
-  if (filtros.upsell) tags.push({ label: '📈 Filtro: Upsell detectado', cor: 'var(--vg-brand-500)' });
+  if (filtros.mesMeta !== 'todos') tags.push({ label: `Meta de: ${fmtMes(filtros.mesMeta+'-01')}`, cor: 'var(--vg-success-fg)' });
+  if (filtros.upsell) tags.push({ label: 'Filtro: Upsell detectado', cor: 'var(--vg-brand-500)' });
   if (filtros.busca.trim()) tags.push({ label: `Busca: "${filtros.busca}"`, cor: 'var(--vg-ink)' });
   if (tags.length === 0) return null;
 
   return (
     <div style={bb.wrap}>
-      <span style={bb.icone}>🔍</span>
+      <span style={bb.icone}>{LI(Search)} </span>
       <span style={bb.label}>Analisando:</span>
       <div style={bb.tags}>
         {tags.map((t, i) => (
@@ -245,7 +253,7 @@ function BannerFiltros({ filtros, onLimpar }) {
           </span>
         ))}
       </div>
-      <button style={bb.limpar} onClick={onLimpar}>✕ Limpar</button>
+      <button style={bb.limpar} onClick={onLimpar}>{LI(X)} Limpar</button>
     </div>
   );
 }
@@ -259,7 +267,7 @@ const bb = {
   limpar: { background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '4px 12px', color: 'var(--vg-danger-fg)', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 };
 
-// ID da empresa com destaque + botão copiar (✅ por 1.5s ao copiar)
+// ID da empresa com destaque + botão copiar (check por 1.5s ao copiar)
 function IdCopiavel({ id }) {
   const [copiado, setCopiado] = useState(false);
   return (
@@ -273,7 +281,7 @@ function IdCopiavel({ id }) {
           setCopiado(true); setTimeout(() => setCopiado(false), 1500);
         }}
         style={{ cursor: 'pointer', userSelect: 'none', fontSize: '0.72rem' }}>
-        {copiado ? '✅' : '📋'}
+        {copiado ? <CheckCircle2 size={16} strokeWidth={1.75}/> : <Copy size={16} strokeWidth={1.75}/>}
       </span>
     </div>
   );
@@ -406,7 +414,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
           Exibindo <strong style={{ color: 'var(--vg-ink)' }}>{listaPagina.length}</strong> de <strong style={{ color: 'var(--vg-ink)' }}>{lista.length}</strong> empresas
           {totalMetaApurado > 0 && (
             <span style={{ marginLeft: 12, background: 'var(--vg-success-bg)', border: '1px solid var(--vg-success-fg)', borderRadius: 6, padding: '2px 10px', color: 'var(--vg-success-fg)', fontSize: '0.72rem', fontWeight: 600 }}>
-              ✅ {naMeta} na meta · {fmt(totalMetaApurado)} apurado
+              {LI(CheckCircle2)} {naMeta} na meta · {fmt(totalMetaApurado)} apurado
             </span>
           )}
         </div>
@@ -424,7 +432,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
           </button>
           <button onClick={() => { setLoteResultado(null); setLoteAberto(true); }}
             style={{ background: 'var(--vg-success-fg)', border: 'none', borderRadius: 8, padding: '6px 16px', color: '#fff', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-            ✓ Confirmar {selecionadasArr.length} selecionada{selecionadasArr.length > 1 ? 's' : ''}
+            {LI(CheckCircle2)} Confirmar {selecionadasArr.length} selecionada{selecionadasArr.length > 1 ? 's' : ''}
           </button>
         </div>
       )}
@@ -451,8 +459,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
               {col('total')    && <th style={{ ...s.th, textAlign: 'right' }}>Movimentado</th>}
               {col('status')   && <th style={{ ...s.th, textAlign: 'center' }}>Status</th>}
               {col('tendencia')&& <th style={{ ...s.th, textAlign: 'center' }}>Tendência</th>}
-              {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)', minWidth: 120 }}>🎯 Meta</th>}
-              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-warning-fg)', color: 'var(--vg-brand-500)', minWidth: 130 }}>📈 Upsell</th>}
+              {col('meta')     && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-success-fg)', color: 'var(--vg-success-fg)', minWidth: 120 }}>{LI(Target)} Meta</th>}
+              {col('upsell')   && <th style={{ ...s.th, textAlign: 'center', borderLeft: '2px solid var(--vg-warning-fg)', color: 'var(--vg-brand-500)', minWidth: 130 }}>{LI(TrendingUp)} Upsell</th>}
             </tr>
           </thead>
           <tbody>
@@ -498,7 +506,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           style={{ fontWeight: 600, color: 'var(--vg-ink)', textDecoration: 'none', cursor: 'pointer', fontSize: '0.82rem' }}
                           onMouseEnter={ev => ev.currentTarget.style.color='var(--vg-success-fg)'}
                           onMouseLeave={ev => ev.currentTarget.style.color='var(--vg-ink)'}>
-                          {e.nome} ↗
+                          {e.nome} {LI(ArrowUpRight)} 
                         </a>
                         <IdCopiavel id={e.produto_id} />
                       </div>
@@ -537,7 +545,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                               {isMesAlvo && (
                                 <span title={entradaMeta ? `Meta: ${fmt(entradaMeta.valor_meta)} (${entradaMeta.regra})` : 'Na meta'}
                                   style={{ fontSize: '0.6rem', marginLeft: 3, cursor: 'help' }}>
-                                  {entradaMeta?.regra === 'upsell' ? '📈' : '✅'}
+                                  {entradaMeta?.regra === 'upsell' ? <TrendingUp size={16} strokeWidth={1.75}/> : <CheckCircle2 size={16} strokeWidth={1.75}/>}
                                 </span>
                               )}
                             </span>
@@ -552,8 +560,8 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                     {e.totalCreditado > 0 ? fmt(e.totalCreditado) : <span style={{ color: 'var(--vg-border)' }}>—</span>}
                   </td>}                  {col('status') && <td style={{ ...s.td, textAlign: 'center' }}>
                     {e.creditou
-                      ? <span style={s.badgeGreen}>✅ Movimentou</span>
-                      : <span style={s.badgeRed}>❌ Sem movimentação</span>}
+                      ? <span style={s.badgeGreen}>{LI(CheckCircle2)} Movimentou</span>
+                      : <span style={s.badgeRed}>{LI(X)} Sem movimentação</span>}
                   </td>}
                   {col('tendencia') && <td style={{ ...s.td, textAlign: 'center' }}>
                     <span style={{ color: ts.color, fontSize: '0.78rem', fontWeight: 600 }}>{ts.label}</span>
@@ -580,14 +588,14 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         })().map((entrada, idx, arr) => (
                           <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, paddingBottom: idx < arr.length - 1 ? 4 : 0, borderBottom: idx < arr.length - 1 ? '1px solid var(--vg-surface-muted)' : 'none', width: '100%' }}>
                             <span style={{ background: entrada.regra === 'upsell' ? 'var(--vg-warning-bg)' : 'var(--vg-success-bg)', border: `1px solid ${entrada.regra === 'upsell' ? 'var(--vg-warning-fg)' : 'var(--vg-success-fg)'}`, color: entrada.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', borderRadius: 5, padding: '2px 8px', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              {entrada.regra === 'upsell' ? '📈' : '✅'} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
+                              {entrada.regra === 'upsell' ? <TrendingUp size={16} strokeWidth={1.75}/> : <CheckCircle2 size={16} strokeWidth={1.75}/>} {entrada.regra === 'upsell' ? 'Upsell' : entrada.regra === 'beneficio' ? '1ª rec.' : entrada.regra === 'convenio' ? '3º mês' : 'Manual'} · {fmtMes((entrada.competencia_meta||'').substring(0,7)+'-01')}
                             </span>
                             <span style={{ color: entrada.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', fontSize: '0.75rem', fontWeight: 700 }}>{fmt(entrada.valor_meta)}</span>
                           </div>
                         ))}
                         <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
                           style={{ color: 'var(--vg-muted)', fontSize: '0.58rem', marginTop: 2, textDecoration: 'none' }}>
-                          ✏️ editar ↗
+                          {LI(Pencil)} editar {LI(ArrowUpRight)} 
                         </a>
                       </div>
                     ) : (
@@ -596,7 +604,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         {aguardandoDe(e) && (
                           <button onClick={() => abrirConfirm(e)}
                             style={{ marginTop: 2, background: 'var(--vg-brand-50)', border: '1px solid var(--vg-brand-500)', borderRadius: 5, padding: '3px 10px', color: 'var(--vg-brand-500)', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                            ✓ Confirmar na meta
+                            {LI(CheckCircle2)} Confirmar na meta
                           </button>
                         )}
                       </div>
@@ -612,7 +620,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                           <div>
                             <div style={{ fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '0.9rem', marginBottom: 3 }}>
-                              🎯 Confirmar na meta — {e.nome}
+                              {LI(Target)} Confirmar na meta — {e.nome}
                             </div>
                             <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem' }}>
                               ID {e.produto_id} · {meta?.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · <strong style={{ color: 'var(--vg-ink)' }}>{fmtMes((String(meta?.mesAlvo || '2000-01')).substring(0,7)+'-01')}</strong>
@@ -621,7 +629,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           </div>
                           <button onClick={() => setConfirmRow(null)}
                             style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 6, padding: '4px 10px', color: 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                            ✕ Fechar
+                            {LI(X)} Fechar
                           </button>
                         </div>
 
@@ -654,7 +662,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             </button>
                             <button onClick={executarConfirm} disabled={confirmando || confirmValor === ''}
                               style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: confirmValor === '' ? 'default' : 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', opacity: confirmValor === '' ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-                              {confirmando ? 'Confirmando...' : '✓ Confirmar'}
+                              {confirmando ? 'Confirmando...' : 'Confirmar'}
                             </button>
                           </div>
                         </div>
@@ -672,11 +680,11 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
                           <div>
                             <div style={{ fontWeight: 700, color: metaForm.regra === 'upsell' ? 'var(--vg-brand-500)' : 'var(--vg-success-fg)', fontSize: '0.88rem', marginBottom: 3 }}>
-                              {metaForm.regra === 'upsell' ? '📈 Upsell detectado' : temMetaGravada ? '🎯 Editar meta' : '🎯 Marcar na meta'} — {e.nome}
+                              {metaForm.regra === 'upsell' ? 'Upsell detectado' : temMetaGravada ? 'Editar meta' : 'Marcar na meta'} — {e.nome}
                             </div>
                             <div style={{ color: 'var(--vg-muted)', fontSize: '0.72rem' }}>
                               {metaForm.regra === 'upsell'
-                                ? <>📈 Crescimento ≥45% · <strong style={{color:'var(--vg-brand-500)'}}>{fmtMes((String(metaForm.mesAlvoOverride||'2000-01')).substring(0,7)+'-01')}</strong> · Meta original preservada</>
+                                ? <>{LI(TrendingUp)} Crescimento ≥45% · <strong style={{color:'var(--vg-brand-500)'}}>{fmtMes((String(metaForm.mesAlvoOverride||'2000-01')).substring(0,7)+'-01')}</strong> · Meta original preservada</>
                                 : meta ? <>{meta.regra === 'beneficio' ? '1ª recarga' : '3º mês'} · {fmtMes((String(meta.mesAlvo||'2000-01')).substring(0,7)+'-01')}</> : <span>—</span>
                               }
                               {' '}· Consultor: <strong style={{ color: 'var(--vg-ink)' }}>{e.vendedor || '—'}</strong> ({e._pct || 100}%)
@@ -684,7 +692,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           </div>
                           <button onClick={() => setModalMeta(null)}
                             style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 6, padding: '4px 10px', color: 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit' }}>
-                            ✕ Fechar
+                            {LI(X)} Fechar
                           </button>
                         </div>
 
@@ -716,28 +724,28 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                             <label style={{ display: 'block', color: 'var(--vg-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Regra</label>
                             <select value={metaForm.regra} onChange={ev => setMetaForm(f => ({ ...f, regra: ev.target.value }))}
                               style={{ width: '100%', background: 'var(--vg-surface)', border: '1px solid var(--vg-success-fg)', borderRadius: 8, padding: '8px 12px', color: 'var(--vg-ink)', fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box' }}>
-                              <option value="beneficio">✅ 1ª Recarga (Benefícios/Bônus)</option>
-                              <option value="convenio">📅 3º Mês (Convênio/Mobilidade)</option>
-                              <option value="manual">✏️ Inclusão Manual</option>
-                              <option value="upsell">📈 Upsell (entrada adicional)</option>
+                              <option value="beneficio">1ª Recarga (Benefícios/Bônus)</option>
+                              <option value="convenio">3º Mês (Convênio/Mobilidade)</option>
+                              <option value="manual">Inclusão Manual</option>
+                              <option value="upsell">Upsell (entrada adicional)</option>
                             </select>
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <button onClick={salvarMeta} disabled={salvandoMeta || !metaForm.valor}
                               style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', fontFamily: 'inherit', opacity: !metaForm.valor ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-                              {salvandoMeta ? 'Salvando...' : temMetaGravada ? '💾 Atualizar' : '🎯 Confirmar'}
+                              {salvandoMeta ? 'Salvando...' : temMetaGravada ? 'Atualizar' : 'Confirmar'}
                             </button>
                             {temMetaGravada && (
                               <button onClick={() => removerMeta(e)}
                                 style={{ background: 'var(--vg-danger-bg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 8, padding: '10px 16px', color: 'var(--vg-danger-fg)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                                🗑 Remover
+                                {LI(Trash2)} Remover
                               </button>
                             )}
                             <a href={`/gestao/${e.id}`} target="_blank"
                               style={{ color: 'var(--vg-muted)', fontSize: '0.72rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
                               onMouseEnter={ev => ev.currentTarget.style.color='var(--vg-success-fg)'}
                               onMouseLeave={ev => ev.currentTarget.style.color='var(--vg-muted)'}>
-                              ↗ Abrir ficha completa
+                              {LI(ArrowUpRight)} Abrir ficha completa
                             </a>
                           </div>
                         </div>
@@ -759,7 +767,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                           <span style={{ color: 'var(--vg-muted)', fontSize: '0.62rem' }}>base: {fmt(up.baseValor)}</span>
                           <a href={`/gestao/${e.id}`} target="_blank" rel="noopener noreferrer"
                             style={{ marginTop: 2, display: 'block', textAlign: 'center', background: 'var(--vg-warning-bg)', border: '1px solid var(--vg-warning-fg)', borderRadius: 5, padding: '3px 10px', color: 'var(--vg-brand-500)', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, textDecoration: 'none' }}>
-                            + Adicionar na meta ↗
+                            + Adicionar na meta {LI(ArrowUpRight)} 
                           </a>
                         </div>
                       ) : (
@@ -813,7 +821,7 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
             style={{ background: 'var(--vg-bg)', border: '1px solid var(--vg-brand-500)', borderRadius: 14, padding: '20px 24px', width: 'min(560px, 96vw)', maxHeight: '84vh', display: 'flex', flexDirection: 'column' }}>
             {!loteResultado ? (
               <>
-                <div style={{ fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '1rem', marginBottom: 4 }}>✓ Confirmar {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} na meta</div>
+                <div style={{ fontWeight: 700, color: 'var(--vg-brand-500)', fontSize: '1rem', marginBottom: 4 }}>{LI(CheckCircle2)} Confirmar {selecionadasArr.length} empresa{selecionadasArr.length > 1 ? 's' : ''} na meta</div>
                 <div style={{ color: 'var(--vg-muted)', fontSize: '0.78rem', marginBottom: 14 }}>Total: <strong style={{ color: 'var(--vg-success-fg)' }}>{fmt(totalSelecionado)}</strong> · usa o valor calculado de cada empresa</div>
                 <div style={{ overflowY: 'auto', border: '1px solid var(--vg-border)', borderRadius: 10 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
@@ -842,13 +850,13 @@ function TabelaEvolucao({ lista, meses, libMap, colunas, porPagina = 12,
                   </button>
                   <button onClick={executarLote} disabled={loteProcessando}
                     style={{ background: 'var(--vg-success-fg)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    {loteProcessando ? 'Confirmando...' : `✓ Confirmar todas`}
+                    {loteProcessando ? 'Confirmando...' : `Confirmar todas`}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontWeight: 700, color: 'var(--vg-success-fg)', fontSize: '1rem', marginBottom: 6 }}>✓ {loteResultado.confirmadas} confirmada{loteResultado.confirmadas === 1 ? '' : 's'}</div>
+                <div style={{ fontWeight: 700, color: 'var(--vg-success-fg)', fontSize: '1rem', marginBottom: 6 }}>{LI(CheckCircle2)} {loteResultado.confirmadas} confirmada{loteResultado.confirmadas === 1 ? '' : 's'}</div>
                 {loteResultado.falhas?.length > 0 && (
                   <div style={{ marginTop: 6 }}>
                     <div style={{ color: 'var(--vg-danger-fg)', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>{loteResultado.falhas.length} falha{loteResultado.falhas.length === 1 ? '' : 's'}:</div>
@@ -901,7 +909,7 @@ function TabelaCruzamento({ lista, meses }) {
             {listaPagina.map((e, i) => {
               const pct = e.pctPot || 0;
               const cor = pct >= 80 ? 'var(--vg-success-fg)' : pct >= 40 ? 'var(--vg-brand-500)' : 'var(--vg-danger-fg)';
-              const stLabel = pct >= 80 ? '✅ Atingindo' : pct >= 40 ? '⚡ Parcial' : e.totalCreditado === 0 ? '❌ Sem crédito' : '⚠️ Abaixo';
+              const stLabel = pct >= 80 ? 'Atingindo' : pct >= 40 ? 'Parcial' : e.totalCreditado === 0 ? 'Sem crédito' : 'Abaixo';
               return (
                 <tr key={e._key} style={i % 2 === 0 ? { background: 'var(--vg-surface-muted)' } : {}}>
                   <td style={s.td}>
@@ -999,8 +1007,8 @@ export default function Evolucao() {
     { key:'total',        label:'Total Mov.',      grupo:'Movimentação'  },
     { key:'status',       label:'Status',          grupo:'Movimentação'  },
     { key:'tendencia',    label:'Tendência',       grupo:'Movimentação'  },
-    { key:'meta',         label:'🎯 Meta',         grupo:'Meta'          },
-    { key:'upsell',       label:'📈 Upsell',       grupo:'Meta'          },
+    { key:'meta',         label:'Meta',         grupo:'Meta'          },
+    { key:'upsell',       label:'Upsell',       grupo:'Meta'          },
   ];
   const PRESETS = {
     padrao:  ['categoria','produto','vendedor','gestor','meses','previsto','total','status','meta'],
@@ -1497,9 +1505,9 @@ export default function Evolucao() {
   );
 
   const abas = [
-    { key: 'evolucao',   label: '📈 Evolução por Empresa' },
-    { key: 'resumo',     label: '🔢 Resumo por Mês' },
-    { key: 'cruzamento', label: '🎯 Potencial vs Creditado' },
+    { key: 'evolucao',   label: 'Evolução por Empresa' },
+    { key: 'resumo',     label: 'Resumo por Mês' },
+    { key: 'cruzamento', label: 'Potencial vs Creditado' },
   ];
 
   return (
@@ -1520,15 +1528,15 @@ export default function Evolucao() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={exportarExcel} disabled={!xlsxLib || listaFiltrada.length===0}
             style={{ ...s.linkBtnGreen, background:'var(--vg-success-bg)', borderColor:'var(--vg-success-fg)', color:'var(--vg-success-fg)', cursor:'pointer', border:'1px solid var(--vg-success-fg)', fontFamily:'inherit', opacity:(!xlsxLib||listaFiltrada.length===0)?0.5:1 }}>
-            📥 Exportar Excel ({listaFiltrada.length})
+            {LI(FileSpreadsheet)} Exportar Excel ({listaFiltrada.length})
           </button>
           <button onClick={recarregar} disabled={recarregando}
             style={{ ...s.linkBtnGreen, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid var(--vg-success-fg)', opacity: recarregando ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', animation: recarregando ? 'spin 0.8s linear infinite' : 'none' }}>🔄</span>
+            <span style={{ display: 'inline-block', animation: recarregando ? 'spin 0.8s linear infinite' : 'none' }}>{LI(RefreshCw)} </span>
             {recarregando ? 'Atualizando...' : 'Atualizar'}
           </button>
-          <a href="/importar-movimentacao" style={s.linkBtnGreen}>📊 Importar Movimentação</a>
-          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'var(--vg-info-fg)', borderColor:'var(--vg-info-fg)', background:'var(--vg-info-bg)' }}>💳 Importar Liberações</a>
+          <a href="/importar-movimentacao" style={s.linkBtnGreen}>{LI(BarChart3)} Importar Movimentação</a>
+          <a href="/importar-liberacoes" style={{ ...s.linkBtnGreen, color:'var(--vg-info-fg)', borderColor:'var(--vg-info-fg)', background:'var(--vg-info-bg)' }}>{LI(CreditCard)} Importar Liberações</a>
         </div>
       </div>
 
@@ -1560,13 +1568,13 @@ export default function Evolucao() {
         </div>
         {/* NOVO: KPI Total Previsto */}
         <div style={{ ...s.kpi, borderColor: 'var(--vg-brand-400)' }}>
-          <span style={s.kpiLabel}>📊 Total Previsto</span>
+          <span style={s.kpiLabel}>{LI(BarChart3)} Total Previsto</span>
           <span style={{ ...s.kpiVal, color: 'var(--vg-brand-400)' }}>{fmt(kpis.totalPrevisto)}</span>
           <span style={s.kpiSub}>potencial × peso/mês</span>
         </div>
         {/* NOVOS KPIs de meta */}
         <div style={{ ...s.kpi, borderColor: 'var(--vg-success-fg)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('na_meta'); setAba('evolucao'); }}>
-          <span style={s.kpiLabel}>✅ Na Meta</span>
+          <span style={s.kpiLabel}>{LI(CheckCircle2)} Na Meta</span>
           <span style={s.kpiVal}>
             <span style={{ color: 'var(--vg-success-fg)' }}>{kpis.confirmadas}</span>
             <span style={{ color: 'var(--vg-muted)', fontSize: '0.85rem', fontWeight: 600 }}> · </span>
@@ -1581,15 +1589,15 @@ export default function Evolucao() {
         {/* KPI Upsell */}
         <div style={{ ...s.kpi, borderColor: filtroUpsell ? 'var(--vg-warning-fg)' : 'var(--vg-warning-fg)', cursor: 'pointer', background: filtroUpsell ? 'var(--vg-warning-bg)' : 'var(--vg-surface)' }}
           onClick={() => { setFiltroUpsell(f => !f); setAba('evolucao'); }}>
-          <span style={s.kpiLabel}>📈 Possível Upsell</span>
+          <span style={s.kpiLabel}>{LI(TrendingUp)} Possível Upsell</span>
           <span style={{ ...s.kpiVal, color: 'var(--vg-brand-500)' }}>{kpis.totalUpsell || 0}</span>
           <span style={{ ...s.kpiSub, color: kpis.totalUpsell > 0 ? 'var(--vg-brand-500)' : 'var(--vg-muted)' }}>
-            {kpis.totalUpsell > 0 ? `≥45% acima da meta` : 'nenhum detectado'}
+            {kpis.totalUpsell > 0 ? `45% acima da meta` : 'nenhum detectado'}
             {filtroUpsell && <span style={{color:'var(--vg-brand-500)',marginLeft:4,fontWeight:700}}>· ativo</span>}
           </span>
         </div>
         <div style={{ ...s.kpi, borderColor: 'var(--vg-brand-500)', cursor: 'pointer' }} onClick={() => { setFiltroMeta('pendente'); setAba('evolucao'); }}>
-          <span style={s.kpiLabel}>⏳ Pendente Meta</span>
+          <span style={s.kpiLabel}>{LI(Clock)} Pendente Meta</span>
           <span style={{ ...s.kpiVal, color: 'var(--vg-brand-500)' }}>{kpis.pendenteMeta}</span>
           <span style={s.kpiSub}>aguardando elegibilidade</span>
         </div>
@@ -1609,18 +1617,18 @@ export default function Evolucao() {
         <div style={s.card}>
           {/* Linha 1 de filtros */}
           <div style={s.filtroRow}>
-            <input style={s.busca} placeholder="🔍 Buscar empresa ou ID..." value={busca} onChange={e => setBusca(e.target.value)} />
+            <input style={s.busca} placeholder="Buscar empresa ou ID..." value={busca} onChange={e => setBusca(e.target.value)} />
             <select style={s.sel} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
               <option value="todos">Todas as empresas</option>
-              <option value="creditou">✅ Creditaram</option>
-              <option value="sem_credito">❌ Sem crédito</option>
+              <option value="creditou">Creditaram</option>
+              <option value="sem_credito">Sem crédito</option>
             </select>
             <select style={s.sel} value={filtroTend} onChange={e => setFiltroTend(e.target.value)}>
               <option value="todos">Todas as tendências</option>
-              <option value="up">↑ Crescendo</option>
-              <option value="down">↓ Caindo</option>
-              <option value="flat">→ Estável</option>
-              <option value="new">✦ Nova</option>
+              <option value="up">Crescendo</option>
+              <option value="down">Caindo</option>
+              <option value="flat">Estável</option>
+              <option value="new">Nova</option>
               <option value="none">— Sem crédito</option>
             </select>
             <select style={s.sel} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
@@ -1635,16 +1643,16 @@ export default function Evolucao() {
             {/* NOVO: filtro por meta */}
             <select style={{ ...s.sel, borderColor: filtroMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-border)', color: filtroMeta !== 'todos' ? 'var(--vg-success-fg)' : 'var(--vg-ink)' }}
               value={filtroMeta} onChange={e => setFiltroMeta(e.target.value)}>
-              <option value="todos">🎯 Todas (meta)</option>
-              <option value="na_meta">✅ Confirmadas na meta</option>
-              <option value="aguardando">⏳ Aguardando confirmação</option>
-              <option value="pendente">⏳ Pendente elegibilidade</option>
+              <option value="todos">Todas (meta)</option>
+              <option value="na_meta">Confirmadas na meta</option>
+              <option value="aguardando">Aguardando confirmação</option>
+              <option value="pendente">Pendente elegibilidade</option>
               <option value="fora">— Fora da meta</option>
             </select>
             {/* Filtro upsell toggle */}
             <button onClick={() => setFiltroUpsell(f => !f)}
               style={{ ...s.sel, cursor: 'pointer', fontFamily: 'inherit', background: filtroUpsell ? 'var(--vg-warning-bg)' : 'var(--vg-surface-muted)', borderColor: filtroUpsell ? 'var(--vg-warning-fg)' : 'var(--vg-border)', color: filtroUpsell ? 'var(--vg-brand-500)' : 'var(--vg-muted)', fontWeight: filtroUpsell ? 700 : 400 }}>
-              📈 {filtroUpsell ? '✓ Upsell' : 'Upsell'}
+              {LI(TrendingUp)} {filtroUpsell ? 'Upsell' : 'Upsell'}
             </button>
           </div>
           {/* Linha 2: hierarquia + ordenar */}
@@ -1680,7 +1688,7 @@ export default function Evolucao() {
 
             {/* Filtro por mês de cadastro — select compacto */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: 'var(--vg-info-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>📅 Cadastro em:</span>
+              <span style={{ color: 'var(--vg-info-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{LI(CalendarDays)} Cadastro em:</span>
               <select
                 value={filtroMesCadastro}
                 onChange={e => setFiltroMesCadastro(e.target.value)}
@@ -1707,7 +1715,7 @@ export default function Evolucao() {
               const mesesUnicos = [...new Set([...mesesCalc, ...mesesGrav])].sort();
               return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: 'var(--vg-success-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>🎯 Mês da meta:</span>
+                  <span style={{ color: 'var(--vg-success-fg)', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{LI(Target)} Mês da meta:</span>
                   <select
                     value={filtroMesMeta}
                     onChange={e => setFiltroMesMeta(e.target.value)}
@@ -1741,7 +1749,7 @@ export default function Evolucao() {
                 style={{ ...s.sel, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                   borderColor: mesesOcultos.size > 0 ? 'var(--vg-brand-500)' : 'var(--vg-border)',
                   color: mesesOcultos.size > 0 ? 'var(--vg-brand-500)' : 'var(--vg-ink)', whiteSpace: 'nowrap' }}>
-                📅 Meses ({meses.length - mesesOcultos.size}/{meses.length}) ▾
+                {LI(CalendarDays)} Meses ({meses.length - mesesOcultos.size}/{meses.length}) ▾
               </button>
               {mesesDrop && (
                 <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 50, minWidth: 180,
@@ -1791,8 +1799,8 @@ export default function Evolucao() {
               <div style={{ position: 'relative' }}>
               <button onClick={() => setPainelColunas(p => !p)}
                 style={{ background: painelColunas ? 'var(--vg-brand-50)' : 'var(--vg-surface-muted)', border: `1px solid ${painelColunas ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`, borderRadius: 8, padding: '7px 14px', color: painelColunas ? 'var(--vg-brand-500)' : 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                ⚙️ Colunas selecionadas: {colunasVisiveis.size} de {COLUNAS_DEF.length}
-                <span style={{ fontSize: '0.65rem' }}>{painelColunas ? '▲' : '▼'}</span>
+                {LI(Settings)} Colunas selecionadas: {colunasVisiveis.size} de {COLUNAS_DEF.length}
+                <span style={{ fontSize: '0.65rem' }}>{painelColunas ? '' : ''}</span>
               </button>
 
               {painelColunas && (
@@ -1824,7 +1832,7 @@ export default function Evolucao() {
                                   setColunasVisiveis(next);
                                 }}
                                 style={{ background: ativo ? 'var(--vg-brand-50)' : 'var(--vg-surface-muted)', border: `1px solid ${ativo ? 'var(--vg-brand-500)' : 'var(--vg-border)'}`, borderRadius: 6, padding: '4px 10px', color: ativo ? 'var(--vg-brand-500)' : 'var(--vg-muted)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', fontWeight: ativo ? 700 : 400, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                {ativo ? '✓' : '○'} {col.label}
+                                {ativo ? '' : ''} {col.label}
                               </button>
                             );
                           })}
@@ -1834,7 +1842,7 @@ export default function Evolucao() {
                   })}
                   <button onClick={() => setPainelColunas(false)}
                     style={{ marginTop: 6, background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 7, padding: '5px 14px', color: 'var(--vg-ink-secondary)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', width: '100%' }}>
-                    ✕ Fechar
+                    {LI(X)} Fechar
                   </button>
                 </div>
               )}
@@ -2004,7 +2012,7 @@ export default function Evolucao() {
       {/* ═══ ABA: RESUMO POR MÊS ═══ */}
       {aba === 'resumo' && (
         <div style={s.card}>
-          <div style={s.cardTitle}>🔢 Resumo por Mês</div>
+          <div style={s.cardTitle}>{LI(Hash)} Resumo por Mês</div>
           <div style={{ display: 'flex', gap: 16, marginTop: 24, flexWrap: 'wrap' }}>
             {kpis.porMes.map(m => (
               <div key={m.mes} style={s.mesCard}>
@@ -2044,7 +2052,7 @@ export default function Evolucao() {
       {/* ═══ ABA: POTENCIAL VS CREDITADO ═══ */}
       {aba === 'cruzamento' && (
         <div style={s.card}>
-          <div style={s.cardTitle}>🎯 Potencial vs Creditado</div>
+          <div style={s.cardTitle}>{LI(Target)} Potencial vs Creditado</div>
           <div style={{ color: 'var(--vg-muted)', fontSize: '0.82rem', marginTop: 6, marginBottom: 16 }}>
             Empresas com potencial cadastrado · {meses.length} meses de referência
           </div>
