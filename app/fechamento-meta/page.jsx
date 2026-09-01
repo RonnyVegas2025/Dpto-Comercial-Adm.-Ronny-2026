@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   Check, CheckCheck, Circle, MessageSquare, AlertTriangle, X, Lock,
   Filter, FileSpreadsheet, Search, TrendingUp, Send, Briefcase,
-  CircleSlash, User, ArrowRight,
+  CircleSlash, User, ArrowRight, RefreshCw, Loader2,
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -570,9 +570,146 @@ export default function RelatorioFechamento() {
   const [mesSel, setMesSel]           = useState('2026-07');
   const [mesesDisp, setMesesDisp]     = useState([]);
   const [modalFech, setModalFech]     = useState(null);
+  // Geração/atualização do fechamento (apenas gestor_master).
+  const [showGerar, setShowGerar]     = useState(false);
+  const [preview, setPreview]         = useState(null);   // resumo do que será criado
+  const [carregandoPrev, setCarregandoPrev] = useState(false);
+  const [gerando, setGerando]         = useState(false);
+  const [erroGerar, setErroGerar]     = useState('');
 
   useEffect(() => { import('xlsx').then(m => setXlsxLib(m.default || m)); }, []);
   useEffect(() => { carregar(); }, [mesSel]);
+
+  // Primeiro dia do mês seguinte a mesSel (para filtrar competencia_meta por intervalo).
+  function proximoMesPrimeiroDia(ym) {
+    const [y, m] = ym.split('-').map(Number);
+    return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  }
+
+  // Lê valor_meta_empresa da competência e monta o preview do fechamento (agrupado por gestor).
+  async function abrirGerar() {
+    setErroGerar(''); setPreview(null); setShowGerar(true); setCarregandoPrev(true);
+    try {
+      const ini = mesSel + '-01';
+      const fim = proximoMesPrimeiroDia(mesSel);
+
+      const { data: metas } = await supabase.from('valor_meta_empresa')
+        .select('empresa_id, consultor_id, competencia_meta, valor_meta, regra, pct_consultor')
+        .gte('competencia_meta', ini).lt('competencia_meta', fim);
+      const metasList = metas || [];
+
+      const empIds = [...new Set(metasList.map(m => m.empresa_id).filter(Boolean))];
+      const empMap = {};
+      for (let i = 0; i < empIds.length; i += 300) {
+        const { data: emps } = await supabase.from('empresas')
+          .select('id, nome, produto_id, produto_contratado, consultor_principal_id')
+          .in('id', empIds.slice(i, i + 300));
+        for (const e of (emps || [])) empMap[e.id] = e;
+      }
+
+      const { data: cons } = await supabase.from('consultores').select('id, nome, gestor');
+      const consMap = {}; for (const c of (cons || [])) consMap[c.id] = c;
+
+      // Uma linha de fechamento_meta_empresas por linha de valor_meta_empresa.
+      // Gestor = consultor da meta OU (upsell/consultor_id NULL) consultor principal da empresa.
+      const grupos = {}; // gestor_nome -> { gestor_nome, rows:[], valorTotal }
+      for (const mv of metasList) {
+        const emp = empMap[mv.empresa_id];
+        const donoId = mv.consultor_id || emp?.consultor_principal_id;
+        const dono = consMap[donoId];
+        const gestor = dono?.gestor || '(sem gestor)';
+        const g = grupos[gestor] || (grupos[gestor] = { gestor_nome: gestor, rows: [], valorTotal: 0 });
+        g.rows.push({
+          produto_id: emp?.produto_id ?? null,
+          empresa_nome: emp?.nome ?? '—',
+          produto: emp?.produto_contratado ?? null,
+          consultor_nome: dono?.nome ?? '—',
+          regra: mv.regra ?? null,
+          competencia_meta: mv.competencia_meta,
+          valor_meta: mv.valor_meta || 0,
+          pct_consultor: mv.pct_consultor ?? null,
+          conferido_adm: false,
+          conferido_marina: false,
+        });
+        g.valorTotal += mv.valor_meta || 0;
+      }
+      const gruposArr = Object.values(grupos).sort((a, b) => a.gestor_nome.localeCompare(b.gestor_nome));
+
+      // Fechamento existente da competência (para comparação e bloqueio).
+      const { data: fechExist } = await supabase.from('fechamento_meta')
+        .select('id, gestor_nome, status, valor_total_meta').eq('competencia', ini);
+      const existentes = fechExist || [];
+      const aprovado = existentes.find(f => f.status === 'aprovado');
+
+      let existe = null;
+      if (existentes.length) {
+        const ids = existentes.map(f => f.id);
+        let itens = 0, valorAtual = 0, conferidos = 0;
+        for (let i = 0; i < ids.length; i += 300) {
+          const { data: rows } = await supabase.from('fechamento_meta_empresas')
+            .select('valor_meta, conferido_adm, conferido_marina').in('fechamento_id', ids.slice(i, i + 300));
+          for (const r of (rows || [])) {
+            itens++; valorAtual += r.valor_meta || 0;
+            if (r.conferido_adm || r.conferido_marina) conferidos++;
+          }
+        }
+        existe = { fechamentos: existentes.length, itens, valorAtual, conferidos };
+      }
+
+      setPreview({
+        nGestores: gruposArr.length,
+        nEmpresas: gruposArr.reduce((s, g) => s + g.rows.length, 0),
+        valorTotal: gruposArr.reduce((s, g) => s + g.valorTotal, 0),
+        grupos: gruposArr,
+        existe,
+        aprovadoGestor: aprovado ? aprovado.gestor_nome : null,
+      });
+    } catch (err) {
+      console.error(err); setErroGerar('Falha ao ler os dados da competência. Tente novamente.');
+    }
+    setCarregandoPrev(false);
+  }
+
+  // Replica o SQL manual: apaga o fechamento da competência e recria a partir de valor_meta_empresa.
+  async function confirmarGerar() {
+    if (!preview || preview.aprovadoGestor) return;
+    setGerando(true); setErroGerar('');
+    try {
+      const ini = mesSel + '-01';
+      // 1/2. Apaga fechamento_meta_empresas e fechamento_meta da competência.
+      const { data: fechExist } = await supabase.from('fechamento_meta').select('id').eq('competencia', ini);
+      const ids = (fechExist || []).map(f => f.id);
+      for (let i = 0; i < ids.length; i += 300) {
+        await supabase.from('fechamento_meta_empresas').delete().in('fechamento_id', ids.slice(i, i + 300));
+      }
+      await supabase.from('fechamento_meta').delete().eq('competencia', ini);
+
+      // 3/4. Um fechamento_meta por gestor (status em_conferencia) + suas empresas (lotes de 50).
+      const agora = new Date().toISOString();
+      for (const g of preview.grupos) {
+        const { data: novo, error } = await supabase.from('fechamento_meta').insert({
+          competencia: ini,
+          gestor_nome: g.gestor_nome,
+          status: 'em_conferencia',
+          apurado_por: nomeUser,
+          apurado_em: agora,
+          valor_total_meta: g.valorTotal,
+        }).select('id').single();
+        if (error || !novo) throw error || new Error('Falha ao inserir fechamento');
+        const linhas = g.rows.map(r => ({ ...r, fechamento_id: novo.id }));
+        for (let i = 0; i < linhas.length; i += 50) {
+          const { error: e2 } = await supabase.from('fechamento_meta_empresas').insert(linhas.slice(i, i + 50));
+          if (e2) throw e2;
+        }
+      }
+
+      setShowGerar(false); setPreview(null);
+      await carregar();
+    } catch (err) {
+      console.error(err); setErroGerar('Falha ao gerar o fechamento. Verifique e tente novamente.');
+    }
+    setGerando(false);
+  }
 
   async function carregar() {
     setLoading(true);
@@ -655,10 +792,18 @@ export default function RelatorioFechamento() {
           <h1 style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 700, color: 'var(--vg-ink)', margin: '0 0 6px' }}>Fechamento de Meta</h1>
           <p style={{ color: 'var(--vg-ink-secondary)', fontSize: '0.9rem', margin: 0 }}>Conferência e aprovação por equipe</p>
         </div>
-        <select value={mesSel} onChange={e => setMesSel(e.target.value)}
-          style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border-field)', borderRadius: 10, padding: '9px 14px', color: 'var(--vg-ink)', fontSize: '0.85rem', fontFamily: INTER, cursor: 'pointer', outline: 'none' }}>
-          {mesesDisp.map(m => <option key={m} value={m}>{fmtMes(m + '-01')}</option>)}
-        </select>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {perfil === 'gestor_master' && (
+            <button onClick={abrirGerar} disabled={showGerar}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--vg-brand-500)', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: '0.85rem', fontWeight: 600, fontFamily: INTER, cursor: 'pointer', opacity: showGerar ? 0.6 : 1 }}>
+              <RefreshCw size={16} strokeWidth={1.75} /> Gerar fechamento
+            </button>
+          )}
+          <select value={mesSel} onChange={e => setMesSel(e.target.value)}
+            style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border-field)', borderRadius: 10, padding: '9px 14px', color: 'var(--vg-ink)', fontSize: '0.85rem', fontFamily: INTER, cursor: 'pointer', outline: 'none' }}>
+            {mesesDisp.map(m => <option key={m} value={m}>{fmtMes(m + '-01')}</option>)}
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 24 }}>
@@ -719,6 +864,89 @@ export default function RelatorioFechamento() {
           nomeUser={nomeUser}
         />
       )}
+
+      {/* Diálogo — Gerar/atualizar fechamento (gestor_master) */}
+      {showGerar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(28,31,59,0.4)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: INTER }}>
+          <div style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border)', borderRadius: 16, width: '100%', maxWidth: 520, boxShadow: '0 20px 50px rgba(28,31,59,0.18)', display: 'flex', flexDirection: 'column', maxHeight: '85vh' }}>
+            {/* Header */}
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--vg-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 700, color: 'var(--vg-ink)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <RefreshCw size={18} strokeWidth={1.75} color="var(--vg-brand-500)" /> Gerar fechamento — {fmtMes(mesSel + '-01')}
+              </div>
+              <button onClick={() => { if (!gerando) { setShowGerar(false); setPreview(null); setErroGerar(''); } }} disabled={gerando}
+                style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 8, padding: '6px 10px', color: 'var(--vg-ink-secondary)', cursor: gerando ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center' }}><X size={16} strokeWidth={1.75} /></button>
+            </div>
+
+            {/* Corpo */}
+            <div style={{ padding: '18px 20px', overflowY: 'auto' }}>
+              {carregandoPrev ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--vg-muted)', padding: '16px 0', justifyContent: 'center' }}>
+                  <Loader2 size={18} strokeWidth={1.75} style={{ animation: 'spin 0.8s linear infinite' }} /> Lendo metas da competência…
+                </div>
+              ) : erroGerar ? (
+                <div style={{ background: 'var(--vg-danger-bg)', color: 'var(--vg-danger-fg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 10, padding: '12px 14px', fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <AlertTriangle size={16} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />{erroGerar}
+                </div>
+              ) : preview && preview.aprovadoGestor ? (
+                <div style={{ background: 'var(--vg-danger-bg)', color: 'var(--vg-danger-fg)', border: '1px solid var(--vg-danger-fg)', borderRadius: 10, padding: '14px 16px', fontSize: '0.85rem', lineHeight: 1.5, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <Lock size={18} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>Não é possível regerar: o fechamento de <strong>{preview.aprovadoGestor}</strong> já foi aprovado. Regerar apagaria a conferência e alteraria um número já validado.</span>
+                </div>
+              ) : preview ? (
+                <>
+                  <div style={{ ...CAPTIONDLG, marginBottom: 10 }}>Será criado a partir de <strong>valor_meta_empresa</strong> para {fmtMes(mesSel + '-01')}:</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                    <DlgKpi label="Gestores"  valor={preview.nGestores} />
+                    <DlgKpi label="Empresas"  valor={preview.nEmpresas} />
+                    <DlgKpi label="Valor total" valor={fmt(preview.valorTotal)} moeda />
+                  </div>
+
+                  {preview.existe ? (
+                    <div style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                      <div style={{ ...CAPTIONDLG, fontWeight: 600, color: 'var(--vg-ink-secondary)', marginBottom: 6 }}>Já existe fechamento para o mês (será substituído):</div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--vg-ink)' }}>
+                        <span>Hoje: <strong className="vg-num">{preview.existe.itens}</strong> itens · <strong className="vg-num">{fmt(preview.existe.valorAtual)}</strong></span>
+                        <span>Novo: <strong className="vg-num">{preview.nEmpresas}</strong> itens · <strong className="vg-num">{fmt(preview.valorTotal)}</strong></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ ...CAPTIONDLG, marginBottom: 12 }}>Ainda não há fechamento para este mês — será criado do zero.</div>
+                  )}
+
+                  {preview.existe && preview.existe.conferidos > 0 && (
+                    <div style={{ background: 'var(--vg-warning-bg)', color: 'var(--vg-warning-fg)', border: '1px solid var(--vg-warning-fg)', borderRadius: 10, padding: '10px 14px', fontSize: '0.82rem', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <AlertTriangle size={16} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span><strong>{preview.existe.conferidos}</strong> empresa{preview.existe.conferidos > 1 ? 's' : ''} já conferida{preview.existe.conferidos > 1 ? 's' : ''} — a conferência será reiniciada.</span>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {/* Ações */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--vg-border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => { if (!gerando) { setShowGerar(false); setPreview(null); setErroGerar(''); } }} disabled={gerando}
+                style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border-field)', borderRadius: 8, padding: '9px 18px', color: 'var(--vg-ink-secondary)', cursor: gerando ? 'default' : 'pointer', fontSize: '0.85rem', fontWeight: 600, fontFamily: 'inherit' }}>Cancelar</button>
+              <button onClick={confirmarGerar} disabled={gerando || carregandoPrev || !preview || !!preview?.aprovadoGestor || !!erroGerar}
+                style={{ background: 'var(--vg-brand-500)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, cursor: (gerando || carregandoPrev || !preview || preview?.aprovadoGestor || erroGerar) ? 'not-allowed' : 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', opacity: (gerando || carregandoPrev || !preview || preview?.aprovadoGestor || erroGerar) ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {gerando ? <><Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 0.8s linear infinite' }} /> Gerando…</> : <><Check size={16} strokeWidth={1.75} /> Confirmar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// KPI compacto do diálogo de geração.
+const CAPTIONDLG = { fontSize: '0.8rem', lineHeight: 1.5, color: 'var(--vg-muted)' };
+function DlgKpi({ label, valor, moeda }) {
+  return (
+    <div style={{ background: 'var(--vg-surface-muted)', border: '1px solid var(--vg-border)', borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ color: 'var(--vg-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>{label}</div>
+      <div className="vg-num" style={{ fontFamily: OUTFIT, fontSize: moeda ? 15 : 20, fontWeight: 700, color: 'var(--vg-ink)', whiteSpace: 'nowrap' }}>{valor}</div>
     </div>
   );
 }
