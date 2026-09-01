@@ -286,6 +286,9 @@ export default function CartoesVegas() {
         if(!comValor.length) return null;
         const [y0,m0] = comValor[0].comp.split('-').map(Number);
         const tres = [0,1,2].map(i => { const d=new Date(y0, m0-1+i, 1); const comp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; return { comp, val: (list.find(l=>l.comp===comp)?.val)||0 }; });
+        // Só é elegível quando houve movimento nos TRÊS meses consecutivos a partir do
+        // 1º com valor (mesma regra da Evolução). 1 ou 2 meses não completam o ciclo.
+        if(tres.filter(t => t.val > 0).length < 3) return null;
         const alvo = tres[2].val>0 ? tres[2] : [...tres].reverse().find(t=>t.val>0);
         if(!alvo) return null;
         mesAlvo = alvo.comp; valorBase = alvo.val;
