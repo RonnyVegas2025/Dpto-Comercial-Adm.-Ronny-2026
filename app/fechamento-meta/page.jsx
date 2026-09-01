@@ -719,9 +719,19 @@ export default function RelatorioFechamento() {
         const { data: prof } = await supabase.from('user_profiles').select('perfil, nome, gestor_vinculado').eq('id', user.id).single();
         if (prof) { setPerfil(prof.perfil); setNomeUser(prof.nome); setGestorUser(prof.gestor_vinculado || ''); }
       }
+      // União: meses com fechamento + meses com meta apurada (valor_meta_empresa).
       const { data: meses } = await supabase.from('fechamento_meta').select('competencia').order('competencia', { ascending: false });
-      const unicos = [...new Set((meses || []).map(m => String(m.competencia).substring(0, 7)))];
-      setMesesDisp(unicos);
+      const comFech = new Set((meses || []).map(m => String(m.competencia).substring(0, 7)).filter(Boolean));
+      // valor_meta_empresa pode ter muitas linhas — pagina só a coluna de competência.
+      const comMeta = new Set();
+      for (let from = 0; ; from += 1000) {
+        const { data: vm, error } = await supabase.from('valor_meta_empresa').select('competencia_meta').range(from, from + 999);
+        if (error || !vm || !vm.length) break;
+        for (const r of vm) { const ym = String(r.competencia_meta || '').substring(0, 7); if (ym) comMeta.add(ym); }
+        if (vm.length < 1000) break;
+      }
+      const uniao = [...new Set([...comFech, ...comMeta])].sort().reverse(); // mais recente → mais antigo
+      setMesesDisp(uniao.map(ym => ({ ym, semFech: !comFech.has(ym) })));
       const { data: fechs } = await supabase.from('fechamento_meta').select('*').eq('competencia', mesSel + '-01').order('gestor_nome');
       setFechamentos(fechs || []);
     } catch(err) { console.error(err); }
@@ -801,7 +811,7 @@ export default function RelatorioFechamento() {
           )}
           <select value={mesSel} onChange={e => setMesSel(e.target.value)}
             style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border-field)', borderRadius: 10, padding: '9px 14px', color: 'var(--vg-ink)', fontSize: '0.85rem', fontFamily: INTER, cursor: 'pointer', outline: 'none' }}>
-            {mesesDisp.map(m => <option key={m} value={m}>{fmtMes(m + '-01')}</option>)}
+            {mesesDisp.map(o => <option key={o.ym} value={o.ym}>{fmtMes(o.ym + '-01')}{o.semFech ? ' (sem fechamento)' : ''}</option>)}
           </select>
         </div>
       </div>
@@ -812,6 +822,12 @@ export default function RelatorioFechamento() {
         <div style={{ ...s.kpi, borderColor: 'var(--vg-info-fg)' }}><span style={s.kpiLabel}>Conferidos</span><span className="vg-num" style={{ ...s.kpiVal, color: 'var(--vg-info-fg)' }}>{totalConfer}</span><span style={s.kpiSub}>aguardando aprovação</span></div>
         <div style={{ ...s.kpi, borderColor: 'var(--vg-warning-fg)' }}><span style={s.kpiLabel}>Pendentes</span><span className="vg-num" style={{ ...s.kpiVal, color: 'var(--vg-warning-fg)' }}>{totalPending}</span><span style={s.kpiSub}>em conferência</span></div>
       </div>
+
+      {fechamentosFiltrados.length === 0 && (
+        <div style={{ background: 'var(--vg-surface)', border: '1px solid var(--vg-border)', borderRadius: 16, padding: '40px 24px', textAlign: 'center', color: 'var(--vg-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          Nenhum fechamento gerado para este mês. Use "Gerar fechamento" para criar a partir das metas apuradas.
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
         {fechamentosFiltrados.map(fech => {
