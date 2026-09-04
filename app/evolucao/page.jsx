@@ -67,7 +67,7 @@ const POR_PAGINA = 12;
 // ─── LÓGICA DE META ──────────────────────────────────────────────────────────
 // Regra de peso: APENAS Vegas Benefícios aplica peso na meta (30%)
 // Todos os outros produtos: peso é só para previsão, meta usa 100% da movimentação
-function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
+function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes, fimDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
   const isConv    = catLower.includes('conv') || catLower.includes('mobil');
@@ -76,10 +76,12 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
   const validaMes = validaDesdeMes?.substring(0,7) || '2000-01';
+  // meta_fim: teto da meta (vazio = ativa). Movimentos após esse mês não geram meta.
+  const fimMes    = fimDesdeMes ? String(fimDesdeMes).substring(0,7) : null;
 
-  // Filtra movimentações: apenas a partir do mês válido da meta
+  // Filtra movimentações: apenas a partir do mês válido da meta (e até meta_fim, se houver)
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0 && l.comp >= validaMes)
+    .filter(l => l.val > 0 && l.comp >= validaMes && (!fimMes || l.comp <= fimMes))
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   const totalMesesComMov = libsOrdenadas.length;
@@ -105,7 +107,7 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   if (isConv) {
     // Regra: 3 meses CORRIDOS a partir do 1º mês com movimentação VÁLIDA
     const todosOsMeses = (libsTodasMap[empresa.produto_id] || [])
-      .filter(l => l.comp >= validaMes)
+      .filter(l => l.comp >= validaMes && (!fimMes || l.comp <= fimMes))
       .sort((a, b) => a.comp.localeCompare(b.comp));
 
     const primeiroCom = todosOsMeses.find(l => l.val > 0);
@@ -1031,9 +1033,9 @@ export default function Evolucao() {
       const [emps, libsData, { data: ajustesData }, libsTodasData] = await Promise.all([
         fetchAll(supabase.from('empresas').select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
           data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
-         consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, diretorObj:diretor_id(id,nome)),
-          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome)),
-          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome))`)
+         consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome)),
+          consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome)),
+          consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true).order('id')),
         fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
@@ -1070,9 +1072,9 @@ export default function Evolucao() {
           .from('empresas')
           .select(`id, produto_id, nome, cnpj, cidade, estado, categoria, produto_contratado, potencial_movimentacao, peso_categoria,
             data_cadastro, pct_principal, pct_agregado_1, pct_agregado_2,
-            consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, diretorObj:diretor_id(id,nome)),
-            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome)),
-            consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, diretorObj:diretor_id(id,nome))`)
+            consultor_principal:consultor_principal_id (id, nome, setor, equipe, gestor, diretor, diretor_id, tipo, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome)),
+            consultor_agregado:consultor_agregado_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome)),
+            consultor_agregado_2:consultor_agregado_2_id (id, nome, setor, equipe, gestor, diretor, diretor_id, meta_inicio, meta_fim, diretorObj:diretor_id(id,nome))`)
           .eq('ativo', true).order('id')),
         fetchAll(supabase.from('liberacoes').select('produto_id, competencia, total_liberado').order('competencia')),
         supabase.from('ajustes_movimentacao').select('empresa_id, competencia, valor_considerado').order('competencia'),
@@ -1168,7 +1170,8 @@ export default function Evolucao() {
 
         // Calcula meta automática como base — respeitando meta_inicio do consultor
         const validaDesdeMes = cons?.meta_inicio || null;
-        const metaInfoCalc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes);
+        const fimDesdeMes = cons?.meta_fim || null;
+        const metaInfoCalc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validaDesdeMes, fimDesdeMes);
 
         // Verifica se há meta GRAVADA no banco para esta empresa
         // (carregada em metasGravadas como all__empresa_id)

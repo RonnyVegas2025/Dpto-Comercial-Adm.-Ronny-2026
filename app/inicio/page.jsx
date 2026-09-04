@@ -78,7 +78,7 @@ export default function HomePage() {
       // ── 2. Consultores ───────────────────────────────────────────────────
       const { data: todosConsultores } = await supabase
         .from('consultores')
-        .select('id,nome,meta_mensal,gestor,equipe,meta_inicio')
+        .select('id,nome,meta_mensal,gestor,equipe,meta_inicio,meta_fim')
         .eq('ativo', true);
 
       let consultores = todosConsultores || [];
@@ -349,8 +349,10 @@ export default function HomePage() {
         if (!metaMes) return total;
         const validaMes = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
         const valida    = validaMes > '2026-01' ? validaMes : '2026-01';
+        // meta_fim: teto da meta (vazio = ativa). Para de contar após esse mês.
+        const fim       = cons.meta_fim ? String(cons.meta_fim).substring(0,7) : null;
         // Usa mesesComLib — sem || 1, consultor com qtd=0 não entra (ex: Adriana Diniz Abr/2026)
-        const qtd       = mesesComLib.filter(m => m >= valida).length;
+        const qtd       = mesesComLib.filter(m => m >= valida && (!fim || m <= fim)).length;
         if (qtd === 0) return total;
         return total + metaMes * qtd;
       }, 0);
@@ -482,7 +484,8 @@ export default function HomePage() {
         const mm = c.meta_mensal || 0; if (!mm) return t;
         const vm = (c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01');
         const valida = vm > '2026-01' ? vm : '2026-01';
-        const qtd = (mesesComLib || []).filter(m => m >= valida).length;
+        const fim = c.meta_fim ? String(c.meta_fim).substring(0,7) : null;
+        const qtd = (mesesComLib || []).filter(m => m >= valida && (!fim || m <= fim)).length;
         return qtd === 0 ? t : t + mm * qtd;
       }, 0)
     : metaTotal;
@@ -692,7 +695,8 @@ export default function HomePage() {
             {top3View.map((vend,i) => {
               const validaMesV = (vend.meta_inicio ? String(vend.meta_inicio).substring(0,7) : '2026-01');
               const validaV    = validaMesV > '2026-01' ? validaMesV : '2026-01';
-              const qtdV       = (mesesComLib||mesesDisp||[]).filter(m => m >= validaV).length || 1;
+              const fimV       = vend.meta_fim ? String(vend.meta_fim).substring(0,7) : null;
+              const qtdV       = (mesesComLib||mesesDisp||[]).filter(m => m >= validaV && (!fimV || m <= fimV)).length || 1;
               const metaAcum   = (vend.meta_mensal||0) * qtdV;
               const pct        = metaAcum > 0 ? (vend.metaApurada/metaAcum)*100 : 0;
               const cor        = corPct(pct);
@@ -735,7 +739,8 @@ export default function HomePage() {
           // % correto: vs meta ACUMULADA (meta_mensal × meses), não só 1 mês
           const validaM = (cons.meta_inicio ? String(cons.meta_inicio).substring(0,7) : '2026-01');
           const validaR = validaM > '2026-01' ? validaM : '2026-01';
-          const qtdM    = (mesesComLib||mesesDisp||[]).filter(m => m >= validaR).length || 1;
+          const fimR    = cons.meta_fim ? String(cons.meta_fim).substring(0,7) : null;
+          const qtdM    = (mesesComLib||mesesDisp||[]).filter(m => m >= validaR && (!fimR || m <= fimR)).length || 1;
           const mAcum   = (cons.meta_mensal||0) * qtdM;
           const pct   = mAcum > 0 ? (apurado / mAcum) * 100 : 0;
           return { ...cons, apurado, metaAcum: mAcum, pct };

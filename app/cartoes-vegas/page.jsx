@@ -128,7 +128,7 @@ export default function CartoesVegas() {
           .eq('ativo', true)
           .not('produto_contratado','ilike','%desconto condicional%')
           .not('categoria','eq','Taxa Negativa')),
-        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,equipe,setor,meta_mensal,meta_inicio,ativo')),
+        fetchAll(supabase.from('consultores').select('id,nome,diretor,gestor,equipe,setor,meta_mensal,meta_inicio,meta_fim,ativo')),
       ]);
 
       const empIds  = empresas.map(e => e.id);
@@ -208,7 +208,10 @@ export default function CartoesVegas() {
 
     // Meta DO PERÍODO por consultor: meta_mensal × nº de meses do período >= piso (meta_inicio; ≥ 2026-01).
     const pisoDe = (c) => { const mi = c.meta_inicio ? String(c.meta_inicio).substring(0,7) : '2026-01'; return mi > '2026-01' ? mi : '2026-01'; };
-    const metaPeriodoCons = (c) => (c.meta_mensal||0) * periodoMeses.filter(m => m >= pisoDe(c)).length;
+    // meta_fim: teto da meta. Empresas seguem no nome do consultor, mas param de gerar
+    // meta nas competências posteriores a meta_fim. Vazio = meta ainda ativa.
+    const fimDe = (c) => c.meta_fim ? String(c.meta_fim).substring(0,7) : null;
+    const metaPeriodoCons = (c) => { const fim = fimDe(c); return (c.meta_mensal||0) * periodoMeses.filter(m => m >= pisoDe(c) && (!fim || m <= fim)).length; };
 
     // Média mensal = meta apurada ÷ nº de meses válidos. Com meta cadastrada, meses = metaPeriodo/metaMensal
     // (contagem que respeita o meta_inicio); sem meta cadastrada, meses = nº de meses do período.

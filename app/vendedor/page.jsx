@@ -103,7 +103,7 @@ async function fetchAjustesPorEmpresa(empIds) {
 // Regra de peso: APENAS Vegas Benefícios aplica peso na meta. Demais produtos: peso
 // só para previsão; meta usa 100% da movimentação.
 // Benefícios/Bônus → meta = 1ª liberação. Convênio/Mobilidade → meta = 3º mês corrido.
-function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
+function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes, fimDesdeMes) {
   const catLower  = (empresa.categoria || '').toLowerCase();
   const prodNorm  = (empresa.produto_contratado || '').toLowerCase().trim();
   const isConv    = catLower.includes('conv') || catLower.includes('mobil');
@@ -112,10 +112,12 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   if (!isBenef && !isConv) return { elegivel: false, regra: null };
 
   const validaMes = validaDesdeMes?.substring(0,7) || '2000-01';
+  // meta_fim: teto da meta (vazio = ativa). Movimentos após esse mês não geram meta.
+  const fimMes    = fimDesdeMes ? String(fimDesdeMes).substring(0,7) : null;
 
-  // Filtra movimentações: apenas a partir do mês válido da meta
+  // Filtra movimentações: apenas a partir do mês válido da meta (e até meta_fim, se houver)
   const libsOrdenadas = (libsTodasMap[empresa.produto_id] || [])
-    .filter(l => l.val > 0 && l.comp >= validaMes)
+    .filter(l => l.val > 0 && l.comp >= validaMes && (!fimMes || l.comp <= fimMes))
     .sort((a, b) => a.comp.localeCompare(b.comp));
 
   const totalMesesComMov = libsOrdenadas.length;
@@ -141,7 +143,7 @@ function calcularMeta(empresa, libsTodasMap, ajusteMap, pct, validaDesdeMes) {
   if (isConv) {
     // Regra: 3 meses CORRIDOS a partir do 1º mês com movimentação VÁLIDA
     const todosOsMeses = (libsTodasMap[empresa.produto_id] || [])
-      .filter(l => l.comp >= validaMes)
+      .filter(l => l.comp >= validaMes && (!fimMes || l.comp <= fimMes))
       .sort((a, b) => a.comp.localeCompare(b.comp));
 
     const primeiroCom = todosOsMeses.find(l => l.val > 0);
@@ -247,7 +249,7 @@ export default function DashboardVendedor() {
     } catch(_) {}
 
     const [{ data: cons }, libs] = await Promise.all([
-      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio').eq('ativo',true).order('nome'),
+      supabase.from('consultores').select('id,nome,meta_mensal,setor,gestor,equipe,meta_inicio,meta_fim').eq('ativo',true).order('nome'),
       fetchAll(supabase.from('liberacoes').select('competencia').order('competencia',{ascending:false})),
     ]);
 
@@ -501,6 +503,7 @@ export default function DashboardVendedor() {
 
           const consCompleto = consultores.find(c=>c.id===cons.id);
           const validadeConsultor = consCompleto?.meta_inicio || null;
+          const fimConsultor = consCompleto?.meta_fim || null;
 
           const entradaBanco = (vmetasRows||[]).find(v =>
             v.empresa_id === e.id &&
@@ -525,7 +528,7 @@ export default function DashboardVendedor() {
           } else {
             // Sem entrada no banco → calcula automaticamente (mesma lógica da Evolução):
             // Benefícios/Bônus = 1ª liberação; Convênio/Mobilidade = 3º mês corrido.
-            const mc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor);
+            const mc = calcularMeta(e, libsTodasMap, ajusteMap, pct, validadeConsultor, fimConsultor);
             metaCalc = (mc && mc.elegivel) ? {
               valor_meta:        mc.valorMeta  || 0,
               competencia_meta:  mc.mesAlvo,
@@ -574,10 +577,12 @@ export default function DashboardVendedor() {
         if (!metaMes) return total;
         const validadeIndividual = (cons.meta_inicio || '').substring(0,7) || '2026-01';
         const validaMes = validadeIndividual > '2026-01' ? validadeIndividual : '2026-01';
+        // meta_fim: teto da meta (vazio = ativa). Para de contar após esse mês.
+        const fim = cons.meta_fim ? String(cons.meta_fim).substring(0,7) : null;
         if (mesSelecionado) {
-          return total + (mesSelecionado >= validaMes ? metaMes : 0);
+          return total + (mesSelecionado >= validaMes && (!fim || mesSelecionado <= fim) ? metaMes : 0);
         } else {
-          const qtd = mesesDisp.filter(m => m >= validaMes).length;
+          const qtd = mesesDisp.filter(m => m >= validaMes && (!fim || m <= fim)).length;
           return total + metaMes * qtd;
         }
       }, 0);
@@ -1430,7 +1435,8 @@ export default function DashboardVendedor() {
                               // ✅ CORREÇÃO: % da meta vs meta ACUMULADA (meta_mensal × meses válidos)
                               const validaMesVd=(consData?.meta_inicio?String(consData.meta_inicio).substring(0,7):'2026-01');
                               const validaVd=validaMesVd>'2026-01'?validaMesVd:'2026-01';
-                              const metaAcumVd=metaConsultor*(mesesDisp.filter(m=>m>=validaVd).length||1);
+                              const fimVd=consData?.meta_fim?String(consData.meta_fim).substring(0,7):null;
+                              const metaAcumVd=metaConsultor*(mesesDisp.filter(m=>m>=validaVd&&(!fimVd||m<=fimVd)).length||1);
                               const pctMeta=metaAcumVd>0?(vd.valorMeta/metaAcumVd)*100:0;
                               const corMeta=corPct(pctMeta);
                               return (
@@ -1602,7 +1608,8 @@ export default function DashboardVendedor() {
                     const consData=consultores.find(cc=>cc.id===c.id);
                     const metaMensal=consData?.meta_mensal||0;
                     const validaMes=(consData?.meta_inicio?String(consData.meta_inicio).substring(0,7):'2026-01');
-                    const mesesValidos=mesesDisp.filter(m=>m>='2026-01'&&m>=validaMes);
+                    const fimMes=consData?.meta_fim?String(consData.meta_fim).substring(0,7):null;
+                    const mesesValidos=mesesDisp.filter(m=>m>='2026-01'&&m>=validaMes&&(!fimMes||m<=fimMes));
                     const metaAcum=metaMensal*(mesesValidos.length||1);
                     const pctMeta=metaAcum>0?(c.valorMeta/metaAcum)*100:0;
                     const corMeta=corPct(pctMeta);

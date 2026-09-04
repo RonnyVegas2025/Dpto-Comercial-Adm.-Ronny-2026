@@ -34,10 +34,12 @@ const SUBS = [
 ];
 
 function getMesesOpcoes() {
+  // Range FIXO: janeiro/2026 até 12 meses à frente (jan/2026 → jan/2027).
+  // Antes era relativo a hoje (começava em março/2026) e escondia jan/2026,
+  // fazendo a ficha de quem tem meta_inicio em jan mudar silenciosamente ao salvar.
   const meses = [];
-  const hoje = new Date();
-  for (let i = -6; i <= 18; i++) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+  for (let i = 0; i <= 12; i++) {
+    const d = new Date(2026, i, 1);
     const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
     const label = d.toLocaleDateString('pt-BR',{month:'short',year:'numeric'}).replace(' de ',' ');
     meses.push({ val, label });
@@ -123,11 +125,26 @@ function FormVendedor({ val, onChange, onSalvar, onCancelar, titulo, erro, salva
           <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>A meta só é contabilizada a partir deste mês</span>
         </div>
 
+        <div>
+          <label style={sL}>Meta contabilizada até</label>
+          <select style={sI} value={val.meta_fim||''} onChange={e=>onChange('meta_fim',e.target.value)}>
+            <option value=''>— Meta ainda ativa —</option>
+            {mesesOpcoes.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+          </select>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Deixe vazio se a meta continua ativa</span>
+        </div>
+
         {/* ✅ NOVO: Data de Admissão */}
         <div>
           <label style={sL}>Data de Admissão</label>
           <input style={sI} type='date' value={val.data_admissao||''} onChange={e=>onChange('data_admissao',e.target.value)}/>
           <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Data de entrada na empresa</span>
+        </div>
+
+        <div>
+          <label style={sL}>Data de Desligamento</label>
+          <input style={sI} type='date' value={val.data_desligamento||''} onChange={e=>onChange('data_desligamento',e.target.value)}/>
+          <span style={{ color:'#8b92b0', fontSize:'0.68rem' }}>Data de saída da empresa (independente da meta)</span>
         </div>
 
         <div>
@@ -187,7 +204,7 @@ function PaginaVendedores({ equipesDB = [] }) {
   const [sucesso, setSucesso]             = useState('');
 
   // ✅ data_admissao adicionado ao formVazio
-  const formVazio = { nome:'', diretor:'', diretor_id:'', gestor_intermediario:'', gestor_id:'', equipe:'', setor:'', meta_mensal:0, meta_inicio:'', data_admissao:'', telefone:'', email:'', ativo:true };
+  const formVazio = { nome:'', diretor:'', diretor_id:'', gestor_intermediario:'', gestor_id:'', equipe:'', setor:'', meta_mensal:0, meta_inicio:'', meta_fim:'', data_admissao:'', data_desligamento:'', telefone:'', email:'', ativo:true };
   const [form, setForm] = useState(formVazio);
 
   useEffect(() => { carregar(); }, []);
@@ -196,7 +213,7 @@ function PaginaVendedores({ equipesDB = [] }) {
     setLoading(true);
     const [{ data: cons }, { data: eqs }, { data: dirs }, { data: gests }] = await Promise.all([
       // ✅ data_admissao incluído no select
-      supabase.from('consultores').select('id, nome, gestor, diretor, diretor_id, gestor_id, gestor_intermediario, equipe, setor, meta_mensal, meta_inicio, data_admissao, telefone, email, ativo').order('nome'),
+      supabase.from('consultores').select('id, nome, gestor, diretor, diretor_id, gestor_id, gestor_intermediario, equipe, setor, meta_mensal, meta_inicio, meta_fim, data_admissao, data_desligamento, telefone, email, ativo').order('nome'),
       supabase.from('equipes').select('id, nome, cor').order('nome'),
       supabase.from('diretores').select('id, nome').eq('ativo', true).order('nome'),
       supabase.from('gestores').select('id, nome, diretor_id').eq('ativo', true).order('nome'),
@@ -224,7 +241,9 @@ function PaginaVendedores({ equipesDB = [] }) {
       setor:                form.setor  || null,
       meta_mensal:          parseFloat(form.meta_mensal) || 0,
       meta_inicio:          form.meta_inicio || null,
+      meta_fim:             form.meta_fim || null,
       data_admissao:        form.data_admissao || null,
+      data_desligamento:    form.data_desligamento || null,
       telefone:             form.telefone || null,
       email:                form.email    || null,
       ativo:                form.ativo,
@@ -257,7 +276,9 @@ function PaginaVendedores({ equipesDB = [] }) {
       setor:                editando.setor   || null,
       meta_mensal:          parseFloat(editando.meta_mensal) || 0,
       meta_inicio:          editando.meta_inicio || null,
+      meta_fim:             editando.meta_fim || null,
       data_admissao:        editando.data_admissao || null,
+      data_desligamento:    editando.data_desligamento || null,
       telefone:             editando.telefone || null,
       email:                editando.email    || null,
       ativo:                editando.ativo,
@@ -448,7 +469,7 @@ function PaginaVendedores({ equipesDB = [] }) {
                         <button style={{ ...sBtnSec, flex:1, fontSize:'0.78rem', padding:'6px 10px' }}
                           onClick={() => {
                             // ✅ data_admissao incluído no setEditando
-                            setEditando({...c, id: c.id, diretor_id: c.diretor_id||'', gestor_id: c.gestor_id||'', meta_inicio: c.meta_inicio||'', data_admissao: c.data_admissao||''});
+                            setEditando({...c, id: c.id, diretor_id: c.diretor_id||'', gestor_id: c.gestor_id||'', meta_inicio: c.meta_inicio||'', meta_fim: c.meta_fim||'', data_admissao: c.data_admissao||'', data_desligamento: c.data_desligamento||''});
                             setErro('');
                           }}>
                           ✏️ Editar
